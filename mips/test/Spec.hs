@@ -46,12 +46,13 @@ unit f = do
       e <- alpha e
       e <- optimise e
       e <- closureConvert e
+      {-liftIO $ putStrLn "" >> print e-}
       e <- virtualCode e
-      liftIO $ putStrLn "" >> print e
+      {-liftIO $ putStrLn "" >> print e-}
       e <- simm e
-      liftIO $ putStrLn "" >> print e
+      {-liftIO $ putStrLn "" >> print e-}
       e <- regAlloc e
-      liftIO $ putStrLn "" >> print e
+      {-liftIO $ putStrLn "" >> print e-}
       emit out e
 
 

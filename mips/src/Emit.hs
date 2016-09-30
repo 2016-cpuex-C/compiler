@@ -55,7 +55,7 @@ stackSize = uses stackMap (align . (4*) . length)
 
 ppIdOrImm :: IdOrImm -> String
 ppIdOrImm (V x) = x
-ppIdOrImm (C i) = "$" ++ show i
+ppIdOrImm (C i) = show i
 
 shuffle :: Id -> [(Id,Id)] -> [(Id,Id)]
 shuffle sw xys =
