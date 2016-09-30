@@ -334,8 +334,8 @@ emit handle (AProg fdata fundefs e) = do
 
   write $ printf ".text"
   forM_ fundefs $ \fundef -> h handle fundef
-  write $ printf ".globl\tmin_caml_start"
-  write $ printf "min_caml_start:"
+  write $ printf ".globl\tmain"
+  write $ printf "main:"
 
   --write $ printf "\tpushl\t%%eax"
   --write $ printf "\tpushl\t%%ebx"

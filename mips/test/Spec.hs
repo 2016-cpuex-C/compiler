@@ -62,8 +62,9 @@ targets = [
 
 main :: IO ()
 main = do
-  mapM_ test targets
-  putStrLn $ "\n\tcompleted " ++ show (length targets) ++ " tests"
+  error "not implemented"
+  --mapM_ test targets
+  --putStrLn $ "\n\tcompleted " ++ show (length targets) ++ " tests"
 
 test :: FilePath -> IO ()
 test f = do
