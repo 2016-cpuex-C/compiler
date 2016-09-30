@@ -22,11 +22,11 @@ import System.IO (Handle, hPutStrLn)
 import Text.Printf
 
 -- ghc-modが動かなくなるので書いている間はコメントアウト
-{-foreign import ccall "gethi" gethi :: Double -> Word32-}
-{-foreign import ccall "getlo" getlo :: Double -> Word32-}
-gethi, getlo :: Double -> Word32
-gethi = undefined
-getlo = undefined
+foreign import ccall "gethi" gethi :: Double -> Word32
+foreign import ccall "getlo" getlo :: Double -> Word32
+{-gethi, getlo :: Double -> Word32-}
+{-gethi = undefined-}
+{-getlo = undefined-}
 
 save :: Id -> Caml ()
 save x = do
@@ -351,6 +351,7 @@ emit handle (AProg fdata fundefs e) = do
   stackSet .= S.empty
   stackMap .= []
   g handle (NonTail(regs!0), e)
+  write $ printf "\tja\t$ra"
 
   --write $ printf "\tpopl\t%%ebp"
   --write $ printf "\tpopl\t%%edi"
@@ -359,7 +360,6 @@ emit handle (AProg fdata fundefs e) = do
   --write $ printf "\tpopl\t%%ecx"
   --write $ printf "\tpopl\t%%ebx"
   --write $ printf "\tpopl\t%%eax"
-  --write $ printf "\tret"
 
 
 ----------
