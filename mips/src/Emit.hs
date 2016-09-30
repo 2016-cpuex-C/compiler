@@ -354,7 +354,8 @@ emit handle (AProg fdata fundefs e) = do
   stackSet .= S.empty
   stackMap .= []
   g handle (NonTail(regs!0), e)
-  write $ printf "\tjr\t$ra"
+  write $ printf "\tsub\t%s, %s, %s" (regs!0) (regs!0) (regs!0)
+  write $ printf "\texit"
 
   --write $ printf "\tpopl\t%%ebp"
   --write $ printf "\tpopl\t%%edi"

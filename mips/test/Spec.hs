@@ -29,7 +29,7 @@ import Control.Monad.IO.Class (liftIO)
 
 main :: IO ()
 main =
-  unit "test/fib" >>= \case
+  unit "test/test" >>= \case
     Right () -> return ()
     Left e -> print e
 
