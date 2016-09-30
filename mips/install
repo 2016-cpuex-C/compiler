@@ -1,0 +1,2 @@
+#! /usr/bin/env bash
+stack --local-bin-path ./ install
