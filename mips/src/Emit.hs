@@ -94,7 +94,8 @@ g' oc (dest,exp) =
       AAdd y (V z) -> write $ printf "\tadd\t%s, %s, %s" x y z
       AAdd y (C i) -> write $ printf "\taddi\t%s, %s, %d" x y i
       ASub y (V z) -> write $ printf "\tsub\t%s, %s, %s" x y z
-      ASub y (C i) -> write $ printf "\tsubi\t%s, %s, %d" x y i
+      ASub y (C i) -> error "subi not implemented"
+                      --write $ printf "\tsubi\t%s, %s, %d" x y i
       AMul y (V z) -> write ( printf "\tmult\t%s, %s" y z ) >>
                       write ( printf "\tmflo\t %s" x )
       AMul {}      -> error "multi not implemented"
@@ -181,7 +182,8 @@ g' oc (dest,exp) =
           when (ss>0) $ write $ printf "\taddi\t%s, %s, %d" regSp regSp ss
           write $ printf "\tlw\t%s, (%s)" regSw regCl
           write $ printf "\tjal\t(%s)" regSw
-          when (ss>0) $ write $ printf "\tsubi\t%s, %s, %d" regSp regSp ss 
+          {-when (ss>0) $ write $ printf "\tsubi\t%s, %s, %d" regSp regSp ss-}
+          when (ss>0) $ write $ printf "\taddi\t%s, %s, %d" regSp regSp (-ss)
           if | (x `elem` allRegs && x /= regs!0) ->
                     write $ printf "\tlw\t%s, %s" x (regs!0)
              | (x `elem` allFRegs && x /= fregs!0) ->
@@ -193,7 +195,8 @@ g' oc (dest,exp) =
           ss <- stackSize
           when (ss>0) $ write $ printf "\taddi\t%s, %s, %d" regSp regSp ss
           write $ printf "\tjal\t%s" y
-          when (ss>0) $ write $ printf "\tsubi\t%s, %s, %d" regSp regSp ss 
+          {-when (ss>0) $ write $ printf "\tsubi\t%s, %s, %d" regSp regSp ss -}
+          when (ss>0) $ write $ printf "\taddi\t%s, %s, %d" regSp regSp (-ss)
           if | x `elem` allRegs && x /= regs!0 ->
                     write $ printf "\tlw\t%s, %s" x (regs!0)
              | x `elem` allFRegs && x /= fregs!0 ->
@@ -351,7 +354,7 @@ emit handle (AProg fdata fundefs e) = do
   stackSet .= S.empty
   stackMap .= []
   g handle (NonTail(regs!0), e)
-  write $ printf "\tja\t$ra"
+  write $ printf "\tjr\t$ra"
 
   --write $ printf "\tpopl\t%%ebp"
   --write $ printf "\tpopl\t%%edi"

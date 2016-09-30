@@ -33,8 +33,8 @@ g' env = let get var = C (lookupJust var env) in \case
   AAdd x (V y)
     | M.member y env -> AAdd x (get y)
     | M.member x env -> AAdd y (get x)
-  ASub x (V y)
-    | M.member y env -> ASub x (get y)
+  --ASub x (V y)
+  --  | M.member y env -> ASub x (get y)
   --AMul x (V y) not implemented
   --  | M.member y env -> AMul x (get y)
   --  | M.member x env -> AMul y (get x)
@@ -47,15 +47,15 @@ g' env = let get var = C (lookupJust var env) in \case
     | M.member y env -> ALdDF x (get y)
   AStDF x y (V z)
     | M.member z env -> AStDF x y (get z)
-  AIfEq x (V y) e1 e2
-    | M.member y env -> AIfEq x (get y) (g env e1) (g env e2)
-    | M.member x env -> AIfEq y (get x) (g env e1) (g env e2)
-  AIfLe x (V y) e1 e2
-    | M.member y env -> AIfLe x (get y) (g env e1) (g env e2)
-    | M.member x env -> AIfGe y (get x) (g env e1) (g env e2)
-  AIfGe x (V y) e1 e2
-    | M.member y env -> AIfGe x (get y) (g env e1) (g env e2)
-    | M.member x env -> AIfLe y (get x) (g env e1) (g env e2)
+  --AIfEq x (V y) e1 e2
+  --  | M.member y env -> AIfEq x (get y) (g env e1) (g env e2)
+  --  | M.member x env -> AIfEq y (get x) (g env e1) (g env e2)
+  --AIfLe x (V y) e1 e2
+  --  | M.member y env -> AIfLe x (get y) (g env e1) (g env e2)
+  --  | M.member x env -> AIfGe y (get x) (g env e1) (g env e2)
+  --AIfGe x (V y) e1 e2
+  --  | M.member y env -> AIfGe x (get y) (g env e1) (g env e2)
+  --  | M.member x env -> AIfLe y (get x) (g env e1) (g env e2)
   AIfEq x y' e1 e2 -> AIfEq x y' (g env e1) (g env e2)
   AIfLe x y' e1 e2 -> AIfLe x y' (g env e1) (g env e2)
   AIfGe x y' e1 e2 -> AIfGe x y' (g env e1) (g env e2)

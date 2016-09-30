@@ -28,6 +28,25 @@ main = runCommand $ \opts args -> do
                        }
   mapM_ (file s) args
 
+file :: S -> FilePath -> IO ()
+file s f = do
+  str <- readFile (f ++ ".ml")
+  withFile (f ++ ".s") WriteMode $ \out -> do
+    m <-(`runCaml` s) $ lex str
+          >>= parse
+          >>= typing
+          >>= kNormalize
+          >>= alpha
+          >>= optimise
+          >>= closureConvert
+          >>= virtualCode
+          >>= simm
+          >>= regAlloc
+          >>= emit out
+    case m of
+      Right () -> return ()
+      Left e -> error $ f ++ ": " ++ show e
+
 minrtExtTyEnv :: TyEnv
 minrtExtTyEnv = M.fromList
   [ ("fiszero"      , TFun [TFloat         ] TBool  )
@@ -51,25 +70,6 @@ minrtExtTyEnv = M.fromList
   , ("int_of_float" , TFun [TFloat         ] TInt   )
   , ("float_of_int" , TFun [TInt           ] TFloat )
   ]
-
-file :: S -> FilePath -> IO ()
-file s f = do
-  str <- readFile (f ++ ".ml")
-  withFile (f ++ ".s") WriteMode $ \out -> do
-    m <-(`runCaml` s) $ lex str
-          >>= parse
-          >>= typing
-          >>= kNormalize
-          >>= alpha
-          >>= optimise
-          >>= closureConvert
-          >>= virtualCode
-          >>= simm
-          >>= regAlloc
-          >>= emit out
-    case m of
-      Right () -> return ()
-      Left e -> error $ f ++ ": " ++ show e
 
 data MinCamlOptions = MinCamlOptions
                     { inline :: Int
