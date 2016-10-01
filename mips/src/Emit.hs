@@ -111,14 +111,12 @@ g' oc (dest,exp) =
           write $ printf "\tadd\t%s, %s, %s" regAd y z
           write $ printf "\tlw\t%s, 0(%s)" x regAd
       ALd y (C i) -> do
-          write $ printf "\taddi\t%s, %s, %s" regAd y i
-          write $ printf "\tlw\t%s, 0(%s)" x regAd
+          write $ printf "\tlw\t%s, %d(%s)" x i y
       ASt y z (V w) -> do
           write $ printf "\tadd\t%s, %s, %s" regAd z w
           write $ printf "\tsw\t%s, (%s)" y regAd
       ASt y z (C i) -> do
-          write $ printf "\taddi\t%s, %s, %s" regAd z i
-          write $ printf "\tsw\t%s, (%s)" y regAd
+          write $ printf "\tsw\t%s, %d(%s)" y i z
 
       ALdDF y (V z) -> do
           write $ printf "\tadd\t%s, %s, %s" regAd y z
@@ -182,7 +180,7 @@ g' oc (dest,exp) =
 
           when (ss>0) $ write $ printf "\taddi\t%s, %s, %d" regSp regSp ss
           write $ printf "\tlw\t%s, (%s)" regSw regCl
-          write $ printf "\tjal\t(%s)" regSw
+          write $ printf "\tjar\t(%s)" regSw
           when (ss>0) $ write $ printf "\taddi\t%s, %s, %d" regSp regSp (-ss)
 
           write $ printf "\taddi\t%s, %s, %d" regAd regSp (ss-4)
@@ -202,7 +200,7 @@ g' oc (dest,exp) =
           write $ printf "\tsw\t%s, (%s)" regRa regAd
 
           when (ss>0) $ write $ printf "\taddi\t%s, %s, %d" regSp regSp ss
-          write $ printf "\tjal\t%s" y
+          write $ printf "\tjar\t%s" y
           when (ss>0) $ write $ printf "\taddi\t%s, %s, %d" regSp regSp (-ss)
 
           write $ printf "\taddi\t%s, %s, %d" regAd regSp (ss-4)
