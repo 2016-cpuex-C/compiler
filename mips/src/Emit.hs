@@ -94,8 +94,7 @@ g' oc (dest,exp) =
       AAdd y (V z) -> write $ printf "\tadd\t%s, %s, %s" x y z
       AAdd y (C i) -> write $ printf "\taddi\t%s, %s, %d" x y i
       ASub y (V z) -> write $ printf "\tsub\t%s, %s, %s" x y z
-      ASub y (C i) -> error "subi not implemented"
-                      --write $ printf "\tsubi\t%s, %s, %d" x y i
+      ASub y (C i) -> write $ printf "\taddi\t%s, %s, %d" x y (-i)
       AMul y (V z) -> write ( printf "\tmult\t%s, %s" y z ) >>
                       write ( printf "\tmflo\t %s" x )
       AMul {}      -> error "multi not implemented"
@@ -125,14 +124,12 @@ g' oc (dest,exp) =
           write $ printf "\tadd\t%s, %s, %s" regAd y z
           write $ printf "\tl.d\t%s, 0(%s)" x regAd
       ALdDF y (C i) -> do
-          write $ printf "\taddi\t%s, %s, %s" regAd y i
-          write $ printf "\tl.d\t%s, 0(%s)" x regAd
+          write $ printf "\tl.d\t%s, %d(%s)" x i y
       AStDF y z (V w) -> do
           write $ printf "\tadd\t%s, %s, %s" regAd z w
           write $ printf "\ts.d\t%s, 0(%s)" y regAd
       AStDF y z (C i) -> do
-          write $ printf "\taddi\t%s, %s, %s" regAd z i
-          write $ printf "\ts.d\t%s, 0(%s)" y regAd
+          write $ printf "\ts.d\t%s, %d(%s)" y i z
 
       AComment s -> write $ printf "\t# %s" s
 
@@ -179,11 +176,18 @@ g' oc (dest,exp) =
       ACallCls y zs ws -> do
           g'_args oc [(y, regCl)] zs ws
           ss <- stackSize
+
+          write $ printf "\taddi\t%s, %s, %d" regAd regSp (ss-4)
+          write $ printf "\tsw\t%s, (%s)" regRa regAd
+
           when (ss>0) $ write $ printf "\taddi\t%s, %s, %d" regSp regSp ss
           write $ printf "\tlw\t%s, (%s)" regSw regCl
           write $ printf "\tjal\t(%s)" regSw
-          {-when (ss>0) $ write $ printf "\tsubi\t%s, %s, %d" regSp regSp ss-}
           when (ss>0) $ write $ printf "\taddi\t%s, %s, %d" regSp regSp (-ss)
+
+          write $ printf "\taddi\t%s, %s, %d" regAd regSp (ss-4)
+          write $ printf "\tlw\t%s, (%s)" regRa regAd
+
           if | (x `elem` allRegs && x /= regs!0) ->
                     write $ printf "\tlw\t%s, %s" x (regs!0)
              | (x `elem` allFRegs && x /= fregs!0) ->
@@ -193,10 +197,17 @@ g' oc (dest,exp) =
       ACallDir (Label y) zs ws -> do
           g'_args oc [] zs ws
           ss <- stackSize
+
+          write $ printf "\taddi\t%s, %s, %d" regAd regSp (ss-4)
+          write $ printf "\tsw\t%s, (%s)" regRa regAd
+
           when (ss>0) $ write $ printf "\taddi\t%s, %s, %d" regSp regSp ss
           write $ printf "\tjal\t%s" y
-          {-when (ss>0) $ write $ printf "\tsubi\t%s, %s, %d" regSp regSp ss -}
           when (ss>0) $ write $ printf "\taddi\t%s, %s, %d" regSp regSp (-ss)
+
+          write $ printf "\taddi\t%s, %s, %d" regAd regSp (ss-4)
+          write $ printf "\tlw\t%s, (%s)" regRa regAd
+
           if | x `elem` allRegs && x /= regs!0 ->
                     write $ printf "\tlw\t%s, %s" x (regs!0)
              | x `elem` allFRegs && x /= fregs!0 ->
