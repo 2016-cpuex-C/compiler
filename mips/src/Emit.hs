@@ -57,12 +57,12 @@ ppIdOrImm :: IdOrImm -> String
 ppIdOrImm (V x) = x
 ppIdOrImm (C i) = show i
 
-shuffle :: Id -> [(Id,Id)] -> [(Id,Id)]
+shuffle :: String -> [(Id,Id)] -> [(Id,Id)]
 shuffle sw xys =
   let (_,xys'') = partition (\(x,y) -> x==y) xys
-                --等しくない奴
+                --rm identical move
       tmp  = partition (\(_,y) -> memAssoc y xys) xys''
-                --等しくない奴でyが定義域にないやつとあるやつ
+                --(cyclic, acyclic)
   in case tmp of
     ([],[]) -> []
     ((x,y):xys',[]) ->
@@ -180,7 +180,7 @@ g' oc (dest,exp) =
 
           when (ss>0) $ write $ printf "\taddi\t%s, %s, %d" regSp regSp ss
           write $ printf "\tlw\t%s, (%s)" regSw regCl
-          write $ printf "\tjar\t(%s)" regSw
+          write $ printf "\tjalr\t%s" regSw
           when (ss>0) $ write $ printf "\taddi\t%s, %s, %d" regSp regSp (-ss)
 
           write $ printf "\taddi\t%s, %s, %d" regAd regSp (ss-4)
@@ -190,7 +190,7 @@ g' oc (dest,exp) =
                     write $ printf "\tlw\t%s, %s" x (regs!0)
              | (x `elem` allFRegs && x /= fregs!0) ->
                     write $ printf "\tld\t%s, %s" x (regs!0)
-             | otherwise -> error "にゃーん"
+             | otherwise -> assert (x==regs!0 || x==fregs!0) $ return ()
 
       ACallDir (Label y) zs ws -> do
           g'_args oc [] zs ws
@@ -200,17 +200,17 @@ g' oc (dest,exp) =
           write $ printf "\tsw\t%s, (%s)" regRa regAd
 
           when (ss>0) $ write $ printf "\taddi\t%s, %s, %d" regSp regSp ss
-          write $ printf "\tjar\t%s" y
+          write $ printf "\tjal\t%s" y
           when (ss>0) $ write $ printf "\taddi\t%s, %s, %d" regSp regSp (-ss)
 
           write $ printf "\taddi\t%s, %s, %d" regAd regSp (ss-4)
           write $ printf "\tlw\t%s, (%s)" regRa regAd
 
-          if | x `elem` allRegs && x /= regs!0 ->
+          if | (x `elem` allRegs && x /= regs!0) ->
                     write $ printf "\tlw\t%s, %s" x (regs!0)
-             | x `elem` allFRegs && x /= fregs!0 ->
+             | (x `elem` allFRegs && x /= fregs!0) ->
                     write $ printf "\tld\t%s, %s" x (regs!0)
-             | otherwise -> return ()
+             | otherwise -> assert (x==regs!0 || x==fregs!0) $ return ()
 
     -- 末尾だったら計算結果を第一レジスタにセットしてret
     Tail -> let ret = write $ printf "\tjr\t%s" regRa in case exp of
@@ -274,10 +274,10 @@ g' oc (dest,exp) =
       ACallCls x ys zs -> do
           g'_args oc [(x, regCl)] ys zs
           write $ printf "\tlw\t%s, (%s)" regSw regCl
-          write $ printf "\tb\t(%s)" regSw
+          write $ printf "\tjr\t%s" regSw
       ACallDir (Label x) ys zs -> do
           g'_args oc [] ys zs
-          write $ printf "\tb\t%s" x
+          write $ printf "\tjr\t%s" x
 
 g'_tail_if :: Handle -> Asm -> Asm -> Maybe (Id, Id) -> String -> String -> Caml ()
 g'_tail_if oc e1 e2 msrcs b bn = do
@@ -312,18 +312,15 @@ g'_non_tail_if oc dest e1 e2 msrcs b bn = do
   stackSet .= S.intersection sset1 sset2
 
 g'_args :: Handle -> [(Id,Id)] -> [Id] -> [Id] -> Caml ()
-g'_args oc xRegCl ys zs =
-  assert (length ys <= length regs - length xRegCl) $
-  assert (length zs <= length fregs) $ do
+g'_args oc xRegCl ys zs = do
   ss <- stackSize
   let write s = liftIO $ hPutStrLn oc s
-      sw = printf "%d(%s)" ss regSp :: String
       (_i,yrs) = foldl' f (0,xRegCl) ys
           where f (i,yrs') y = (i+1, (y,regs!i) : yrs')
       (_d,zfrs) = foldl' f (0,[]) zs
           where f (d,zfrs') z = (d+1, (z,fregs!d) : zfrs')
-  forM_ (shuffle sw yrs)  $ \(y,r)  -> write $ printf "\taddi\t%s, %s, %d" r y (0::Int)
-  forM_ (shuffle sw zfrs) $ \(z,fr) -> write $ printf "\tmov.d\t%s, %s" fr z
+  forM_ (shuffle regSw  yrs)  $ \(y,r)  -> write $ printf "\taddi\t%s, %s, %d" r y (0::Int)
+  forM_ (shuffle regFSw zfrs) $ \(z,fr) -> write $ printf "\tmov.d\t%s, %s" fr z
 
 h :: Handle -> AFunDef -> Caml ()
 h handle (AFunDef (Label x) _ _ e _) = do
@@ -345,35 +342,15 @@ emit handle (AProg fdata fundefs e) = do
       write $ printf "\t.word\t0x%lx" (getlo d)
 
   write $ printf ".text"
-  forM_ fundefs $ \fundef -> h handle fundef
+  forM_ fundefs $ h handle
   write $ printf ".globl\tmain"
   write $ printf "main:"
-
-  --write $ printf "\tpushl\t%%eax"
-  --write $ printf "\tpushl\t%%ebx"
-  --write $ printf "\tpushl\t%%ecx"
-  --write $ printf "\tpushl\t%%edx"
-  --write $ printf "\tpushl\t%%esi"
-  --write $ printf "\tpushl\t%%edi"
-  --write $ printf "\tpushl\t%%ebp"
-  --write $ printf "\tmovl\t32(%%esp),%s" regSp
-  --write $ printf "\tmovl\t36(%%esp),%s" (regs!0)
-  --write $ printf "\tmovl\t%s,%s" (regs!0) regHp
 
   stackSet .= S.empty
   stackMap .= []
   g handle (NonTail(regs!0), e)
   write $ printf "\tsub\t%s, %s, %s" (regs!0) (regs!0) (regs!0)
   write $ printf "\texit"
-
-  --write $ printf "\tpopl\t%%ebp"
-  --write $ printf "\tpopl\t%%edi"
-  --write $ printf "\tpopl\t%%esi"
-  --write $ printf "\tpopl\t%%edx"
-  --write $ printf "\tpopl\t%%ecx"
-  --write $ printf "\tpopl\t%%ebx"
-  --write $ printf "\tpopl\t%%eax"
-
 
 ----------
 -- Util --
