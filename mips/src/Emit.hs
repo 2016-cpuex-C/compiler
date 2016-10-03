@@ -28,6 +28,11 @@ foreign import ccall "getlo" getlo :: Double -> Word32
 {-gethi = undefined-}
 {-getlo = undefined-}
 
+
+-- -1 下向き +1 上向き
+stackDir :: Int
+stackDir = -1
+
 save :: Id -> Caml ()
 save x = do
   stackSet %= S.insert x
@@ -86,7 +91,7 @@ g' oc (dest,exp) =
     NonTail x -> case exp of
       ANop -> return ()
       ASet i          -> write $ printf "\tli\t%s, %d" x i
-      ASetL (Label y) -> write $ printf "\tlw\t%s, %s" x y
+      ASetL (Label y) -> write $ printf "\tla\t%s, %s" x y
 
       AMov y ->  when (x /= y) $ write $ printf "\taddi\t%s, %s, %d" x y (0::Int)
       ANeg y ->  write $ printf "\tneg\t%s, %s" x y
@@ -137,13 +142,13 @@ g' oc (dest,exp) =
             when (S.notMember z sset) $ do
               save z
               offset_z <- offset z
-              write $ printf "\tsw\t%s, %d(%s)" y offset_z regSp
+              write $ printf "\tsw\t%s, %d(%s)" y (stackDir * offset_z) regSp
         | y `elem` allFRegs -> do
             sset <- use stackSet
             when (S.notMember z sset) $ do
               savef z
               offset_z <- offset z
-              write $ printf "\tsd\t%s, %d(%s)" y offset_z regSp
+              write $ printf "\ts.d\t%s, %d(%s)" y (stackDir * offset_z) regSp
         | otherwise -> do
             sset <- use stackSet
             assert (S.member z sset) (return ())
@@ -151,10 +156,10 @@ g' oc (dest,exp) =
       ARestore y
         | x `elem` allRegs -> do
             offset_y <- offset y
-            write $ printf "\tlw\t%s, %d(%s)" x offset_y regSp
+            write $ printf "\tlw\t%s, %d(%s)" x (stackDir * offset_y) regSp
         | x `elem` allFRegs -> do
             offset_y <- offset y
-            write $ printf "\tld\t%s, %d(%s)" x offset_y regSp
+            write $ printf "\tl.d\t%s, %d(%s)" x (stackDir * offset_y) regSp
         | otherwise -> assert False undefined
 
       AIfEq y z' e1 e2 ->
@@ -175,37 +180,37 @@ g' oc (dest,exp) =
           g'_args oc [(y, regCl)] zs ws
           ss <- stackSize
 
-          write $ printf "\tsw\t%s, %d(%s)" regRa (ss-4) regSp
+          write $ printf "\tsw\t%s, %d(%s)" regRa (stackDir*(ss-4)) regSp
 
-          when (ss>0) $ write $ printf "\taddi\t%s, %s, %d" regSp regSp ss
+          when (ss>0) $ write $ printf "\taddi\t%s, %s, %d" regSp regSp (stackDir * ss)
           write $ printf "\tlw\t%s, (%s)" regSw regCl
           write $ printf "\tjalr\t%s" regSw
-          when (ss>0) $ write $ printf "\taddi\t%s, %s, %d" regSp regSp (-ss)
+          when (ss>0) $ write $ printf "\taddi\t%s, %s, %d" regSp regSp (stackDir * (-ss))
 
-          write $ printf "\tlw\t%s, %d(%s)" regRa (ss-4) regSp
+          write $ printf "\tlw\t%s, %d(%s)" regRa (stackDir * (ss-4)) regSp
 
           if | (x `elem` allRegs && x /= regs!0) ->
-                    write $ printf "\tlw\t%s, %s" x (regs!0)
+                    write $ printf "\taddi\t%s, %s, 0" x (regs!0)
              | (x `elem` allFRegs && x /= fregs!0) ->
-                    write $ printf "\tld\t%s, %s" x (regs!0)
+                    write $ printf "\tmov.d\t%s, %s" x (regs!0)
              | otherwise -> assert (x==regs!0 || x==fregs!0 || x=="%unit") $ return ()
 
       ACallDir (Label y) zs ws -> do
           g'_args oc [] zs ws
           ss <- stackSize
 
-          write $ printf "\tsw\t%s, %d(%s)" regRa (ss-4) regSp
+          write $ printf "\tsw\t%s, %d(%s)" regRa (stackDir * (ss-4)) regSp
 
-          when (ss>0) $ write $ printf "\taddi\t%s, %s, %d" regSp regSp ss
+          when (ss>0) $ write $ printf "\taddi\t%s, %s, %d" regSp regSp (stackDir * ss)
           write $ printf "\tjal\t%s" y
-          when (ss>0) $ write $ printf "\taddi\t%s, %s, %d" regSp regSp (-ss)
+          when (ss>0) $ write $ printf "\taddi\t%s, %s, %d" regSp regSp (stackDir * (-ss))
 
-          write $ printf "\tlw\t%s, %d(%s)" regRa (ss-4) regSp
+          write $ printf "\tlw\t%s, %d(%s)" regRa (stackDir * (ss-4)) regSp
 
           if | (x `elem` allRegs && x /= regs!0) ->
-                    write $ printf "\tlw\t%s, %s" x (regs!0)
+                    write $ printf "\taddi\t%s, %s, 0" x (regs!0)
              | (x `elem` allFRegs && x /= fregs!0) ->
-                    write $ printf "\tld\t%s, %s" x (regs!0)
+                    write $ printf "\tmov.d\t%s, %s" x (regs!0)
              | otherwise -> assert (x==regs!0 || x==fregs!0 || x=="%unit") $ return ()
 
     -- 末尾だったら計算結果を第一レジスタにセットしてret
@@ -273,7 +278,7 @@ g' oc (dest,exp) =
           write $ printf "\tjr\t%s" regSw
       ACallDir (Label x) ys zs -> do
           g'_args oc [] ys zs
-          write $ printf "\tjr\t%s" x
+          write $ printf "\tj\t%s" x
 
 g'_tail_if :: Handle -> Asm -> Asm -> Maybe (Id, Id) -> String -> String -> Caml ()
 g'_tail_if oc e1 e2 msrcs b bn = do
@@ -320,34 +325,53 @@ g'_args oc xRegCl ys zs = do
 h :: Handle -> AFunDef -> Caml ()
 h handle (AFunDef (Label x) _ _ e _) = do
   let write s = liftIO $ hPutStrLn handle s
-  write $ printf ".ent %s" x
   write $ printf "%s:" x
   stackSet .= S.empty
   stackMap .= []
   g handle (Tail, e)
-  write $ printf ".end %s" x
 
 emit :: Handle -> AProg -> Caml ()
 emit handle (AProg fdata fundefs e) = do
   let write s = liftIO $ hPutStrLn handle s
   liftIO $ putStrLn "generating assembly..."
 
+  --floats
   write $ printf ".data"
   forM_ fdata $ \(Label x,d) -> do
       write $ printf "%s:\t# %.6f" x d
       write $ printf "\t.word\t0x%lx" (gethi d)
       write $ printf "\t.word\t0x%lx" (getlo d)
 
+  -- main routine
   write $ printf ".text"
-  forM_ fundefs $ h handle
   write $ printf ".globl\tmain"
   write $ printf "main:"
+
+  --main header
+  write $ printf "\taddi\t$sp, $sp, -24"
+  write $ printf "\tsw\t$ra, 20($sp)"
+  write $ printf "\tsw\t$fp, 16($sp)"
+  write $ printf "\taddi\t$fp, $sp, 0"
 
   stackSet .= S.empty
   stackMap .= []
   g handle (NonTail(regs!0), e)
-  write $ printf "\tsub\t%s, %s, %s" (regs!0) (regs!0) (regs!0)
-  write $ printf "\texit"
+
+  -- main footer
+  write $ printf "\taddi\t$sp, $fp, 0"
+  write $ printf "\tlw\t$ra, 20($sp)"
+  write $ printf "\tlw\t$fp, 16($sp)"
+  write $ printf "\taddi\t$sp, $sp, 24"
+  --write $ printf "\tsub\t%s, %s, %s" (regs!0) (regs!0) (regs!0)
+  write $ printf "\tli\t$v0, 10"
+  write $ printf "\tsyscall"
+
+  -- funcions
+  forM_ fundefs $ h handle
+
+  s <- liftIO $ readFile "libmincaml.s"
+  write s
+  --min_caml_print_int
 
 ----------
 -- Util --

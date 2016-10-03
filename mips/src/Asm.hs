@@ -59,7 +59,7 @@ regFSw = fregs ! (V.length fregs-1)
 
 -- address for ld, st instruction
 regAd :: Register
-regAd = "$t8"
+regAd = "$t9"
 
 
 -- stack pointer
