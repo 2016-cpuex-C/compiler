@@ -29,12 +29,13 @@ g env = \case
   AsmLet xt exp e -> AsmLet xt (g' env exp) (g env e)
 
 g' :: Map Id Int -> AExpr -> AExpr
-g' env = let get var = C (lookupJust var env) in \case
+g' env = let geti var = lookupJust var env
+             get  var = C (geti var) in \case
   AAdd x (V y)
     | M.member y env -> AAdd x (get y)
     | M.member x env -> AAdd y (get x)
   ASub x (V y)
-    | M.member y env -> AAdd x (case get y of C i -> C (-i))
+    | M.member y env -> AAdd x (C (- geti y))
   --AMul x (V y) not implemented
   --  | M.member y env -> AMul x (get y)
   --  | M.member x env -> AMul y (get x)
