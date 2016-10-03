@@ -37,7 +37,6 @@ allRegs = concat [
 --, [ "$fp" ]                              -- frame pointer
 --, [ "$ra" ]                              -- return address
   ]
---allRegs = [ "$r"++show i | i <- [2..25]] -- for simulater
 
 allFRegs :: [Register]
 allFRegs = [ "$f"++show (i*2) | i <- [0..15] :: [Int]]

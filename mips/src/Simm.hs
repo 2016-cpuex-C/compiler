@@ -33,8 +33,8 @@ g' env = let get var = C (lookupJust var env) in \case
   AAdd x (V y)
     | M.member y env -> AAdd x (get y)
     | M.member x env -> AAdd y (get x)
-  --ASub x (V y)
-  --  | M.member y env -> ASub x (get y)
+  ASub x (V y)
+    | M.member y env -> AAdd x (case get y of C i -> C (-i))
   --AMul x (V y) not implemented
   --  | M.member y env -> AMul x (get y)
   --  | M.member x env -> AMul y (get x)

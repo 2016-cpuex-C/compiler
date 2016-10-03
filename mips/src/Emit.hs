@@ -51,7 +51,7 @@ offset :: Id -> Caml Int
 offset x = (4*).head <$> locate x
 
 stackSize :: Caml Int
-stackSize = uses stackMap (align . (4*) . length)
+stackSize = uses stackMap (align . (4*) . (+1) . length)
 
 ppIdOrImm :: IdOrImm -> String
 ppIdOrImm (V x) = x
@@ -175,42 +175,38 @@ g' oc (dest,exp) =
           g'_args oc [(y, regCl)] zs ws
           ss <- stackSize
 
-          write $ printf "\taddi\t%s, %s, %d" regAd regSp (ss-4)
-          write $ printf "\tsw\t%s, (%s)" regRa regAd
+          write $ printf "\tsw\t%s, %d(%s)" regRa (ss-4) regSp
 
           when (ss>0) $ write $ printf "\taddi\t%s, %s, %d" regSp regSp ss
           write $ printf "\tlw\t%s, (%s)" regSw regCl
           write $ printf "\tjalr\t%s" regSw
           when (ss>0) $ write $ printf "\taddi\t%s, %s, %d" regSp regSp (-ss)
 
-          write $ printf "\taddi\t%s, %s, %d" regAd regSp (ss-4)
-          write $ printf "\tlw\t%s, (%s)" regRa regAd
+          write $ printf "\tlw\t%s, %d(%s)" regRa (ss-4) regSp
 
           if | (x `elem` allRegs && x /= regs!0) ->
                     write $ printf "\tlw\t%s, %s" x (regs!0)
              | (x `elem` allFRegs && x /= fregs!0) ->
                     write $ printf "\tld\t%s, %s" x (regs!0)
-             | otherwise -> assert (x==regs!0 || x==fregs!0) $ return ()
+             | otherwise -> assert (x==regs!0 || x==fregs!0 || x=="%unit") $ return ()
 
       ACallDir (Label y) zs ws -> do
           g'_args oc [] zs ws
           ss <- stackSize
 
-          write $ printf "\taddi\t%s, %s, %d" regAd regSp (ss-4)
-          write $ printf "\tsw\t%s, (%s)" regRa regAd
+          write $ printf "\tsw\t%s, %d(%s)" regRa (ss-4) regSp
 
           when (ss>0) $ write $ printf "\taddi\t%s, %s, %d" regSp regSp ss
           write $ printf "\tjal\t%s" y
           when (ss>0) $ write $ printf "\taddi\t%s, %s, %d" regSp regSp (-ss)
 
-          write $ printf "\taddi\t%s, %s, %d" regAd regSp (ss-4)
-          write $ printf "\tlw\t%s, (%s)" regRa regAd
+          write $ printf "\tlw\t%s, %d(%s)" regRa (ss-4) regSp
 
           if | (x `elem` allRegs && x /= regs!0) ->
                     write $ printf "\tlw\t%s, %s" x (regs!0)
              | (x `elem` allFRegs && x /= fregs!0) ->
                     write $ printf "\tld\t%s, %s" x (regs!0)
-             | otherwise -> assert (x==regs!0 || x==fregs!0) $ return ()
+             | otherwise -> assert (x==regs!0 || x==fregs!0 || x=="%unit") $ return ()
 
     -- 末尾だったら計算結果を第一レジスタにセットしてret
     Tail -> let ret = write $ printf "\tjr\t%s" regRa in case exp of
@@ -313,7 +309,6 @@ g'_non_tail_if oc dest e1 e2 msrcs b bn = do
 
 g'_args :: Handle -> [(Id,Id)] -> [Id] -> [Id] -> Caml ()
 g'_args oc xRegCl ys zs = do
-  ss <- stackSize
   let write s = liftIO $ hPutStrLn oc s
       (_i,yrs) = foldl' f (0,xRegCl) ys
           where f (i,yrs') y = (i+1, (y,regs!i) : yrs')
@@ -325,10 +320,12 @@ g'_args oc xRegCl ys zs = do
 h :: Handle -> AFunDef -> Caml ()
 h handle (AFunDef (Label x) _ _ e _) = do
   let write s = liftIO $ hPutStrLn handle s
+  write $ printf ".ent %s" x
   write $ printf "%s:" x
   stackSet .= S.empty
   stackMap .= []
   g handle (Tail, e)
+  write $ printf ".end %s" x
 
 emit :: Handle -> AProg -> Caml ()
 emit handle (AProg fdata fundefs e) = do
