@@ -29,14 +29,14 @@ default (Text)
 
 targets :: [FilePath]
 targets = [
-    "inprod"        -- !!!
-  , "inprod-rec"    -- !!!
-  , "inprod-loop"   -- !!!
-  , "cls-bug2"      -- !!!
-  , "matmul"        -- !!!
-  , "matmul-flat"   -- !!!
-  , "non-tail-if2"  -- !!!
-  , "spill2"        -- !!!
+    "inprod"        -- これ以外はmin_caml_create_arrayで引っかかっている
+  , "inprod-rec"    --
+  , "inprod-loop"   --
+  , "cls-bug2"      --
+  , "matmul"        --
+  , "matmul-flat"   --
+  , "non-tail-if2"  --
+  , "spill2"        --
   ]
 
 ugoitargets :: [FilePath]

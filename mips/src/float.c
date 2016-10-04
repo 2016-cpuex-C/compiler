@@ -16,3 +16,14 @@ int getlo(double f) {
     return x.i[1];
 }
 
+typedef union {
+    int i;
+    float f;
+} fi;
+
+int floatAsWord(float f) {
+    fi x;
+    x.f = f;
+    return x.i;
+}
+

@@ -1,4 +1,6 @@
+let rec make_adder x =
+  let rec adder y = x + y in
+  adder in
+let hoge = make_adder 3 in
+()
 
-let rec f x = x in
-let test = Array.create 1 f in
-print_int (test.(0) 100)
