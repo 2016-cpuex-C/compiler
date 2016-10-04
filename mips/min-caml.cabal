@@ -8,7 +8,7 @@ cabal-version:       >=1.10
 library
   hs-source-dirs:      src
   C-sources:           src/float.c
-  ghc-options:         -threaded -rtsopts -with-rtsopts=-N -O3 -Wall
+  ghc-options:         -threaded -rtsopts -with-rtsopts=-N -O3
   build-depends:       base
                      , mtl
                      , lens
@@ -55,6 +55,7 @@ test-suite min-caml-test
   build-depends:       base
                      , text
                      , shelly
+                     , filepath
                      , min-caml
                      , transformers
   ghc-options:         -threaded -rtsopts -with-rtsopts=-N -O3

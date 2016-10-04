@@ -22,9 +22,11 @@ import Options
 
 main :: IO ()
 main = runCommand $ \opts args -> do
+  print $ useMars opts
   let s = initialState { _threshold = inline opts
                        , _optimiseLimit = iter opts
                        , _extTyEnv = minrtExtTyEnv
+                       , _forSim = not (useMars opts)
                        }
   mapM_ (file s) args
 
@@ -72,8 +74,9 @@ minrtExtTyEnv = M.fromList
   ]
 
 data MinCamlOptions = MinCamlOptions
-                    { inline :: Int
-                    , iter   :: Int
+                    { inline  :: Int
+                    , iter    :: Int
+                    , useMars :: Bool
                     }
 instance Options MinCamlOptions where
   defineOptions = pure MinCamlOptions
@@ -81,4 +84,6 @@ instance Options MinCamlOptions where
                    0 "maximum size of functions inlined"
                <*> simpleOption "iter"
                    100 "maximum number of optimizations iterated"
+               <*> simpleOption "mars"
+                   False "use Mars emulator"
 

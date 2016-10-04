@@ -14,9 +14,8 @@ min_caml_print_double: #$f0
 	li	$v0, 3
 	syscall
 	jr	$ra
-min_caml_truncate:
-	trunc.w.d $f0, $f0
+min_caml_truncate: # $f0:float -> $v0:int
+	trunc.w.s $f0, $f0
 	mfc1	$v0, $f0
 	jr	$ra
-
 

@@ -25,7 +25,7 @@ memberT x env = case M.lookup x env of
                   _ -> False
 findI :: Id -> Map Id KExpr -> Int
 findI x env = case fromJust $ M.lookup x env of KInt i -> i; _ -> error "findI"
-findF :: Id -> Map Id KExpr -> Double
+findF :: Id -> Map Id KExpr -> Float
 findF x env = case fromJust $ M.lookup x env of KFloat f -> f; _ -> error "findF"
 findT :: Id -> Map Id KExpr -> [Id]
 findT x env = case fromJust $ M.lookup x env of KTuple ys -> ys; _ -> error "findT"

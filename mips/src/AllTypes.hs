@@ -48,7 +48,7 @@ instance Show TV where
 data Expr = EUnit
           | EBool     Bool
           | EInt      Int
-          | EFloat    Double
+          | EFloat    Float
           | ENot      Expr
           | ENeg      Expr
           | EAdd      Expr Expr
@@ -85,7 +85,7 @@ makeLenses ''EFunDef
 -----------------------
 data KExpr = KUnit
            | KInt Int
-           | KFloat Double
+           | KFloat Float
            | KNeg  Id
            | KAdd  Id Id
            | KSub  Id Id
@@ -120,7 +120,7 @@ makeLenses ''KFunDef
 -----------------------
 data CExpr = CUnit
            | CInt      Int
-           | CFloat    Double
+           | CFloat    Float
            | CNeg      Id
            | CAdd      Id Id
            | CSub      Id Id
@@ -237,7 +237,7 @@ data AFunDef = AFunDef { _aname  :: Label
              deriving Show
 makeLenses ''AFunDef
 
-data AProg = AProg [(Label, Double)] [AFunDef] Asm
+data AProg = AProg [(Label, Float)] [AFunDef] Asm
            deriving Show
 
 
@@ -256,10 +256,11 @@ data S = S { _idCount :: Int                  -- for Id module
            , _extTyEnv  :: TyEnv              -- for Typing module
            , _threshold :: Int                -- for Inline module (max inline size)
            , _closureToplevel :: [CFunDef]    -- for Closure module
-           , _virtualData :: [(Label,Double)] -- for Virtual module
+           , _virtualData :: [(Label,Float)]  -- for Virtual module
            , _stackSet :: Set Id              -- for Emit module
            , _stackMap :: [Id]                -- for Emit module
            , _optimiseLimit :: Int            -- for Optimise module (max optimise iter)
+           , _forSim :: Bool                  -- compile for simulater (otherwise for Mars)
            }
            deriving Show
 makeLenses ''S
@@ -274,6 +275,7 @@ initialState = S { _idCount = 0
                  , _stackSet = S.empty
                  , _stackMap = []
                  , _optimiseLimit = 100
+                 , _forSim = True
                  }
 
 liftIO :: IO a -> Caml a

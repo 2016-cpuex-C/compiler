@@ -4,7 +4,7 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# OPTIONS_GHC -fno-warn-type-defaults #-}
 
-import AllTypes (runCamlDefault, Error)
+import AllTypes (runCaml, initialState, S(..), Error)
 import Lexer    (lex)
 import Parser   (parse)
 import Typing   (typing)
@@ -27,17 +27,28 @@ import Data.Text (Text, pack)
 import qualified Data.Text.IO as TIO
 default (Text)
 
+forSim :: Bool
+forSim = True
+
+onlyCompile :: Bool
+onlyCompile = False
+
 targets :: [FilePath]
 targets = [
-    "inprod"        -- これ以外はmin_caml_create_arrayで引っかかっている
-  , "inprod-rec"    --
-  , "inprod-loop"   --
-  , "cls-bug2"      --
-  , "matmul"        --
-  , "matmul-flat"   --
-  , "non-tail-if2"  --
-  , "spill2"        --
+    "inprod-rec"
+  , "inprod-loop"
+  , "matmul"
+  , "matmul-flat"
+  , "non-tail-if2"
+  , "spill2"
+  , "cls-bug2"
   ]
+
+-- simで動いかないやつ
+-- non-tail-if l.sが原因
+-- inprod      同上
+-- shuffle     no label found?
+-- funcomp     わからず
 
 ugoitargets :: [FilePath]
 ugoitargets = [
@@ -50,24 +61,26 @@ ugoitargets = [
   , "fib"
   , "funcomp"
   , "gcd"
+  , "inprod"
   , "inprod-int"
   , "join-reg"
   , "join-reg2"
   , "join-stack"
   , "join-stack2"
   , "join-stack3"
-  , "non-tail-if"
   , "print"
   , "shuffle"
   , "spill"
   , "spill3"
   , "sum"
   , "sum-tail"
+  , "non-tail-if"
   ]
 
 main :: IO ()
 main = do
-  mapM_ test targets
+  test "inprod"
+  {-mapM_ test $ ugoitargets-}
 
 test :: FilePath -> IO ()
 test f = do
@@ -75,29 +88,29 @@ test f = do
   m <- compile $ "test" </> f
   case m of
     Right () -> shelly $ do
-      res <- exe   $ "test" </> f <.> "s"
+      res <- (if forSim then exeSim else exeMars) $ "test" </> f <.> "s"
       ans <- read' $ "test" </> f <.> "ans"
       liftIO $ do
         putStr "result: " >> TIO.putStr res
         putStr "answer: " >> TIO.putStr ans
-      when (res/=ans) $ error f
+      when (res/=ans && not onlyCompile) $ error f
     Left e -> error $ f ++ ":" ++ show e
   where
     read' file = pack <$> liftIO (readFile file)
 
 -- 使うときは適宜修正してください
--- Marsのインストールが必要です
-exe :: FilePath -> Sh Text
-exe s = silently $ run "java" options
-  where
-    options = ["-jar", "/home/hogeyama/apps/Mars4_5.jar", "me", src]
-    src = pack s
+-- Marsのインストールが必要す
+exeMars :: FilePath -> Sh Text
+exeMars s = silently $ run "java" ["-jar", "/home/hogeyama/apps/Mars4_5.jar", "me", pack s]
+exeSim :: FilePath -> Sh Text
+exeSim s = silently $ run "./sim/sim" ["<", pack s]
 
 compile :: FilePath -> IO (Either Error ())
 compile f = do
   s <- readFile (f <.> "ml")
   withFile (f <.> "s") WriteMode $ \out ->
-    runCamlDefault $ lex s
+    let st = initialState { _forSim = forSim }
+    in (`runCaml` st) $ lex s
       >>= parse
       >>= typing
       >>= kNormalize

@@ -63,7 +63,7 @@ tokens :-
 {
 data Token = TokenBool Bool
            | TokenInt Int
-           | TokenFloat Double
+           | TokenFloat Float
            | TokenNot
            | TokenMinus
            | TokenPlus
@@ -120,7 +120,7 @@ tk t = token $ \_ _ -> t
 mktk :: (a -> Token) -> (String -> a) -> AlexAction Token
 mktk con read' = token $ \(_,_,_,s) n -> con $ read' $ take n s
 
-readF :: String -> Double
+readF :: String -> Float
 readF s
   | last s == '.' = read (s++['0'])
   | otherwise     = read s

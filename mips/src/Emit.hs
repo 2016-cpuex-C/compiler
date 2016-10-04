@@ -16,18 +16,15 @@ import Data.Vector ((!))
 import Control.Lens
 import Data.List (foldl')
 import Control.Exception.Base (assert)
-import Control.Monad (when, forM_)
+import Control.Monad (when, unless, forM_)
 import Data.List (partition)
 import System.IO (Handle, hPutStrLn)
 import Text.Printf
 
 -- ghc-modが動かなくなるので書いている間はコメントアウト
-foreign import ccall "gethi" gethi :: Double -> Word32
-foreign import ccall "getlo" getlo :: Double -> Word32
-{-gethi, getlo :: Double -> Word32-}
-{-gethi = undefined-}
-{-getlo = undefined-}
-
+foreign import ccall "floatAsWord" floatAsWord :: Float -> Word32
+{-floatAsWord :: Float -> Word32-}
+{-floatAsWord = undefined-}
 
 -- -1 下向き +1 上向き
 stackDir :: Int
@@ -93,7 +90,7 @@ g' oc (dest,exp) =
       ASet i          -> write $ printf "\tli\t%s, %d" x i
       ASetL (Label y) -> write $ printf "\tla\t%s, %s" x y
 
-      AMov y ->  when (x /= y) $ write $ printf "\taddi\t%s, %s, %d" x y (0::Int)
+      AMov y ->  when (x /= y) $ write $ printf "\taddi\t%s, %s, 0" x y
       ANeg y ->  write $ printf "\tneg\t%s, %s" x y
 
       AAdd y (V z) -> write $ printf "\tadd\t%s, %s, %s" x y z
@@ -105,16 +102,16 @@ g' oc (dest,exp) =
       AMul {}      -> error "multi not implemented"
       ASll y i     -> write $ printf "\tsll\t%s, %s, %d" x y i
 
-      AFMovD y   -> write $ printf "\tmov.d\t%s, %s" x y
-      AFNegD y   -> write $ printf "\tneg.d\t%s, %s" x y
-      AFAddD y z -> write $ printf "\tadd.d\t%s, %s, %s" x y z
-      AFSubD y z -> write $ printf "\tsub.d\t%s, %s, %s" x y z
-      AFMulD y z -> write $ printf "\tmul.d\t%s, %s, %s" x y z
-      AFDivD y z -> write $ printf "\tdiv.d\t%s, %s, %s" x y z
+      AFMovD y   -> write $ printf "\tmov.s\t%s, %s" x y
+      AFNegD y   -> write $ printf "\tneg.s\t%s, %s" x y
+      AFAddD y z -> write $ printf "\tadd.s\t%s, %s, %s" x y z
+      AFSubD y z -> write $ printf "\tsub.s\t%s, %s, %s" x y z
+      AFMulD y z -> write $ printf "\tmul.s\t%s, %s, %s" x y z
+      AFDivD y z -> write $ printf "\tdiv.s\t%s, %s, %s" x y z
 
       ALd y (V z) -> do
           write $ printf "\tadd\t%s, %s, %s" regAd y z
-          write $ printf "\tlw\t%s, 0(%s)" x regAd
+          write $ printf "\tlw\t%s, (%s)" x regAd
       ALd y (C i) -> do
           write $ printf "\tlw\t%s, %d(%s)" x i y
       ASt y z (V w) -> do
@@ -125,14 +122,14 @@ g' oc (dest,exp) =
 
       ALdDF y (V z) -> do
           write $ printf "\tadd\t%s, %s, %s" regAd y z
-          write $ printf "\tl.d\t%s, 0(%s)" x regAd
+          write $ printf "\tl.s\t%s, (%s)" x regAd
       ALdDF y (C i) -> do
-          write $ printf "\tl.d\t%s, %d(%s)" x i y
+          write $ printf "\tl.s\t%s, %d(%s)" x (stackDir * i) y
       AStDF y z (V w) -> do
           write $ printf "\tadd\t%s, %s, %s" regAd z w
-          write $ printf "\ts.d\t%s, 0(%s)" y regAd
+          write $ printf "\ts.s\t%s, (%s)" y regAd
       AStDF y z (C i) -> do
-          write $ printf "\ts.d\t%s, %d(%s)" y i z
+          write $ printf "\ts.s\t%s, %d(%s)" y (stackDir * i) z
 
       AComment s -> write $ printf "\t# %s" s
 
@@ -148,7 +145,7 @@ g' oc (dest,exp) =
             when (S.notMember z sset) $ do
               savef z
               offset_z <- offset z
-              write $ printf "\ts.d\t%s, %d(%s)" y (stackDir * offset_z) regSp
+              write $ printf "\ts.s\t%s, %d(%s)" y (stackDir * offset_z) regSp
         | otherwise -> do
             sset <- use stackSet
             assert (S.member z sset) (return ())
@@ -159,7 +156,7 @@ g' oc (dest,exp) =
             write $ printf "\tlw\t%s, %d(%s)" x (stackDir * offset_y) regSp
         | x `elem` allFRegs -> do
             offset_y <- offset y
-            write $ printf "\tl.d\t%s, %d(%s)" x (stackDir * offset_y) regSp
+            write $ printf "\tl.s\t%s, %d(%s)" x (stackDir * offset_y) regSp
         | otherwise -> assert False undefined
 
       AIfEq y z' e1 e2 ->
@@ -170,10 +167,10 @@ g' oc (dest,exp) =
           g'_non_tail_if oc (NonTail x) e1 e2 (Just (y, (ppIdOrImm z'))) "bge" "blt"
 
       AIfFEq y z e1 e2 -> do
-          write $ printf "\tc.eq.d\t%s, %s" y z
+          write $ printf "\tc.eq.s\t%s, %s" y z
           g'_non_tail_if oc (NonTail x) e1 e2 Nothing "bclt" "bclf"
       AIfFLe y z e1 e2 -> do
-          write $ printf "\tc.le.d\t%s, %s" y z
+          write $ printf "\tc.le.s\t%s, %s" y z
           g'_non_tail_if oc (NonTail x) e1 e2 Nothing "bclt" "bclf"
 
       ACallCls y zs ws -> do
@@ -192,7 +189,7 @@ g' oc (dest,exp) =
           if | (x `elem` allRegs && x /= regs!0) ->
                     write $ printf "\taddi\t%s, %s, 0" x (regs!0)
              | (x `elem` allFRegs && x /= fregs!0) ->
-                    write $ printf "\tmov.d\t%s, %s" x (regs!0)
+                    write $ printf "\tmov.s\t%s, %s" x (fregs!0)
              | otherwise -> assert (x==regs!0 || x==fregs!0 || x=="%unit") $ return ()
 
       ACallDir (Label y) zs ws -> do
@@ -210,7 +207,7 @@ g' oc (dest,exp) =
           if | (x `elem` allRegs && x /= regs!0) ->
                     write $ printf "\taddi\t%s, %s, 0" x (regs!0)
              | (x `elem` allFRegs && x /= fregs!0) ->
-                    write $ printf "\tmov.d\t%s, %s" x (regs!0)
+                    write $ printf "\tmov.s\t%s, %s" x (fregs!0)
              | otherwise -> assert (x==regs!0 || x==fregs!0 || x=="%unit") $ return ()
 
     -- 末尾だったら計算結果を第一レジスタにセットしてret
@@ -266,10 +263,10 @@ g' oc (dest,exp) =
       AIfLe x y' e1 e2 -> g'_tail_if oc e1 e2 (Just (x, (ppIdOrImm y'))) "ble" "bgt"
       AIfGe x y' e1 e2 -> g'_tail_if oc e1 e2 (Just (x, (ppIdOrImm y'))) "bge" "blt"
       AIfFEq x y e1 e2 -> do
-          write $ printf "\tc.eq.d\t%s, %s" x y
+          write $ printf "\tc.eq.s\t%s, %s" x y
           g'_tail_if oc e1 e2 Nothing "bclt" "bclf"
       AIfFLe x y e1 e2 -> do
-          write $ printf "\tc.le.d\t%s, %s" x y
+          write $ printf "\tc.le.s\t%s, %s" x y
           g'_tail_if oc e1 e2 Nothing "bclt" "bclf"
 
       ACallCls x ys zs -> do
@@ -319,8 +316,8 @@ g'_args oc xRegCl ys zs = do
           where f (i,yrs') y = (i+1, (y,regs!i) : yrs')
       (_d,zfrs) = foldl' f (0,[]) zs
           where f (d,zfrs') z = (d+1, (z,fregs!d) : zfrs')
-  forM_ (shuffle regSw  yrs)  $ \(y,r)  -> write $ printf "\taddi\t%s, %s, %d" r y (0::Int)
-  forM_ (shuffle regFSw zfrs) $ \(z,fr) -> write $ printf "\tmov.d\t%s, %s" fr z
+  forM_ (shuffle regSw  yrs)  $ \(y,r)  -> write $ printf "\taddi\t%s, %s, 0" r y
+  forM_ (shuffle regFSw zfrs) $ \(z,fr) -> write $ printf "\tmov.s\t%s, %s" fr z
 
 h :: Handle -> AFunDef -> Caml ()
 h handle (AFunDef (Label x) _ _ e _) = do
@@ -339,8 +336,9 @@ emit handle (AProg fdata fundefs e) = do
   write $ printf ".data"
   forM_ fdata $ \(Label x,d) -> do
       write $ printf "%s:\t# %.6f" x d
-      write $ printf "\t.word\t0x%lx" (gethi d)
-      write $ printf "\t.word\t0x%lx" (getlo d)
+      write $ printf "\t.word\t0x%lx" (floatAsWord d)
+      --write $ printf "\t.word\t0x%lx" (gethi d)
+      --write $ printf "\t.word\t0x%lx" (getlo d)
 
   -- main routine
   write $ printf ".text"
@@ -362,16 +360,22 @@ emit handle (AProg fdata fundefs e) = do
   write $ printf "\tlw\t$ra, 20($sp)"
   write $ printf "\tlw\t$fp, 16($sp)"
   write $ printf "\taddi\t$sp, $sp, 24"
-  --write $ printf "\tsub\t%s, %s, %s" (regs!0) (regs!0) (regs!0)
-  write $ printf "\tli\t$v0, 10"
-  write $ printf "\tsyscall"
+  write $ printf "\tli\t%s, 0" (regs!0)
+
+  use forSim >>= \case
+    True -> do
+      write $ printf "\texit"
+    False -> do
+      write $ printf "\tli\t$v0, 10"
+      write $ printf "\tsyscall"
 
   -- funcions
   forM_ fundefs $ h handle
 
-  s <- liftIO $ readFile "libmincaml.s"
-  write s
-  --min_caml_print_int
+  -- utility for mars
+  use forSim >>= flip unless (do
+    s <- liftIO $ readFile "libmincaml.s"
+    write s)
 
 ----------
 -- Util --
