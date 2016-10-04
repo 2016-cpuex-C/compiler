@@ -36,9 +36,13 @@ g' env = let geti var = lookupJust var env
     | M.member x env -> AAdd y (get x)
   ASub x (V y)
     | M.member y env -> AAdd x (C (- geti y))
-  --AMul x (V y) not implemented
-  --  | M.member y env -> AMul x (get y)
-  --  | M.member x env -> AMul y (get x)
+  AMul x (V y)
+    | M.member y env && geti y == 2 -> ASll x 1
+    | M.member y env && geti y == 4 -> ASll x 2
+    | M.member x env && geti x == 2 -> ASll y 1
+    | M.member x env && geti x == 4 -> ASll y 2
+    | otherwise -> error "Simm.hs: impossible"
+  AMul _ (C _) ->  error "Simm.hs: impossible"
 
   ALd x (V y)
     | M.member y env -> ALd x (get y)

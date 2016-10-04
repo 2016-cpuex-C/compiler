@@ -4,7 +4,7 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# OPTIONS_GHC -fno-warn-type-defaults #-}
 
-import AllTypes (runCaml, initialState, S(..), Error)
+import AllTypes (runCamlDefault, Error)
 import Lexer    (lex)
 import Parser   (parse)
 import Typing   (typing)
@@ -27,11 +27,11 @@ import Data.Text (Text, pack)
 import qualified Data.Text.IO as TIO
 default (Text)
 
-forSim :: Bool
-forSim = True
+useSim :: Bool
+useSim = False
 
 onlyCompile :: Bool
-onlyCompile = False
+onlyCompile = True
 
 targets :: [FilePath]
 targets = [
@@ -62,7 +62,6 @@ ugoitargets = [
   , "funcomp"
   , "gcd"
   , "inprod"
-  , "inprod-int"
   , "join-reg"
   , "join-reg2"
   , "join-stack"
@@ -79,8 +78,7 @@ ugoitargets = [
 
 main :: IO ()
 main = do
-  test "inprod"
-  {-mapM_ test $ ugoitargets-}
+  mapM_ test $ ugoitargets -- ++ targets
 
 test :: FilePath -> IO ()
 test f = do
@@ -88,7 +86,7 @@ test f = do
   m <- compile $ "test" </> f
   case m of
     Right () -> shelly $ do
-      res <- (if forSim then exeSim else exeMars) $ "test" </> f <.> "s"
+      res <- (if useSim then exeSim else exeMars) $ "test" </> f <.> "s"
       ans <- read' $ "test" </> f <.> "ans"
       liftIO $ do
         putStr "result: " >> TIO.putStr res
@@ -98,19 +96,18 @@ test f = do
   where
     read' file = pack <$> liftIO (readFile file)
 
--- 使うときは適宜修正してください
--- Marsのインストールが必要す
+-- 使うときは適修正してください
+-- Marsのインストールが必要です
 exeMars :: FilePath -> Sh Text
 exeMars s = silently $ run "java" ["-jar", "/home/hogeyama/apps/Mars4_5.jar", "me", pack s]
 exeSim :: FilePath -> Sh Text
-exeSim s = silently $ run "./sim/sim" ["<", pack s]
+exeSim s = silently $ run "./simulator/sim" ["<", pack s]
 
 compile :: FilePath -> IO (Either Error ())
 compile f = do
   s <- readFile (f <.> "ml")
   withFile (f <.> "s") WriteMode $ \out ->
-    let st = initialState { _forSim = forSim }
-    in (`runCaml` st) $ lex s
+    runCamlDefault $ lex s
       >>= parse
       >>= typing
       >>= kNormalize

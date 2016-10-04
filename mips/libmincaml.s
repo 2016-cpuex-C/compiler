@@ -19,3 +19,9 @@ min_caml_truncate: # $f0:float -> $v0:int
 	mfc1	$v0, $f0
 	jr	$ra
 
+#min_caml_create_array:
+#	move	$a0, $v0
+#	move	$v0, $gp
+#create_array_loop:
+#	tst	%a0
+

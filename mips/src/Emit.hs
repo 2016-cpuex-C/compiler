@@ -362,20 +362,15 @@ emit handle (AProg fdata fundefs e) = do
   write $ printf "\taddi\t$sp, $sp, 24"
   write $ printf "\tli\t%s, 0" (regs!0)
 
-  use forSim >>= \case
-    True -> do
-      write $ printf "\texit"
-    False -> do
-      write $ printf "\tli\t$v0, 10"
-      write $ printf "\tsyscall"
+  write $ printf "\tli\t$v0, 10"
+  write $ printf "\tsyscall"
 
   -- funcions
   forM_ fundefs $ h handle
 
-  -- utility for mars
-  use forSim >>= flip unless (do
-    s <- liftIO $ readFile "libmincaml.s"
-    write s)
+  -- utility
+  s <- liftIO $ readFile "libmincaml.s"
+  write s
 
 ----------
 -- Util --

@@ -260,7 +260,6 @@ data S = S { _idCount :: Int                  -- for Id module
            , _stackSet :: Set Id              -- for Emit module
            , _stackMap :: [Id]                -- for Emit module
            , _optimiseLimit :: Int            -- for Optimise module (max optimise iter)
-           , _forSim :: Bool                  -- compile for simulater (otherwise for Mars)
            }
            deriving Show
 makeLenses ''S
@@ -275,7 +274,6 @@ initialState = S { _idCount = 0
                  , _stackSet = S.empty
                  , _stackMap = []
                  , _optimiseLimit = 100
-                 , _forSim = True
                  }
 
 liftIO :: IO a -> Caml a
