@@ -198,7 +198,7 @@ g env = \case
     Just (TArray TUnit)  ->
       return $ AsmAns ANop
     Just (TArray TFloat) ->
-      return $ AsmLet (offset, TInt) (ASll y 3) (AsmAns (ALdDF x (V offset)))
+      return $ AsmLet (offset, TInt) (ASll y 2) (AsmAns (ALdDF x (V offset)))
     Just (TArray _)      ->
       return $ AsmLet (offset, TInt) (ASll y 2) (AsmAns (ALd x (V offset)))
     _ -> error "Virtual.g CGet"
@@ -207,7 +207,7 @@ g env = \case
     Just (TArray TUnit)  ->
       return $ AsmAns ANop
     Just (TArray TFloat) ->
-      return $ AsmLet (offset, TInt) (ASll y 3) (AsmAns (AStDF z x (V offset)))
+      return $ AsmLet (offset, TInt) (ASll y 2) (AsmAns (AStDF z x (V offset)))
     Just (TArray _)      -> 
       return $ AsmLet (offset, TInt) (ASll y 2) (AsmAns (ASt z x (V offset)))
     _ -> error "Virtual.g CPut"

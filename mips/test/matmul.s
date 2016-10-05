@@ -87,11 +87,11 @@ main:
 	lw	$v0, 0($a1)
 	la	$v1, l.344
 	l.s	$f0, 0($v1)
-	s.s	$f0, -8($v0)
+	s.s	$f0, -4($v0)
 	lw	$v0, 0($a1)
 	la	$v1, l.348
 	l.s	$f0, 0($v1)
-	s.s	$f0, -16($v0)
+	s.s	$f0, -8($v0)
 	lw	$v0, 4($a1)
 	la	$v1, l.352
 	l.s	$f0, 0($v1)
@@ -99,11 +99,11 @@ main:
 	lw	$v0, 4($a1)
 	la	$v1, l.356
 	l.s	$f0, 0($v1)
-	s.s	$f0, -8($v0)
+	s.s	$f0, -4($v0)
 	lw	$v0, 4($a1)
 	la	$v1, l.360
 	l.s	$f0, 0($v1)
-	s.s	$f0, -16($v0)
+	s.s	$f0, -8($v0)
 	lw	$a2, -8($sp)
 	lw	$v0, 0($a2)
 	la	$v1, l.364
@@ -112,7 +112,7 @@ main:
 	lw	$v0, 0($a2)
 	la	$v1, l.368
 	l.s	$f0, 0($v1)
-	s.s	$f0, -8($v0)
+	s.s	$f0, -4($v0)
 	lw	$v0, 4($a2)
 	la	$v1, l.372
 	l.s	$f0, 0($v1)
@@ -120,7 +120,7 @@ main:
 	lw	$v0, 4($a2)
 	la	$v1, l.376
 	l.s	$f0, 0($v1)
-	s.s	$f0, -8($v0)
+	s.s	$f0, -4($v0)
 	lw	$v0, 8($a2)
 	la	$v1, l.380
 	l.s	$f0, 0($v1)
@@ -128,7 +128,7 @@ main:
 	lw	$v0, 8($a2)
 	la	$v1, l.384
 	l.s	$f0, 0($v1)
-	s.s	$f0, -8($v0)
+	s.s	$f0, -4($v0)
 	li	$v0, 2
 	li	$v1, 3
 	li	$a0, 2
@@ -158,7 +158,7 @@ main:
 	lw	$ra, -20($sp)
 	lw	$v0, -12($sp)
 	lw	$v1, 0($v0)
-	l.s	$f0, -8($v1)
+	l.s	$f0, -4($v1)
 	sw	$ra, -20($sp)
 	addi	$sp, $sp, -24
 	jal	min_caml_truncate
@@ -194,7 +194,7 @@ main:
 	lw	$ra, -20($sp)
 	lw	$v0, -12($sp)
 	lw	$v0, 4($v0)
-	l.s	$f0, -8($v0)
+	l.s	$f0, -4($v0)
 	sw	$ra, -20($sp)
 	addi	$sp, $sp, -24
 	jal	min_caml_truncate
@@ -231,24 +231,24 @@ loop3.153:
 	sll	$t1, $a0, 2
 	add	$t9, $a1, $t1
 	lw	$a1, ($t9)
-	sll	$t1, $v1, 3
+	sll	$t1, $v1, 2
 	add	$t9, $a1, $t1
 	l.s	$f0, ($t9)
 	sll	$a0, $a0, 2
 	add	$t9, $a3, $a0
 	lw	$a0, ($t9)
-	sll	$a1, $v0, 3
+	sll	$a1, $v0, 2
 	add	$t9, $a0, $a1
 	l.s	$f2, ($t9)
 	sll	$a0, $v0, 2
 	add	$t9, $a2, $a0
 	lw	$a0, ($t9)
-	sll	$a1, $v1, 3
+	sll	$a1, $v1, 2
 	add	$t9, $a0, $a1
 	l.s	$f4, ($t9)
 	mul.s	$f2, $f2, $f4
 	add.s	$f0, $f0, $f2
-	sll	$v1, $v1, 3
+	sll	$v1, $v1, 2
 	add	$t9, $t0, $v1
 	s.s	$f0, ($t9)
 	addi	$v0, $v0, -1
@@ -406,7 +406,7 @@ min_caml_print_int: #$v0
 	li	$v0, 1
 	syscall
 	jr	$ra
-min_caml_print_double: #$f0
+min_caml_print_double: #$f0 doubleという名前だがfloat
 	mov.d	$f12, $f0
 	li	$v0, 3
 	syscall
@@ -416,10 +416,39 @@ min_caml_truncate: # $f0:float -> $v0:int
 	mfc1	$v0, $f0
 	jr	$ra
 
-#min_caml_create_array:
-#	move	$a0, $v0
-#	move	$v0, $gp
-#create_array_loop:
-#	tst	%a0
+# align 8する必要あるんだろうか
+min_caml_create_array: # array of length $v0, initialized by $v1
+	move	$a0, $v0
+	move	$v0, $gp
+create_array_loop:
+	li	$a2, 0
+	bne	$a0, $a2, create_array_cont
+	andi	$a1, $gp, 4
+	beq	$a1, $a2, create_array_exit
+	addi	$gp, $gp, 4
+create_array_exit:
+	jr	$ra
+create_array_cont:
+	sw	$v1, ($gp)
+	addi	$a0, $a0, -1
+	addi	$gp, $gp, 4
+	b	create_array_loop
+
+min_caml_create_float_array: # array of length $v0, initialized by $f0
+	move	$a0, $v0
+	move	$v0, $gp
+create_float_array_loop:
+	li	$a2, 0
+	bne	$a0, $a2, create_float_array_cont
+	andi	$a1, $gp, 4
+	beq	$a1, $a2, create_float_array_exit
+	addi	$gp, $gp, 4
+create_float_array_exit:
+	jr	$ra
+create_float_array_cont:
+	s.s	$f0, ($gp)
+	addi	$a0, $a0, -1
+	addi	$gp, $gp, 4
+	b	create_float_array_loop
 
 

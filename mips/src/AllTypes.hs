@@ -20,7 +20,6 @@ type Id = String
 newtype Label = Label String
               deriving Show
 
-
 -------------------
 -- Type.t = Type --
 -------------------
