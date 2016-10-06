@@ -47,6 +47,7 @@ derefExpr = \case
   EAdd e1 e2    -> EAdd   <$> derefExpr e1 <*> derefExpr e2
   ESub e1 e2    -> ESub   <$> derefExpr e1 <*> derefExpr e2
   EMul e1 e2    -> EMul   <$> derefExpr e1 <*> derefExpr e2
+  EDiv e1 e2    -> EDiv   <$> derefExpr e1 <*> derefExpr e2
   EEq  e1 e2    -> EEq    <$> derefExpr e1 <*> derefExpr e2
   ELe  e1 e2    -> ELe    <$> derefExpr e1 <*> derefExpr e2
   EFNeg e       -> EFNeg  <$> derefExpr e
@@ -150,6 +151,10 @@ infer env e =
         unifyM1 TInt (infer env e2)
         return TInt
     EMul e1 e2 -> do
+        unifyM1 TInt (infer env e1)
+        unifyM1 TInt (infer env e2)
+        return TInt
+    EDiv e1 e2 -> do
         unifyM1 TInt (infer env e1)
         unifyM1 TInt (infer env e2)
         return TInt

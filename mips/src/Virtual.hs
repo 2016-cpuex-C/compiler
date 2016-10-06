@@ -1,4 +1,5 @@
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE MultiWayIf #-}
 
 module Virtual where
 {- CProg -> AProg -}
@@ -29,8 +30,8 @@ h (CFunDef (Label x,t) yts zts e) = do
   let (int, float) = separate yts
   (_offset, load) <- do
       e' <- g (M.insert x t (insertList yts $ insertList zts M.empty)) e
-      let f1 z offset load = fLetD (z, ALdDF x (C offset), load)
-          f2 z t' offset load = AsmLet (z,t') (ALd x (C offset)) load
+      let f1 z    offset load = AsmLet (z, TFloat) (ALdDF x (C offset)) load
+          f2 z t' offset load = AsmLet (z,t')      (ALd   x (C offset)) load
       return $ expand zts (4,e') f1 f2
   case t of
     TFun _ t2 -> return $ AFunDef (Label x) int float load t2
@@ -63,14 +64,14 @@ classifyM xts ini addf addi = foldlM func ini xts
           _      -> addi acc x t
 
 expand :: [(Id, Type)] -> (Int, Asm)
-       -> (Id -> Int -> Asm -> Asm)
-       -> (Id -> Type -> Int -> Asm -> Asm)
+       -> (Id -> Int -> Asm -> Asm) -- float
+       -> (Id -> Type -> Int -> Asm -> Asm) -- other
        -> (Int, Asm)
 expand xts ini addf addi =
   classify xts ini
     (\(offset, acc) x ->
         let offset' = align offset in
-        (offset' + 8, addf x offset' acc))
+        (offset' + 4, addf x offset' acc))
     (\(offset, acc) x t ->
       (offset + 4, addi x t offset acc))
 
@@ -84,7 +85,7 @@ expandM xts ini addf addi =
     (\(offset, acc) x -> do
         let offset' = align offset
         z <- addf x offset acc
-        return (offset' + 8, z))
+        return (offset' + 4, z))
     (\(offset, acc) x t -> do
         z <- addi x t offset acc
         return (offset + 4, z))
@@ -121,6 +122,7 @@ g env = \case
   CAdd x y -> return $ AsmAns $ AAdd x (V y)
   CSub x y -> return $ AsmAns $ ASub x (V y)
   CMul x y -> return $ AsmAns $ AMul x (V y)
+  CDiv x y -> return $ AsmAns $ ADiv x (V y)
 
   CFNeg x -> return $ AsmAns $ AFNegD x
   CFAdd x y -> return $ AsmAns $ AFAddD x y
@@ -149,7 +151,7 @@ g env = \case
     Just TFloat -> return $ AsmAns $ AFMovD x
     _ -> return $ AsmAns $ AMov x
 
-  -- 重要
+  -- 重要 よくわかってない
   CMakeCls (x,t) (Closure l ys) e2 -> do
     e2' <- g (M.insert x t env) e2
     let ts = [ fromJust (M.lookup y env) | y <- ys ]
@@ -161,7 +163,11 @@ g env = \case
         e2'' <- do
             z <- genId "l"
             AsmLet (z,TInt) (ASetL l) <$> seq' (ASt z x (C 0), storeFv)
-        return $ AsmLet (regHp, TInt) (AAdd regHp (C $ align offset)) e2''
+        if | stackDir == 1 ->
+                return $ AsmLet (regHp, TInt) (AAdd regHp (C $ align offset)) e2''
+           | stackDir == -1 ->
+                return $ AsmLet (regHp, TInt) (ASub regHp (C $ align offset)) e2''
+           | otherwise -> error "stackDir must be 1 or -1"
     return $ AsmLet (x,t) (AMov regHp) e1
 
   CAppCls x ys ->
@@ -175,23 +181,28 @@ g env = \case
     y <- genId "t"
     let ts = [fromJust (M.lookup x env) | x <- xs]
     (offset,store) <-
-        let addi x   offset store = seq' (AStDF x y (C offset), store)
-            addf x _ offset store = seq' (ASt   x y (C offset), store)
-        in expandM (zip xs ts) (0,AsmAns (AMov y)) addi addf
-    return $ AsmLet (y,TTuple ts) (AMov regHp)
-                (AsmLet (regHp,TInt) (AAdd regHp (C $ align offset)) store)
+        let addf x   offset store = seq' (AStDF x y (C offset), store)
+            addi x _ offset store = seq' (ASt   x y (C offset), store)
+        in expandM (zip xs ts) (0,AsmAns (AMov y)) addf addi
+    if | stackDir == 1 ->
+            return $ AsmLet (y,TTuple ts) (AMov regHp)
+                      (AsmLet (regHp,TInt) (AAdd regHp (C $ align offset)) store)
+       | stackDir == -1 ->
+            return $ AsmLet (y,TTuple ts) (AMov regHp)
+                      (AsmLet (regHp,TInt) (ASub regHp (C $ align offset)) store)
+       | otherwise -> error "stackDir must be 1 or -1"
 
   CLetTuple xts y e2 -> do
     let s = C.fv e2
     (_offset, load) <- do
-        let addi x offset load
+        let addf x offset load --名前逆では
                 | S.member x s = fLetD (x, ALdDF y (C offset), load)
                 | otherwise    = load
-            addf x t offset load
+            addi x t offset load
                 | S.member x s = AsmLet (x,t) (ALd y (C offset)) load
                 | otherwise    = load
         e2' <- g (insertList xts env) e2
-        return $ expand xts (0,e2') addi addf
+        return $ expand xts (0,e2') addf addi
     return load
 
   CGet x y -> genId "o" >>= \offset -> case M.lookup x env of
@@ -208,7 +219,7 @@ g env = \case
       return $ AsmAns ANop
     Just (TArray TFloat) ->
       return $ AsmLet (offset, TInt) (ASll y 2) (AsmAns (AStDF z x (V offset)))
-    Just (TArray _)      -> 
+    Just (TArray _)      ->
       return $ AsmLet (offset, TInt) (ASll y 2) (AsmAns (ASt z x (V offset)))
     _ -> error "Virtual.g CPut"
 

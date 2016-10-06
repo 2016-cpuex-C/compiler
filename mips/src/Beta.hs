@@ -28,6 +28,7 @@ g env e = case e of
   KAdd  x y -> return $ KAdd  (find x env) (find y env)
   KSub  x y -> return $ KSub  (find x env) (find y env)
   KMul  x y -> return $ KMul  (find x env) (find y env)
+  KDiv  x y -> return $ KDiv  (find x env) (find y env)
 
   KFAdd x y -> return $ KFAdd (find x env) (find y env)
   KFSub x y -> return $ KFSub (find x env) (find y env)

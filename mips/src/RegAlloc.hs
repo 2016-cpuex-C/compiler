@@ -229,6 +229,7 @@ g' destt cont regenv exp = case exp of
       rx <- find  x  TInt regenv
       ry' <- find' y' regenv
       return (AsmAns (AMul rx ry'), regenv)
+  ADiv{} -> error "RegAlloc.hs: impossible"
   ASll x i -> do
       rx <- find x TInt   regenv
       return (AsmAns (ASll rx i), regenv)

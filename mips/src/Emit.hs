@@ -16,7 +16,7 @@ import Data.Vector ((!))
 import Control.Lens
 import Data.List (foldl')
 import Control.Exception.Base (assert)
-import Control.Monad (when, unless, forM_)
+import Control.Monad (when, forM_)
 import Data.List (partition)
 import System.IO (Handle, hPutStrLn)
 import Text.Printf
@@ -34,14 +34,11 @@ save x = do
   stackSet %= S.insert x
   stackMap %= \l -> if x `elem` l then l else l++[x]
 
+-- singleにしたのでsaveと変わらない
 savef :: Id -> Caml ()
 savef x = do
   stackSet %= S.insert x
-  smap <- use stackMap
-  when (x `notElem` smap) $ do
-    pad <- if | even (length smap) -> return []
-              | otherwise          -> (:[]) <$> genTmp TInt
-    stackMap .= smap ++ pad ++ [x,x]
+  stackMap %= \l -> if x `elem` l then l else l++[x]
 
 locate :: Id -> Caml [Int]
 locate x = uses stackMap loc
@@ -99,7 +96,10 @@ g' oc (dest,exp) =
       AMul y (V z) -> write ( printf "\tmult\t%s, %s" y z ) >>
                       write ( printf "\tmflo\t %s" x )
       AMul {}      -> error "multi not implemented"
-      ASll y i     -> write $ printf "\tsll\t%s, %s, %d" x y i
+      ADiv {}      -> error "Emit.hs: impossible"
+      ASll y i
+        | i >= 0    -> write $ printf "\tsll\t%s, %s, %d" x y i
+        | otherwise -> write $ printf "\tsrl\t%s, %s, %d" x y (-i)
 
       AFMovD y   -> write $ printf "\tmov.s\t%s, %s" x y
       AFNegD y   -> write $ printf "\tneg.s\t%s, %s" x y
@@ -239,6 +239,7 @@ g' oc (dest,exp) =
       AAdd{}  -> g' oc (NonTail (regs!0), exp) >> ret
       ASub{}  -> g' oc (NonTail (regs!0), exp) >> ret
       AMul{}  -> g' oc (NonTail (regs!0), exp) >> ret
+      ADiv{}  -> error "Emit.hs: impossible"
       ASll{}  -> g' oc (NonTail (regs!0), exp) >> ret
       ALd{}   -> g' oc (NonTail (regs!0), exp) >> ret
 
@@ -334,11 +335,17 @@ emit handle (AProg fdata fundefs e) = do
   --floats
   write $ printf ".data"
   write $ printf "const_f_zero:"
-  write $ printf "\t.word\t0x%lx" (floatAsWord 0.0)
+  write $ printf "\t.word\t0x00000000"
   write $ printf "const_f_zero_neg:"
-  write $ printf "\t.word\t0x%lx" (floatAsWord (-0.0))
+  write $ printf "\t.word\t0x80000000"
+  write $ printf "const_f_one:"
+  write $ printf "\t.word\t0x3f800000"
   write $ printf "const_f_half:"
-  write $ printf "\t.word\t0x%lx" (floatAsWord 0.5)
+  write $ printf "\t.word\t0x3f000000"
+  write $ printf "const_pi:"
+  write $ printf "\t.word\t0x40490fdb"
+  write $ printf "const_half_pi:"
+  write $ printf "\t.word\t0x3fc90fdb"
   forM_ fdata $ \(Label x,d) -> do
       write $ printf "%s:\t# %.6f" x d
       write $ printf "\t.word\t0x%lx" (floatAsWord d)

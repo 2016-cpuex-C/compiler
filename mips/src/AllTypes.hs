@@ -53,6 +53,7 @@ data Expr = EUnit
           | EAdd      Expr Expr
           | ESub      Expr Expr
           | EMul      Expr Expr
+          | EDiv      Expr Expr
           | EFNeg     Expr
           | EFAdd     Expr Expr
           | EFSub     Expr Expr
@@ -89,6 +90,7 @@ data KExpr = KUnit
            | KAdd  Id Id
            | KSub  Id Id
            | KMul  Id Id
+           | KDiv  Id Id
            | KFNeg Id
            | KFAdd Id Id
            | KFSub Id Id
@@ -124,6 +126,7 @@ data CExpr = CUnit
            | CAdd      Id Id
            | CSub      Id Id
            | CMul      Id Id
+           | CDiv      Id Id
            | CFNeg     Id
            | CFAdd     Id Id
            | CFSub     Id Id
@@ -168,35 +171,6 @@ data Asm = AsmAns AExpr
          | AsmLet (Id, Type) AExpr Asm
          deriving Show
 
--- old x86の各命令に対応 -- {{{
---data AExpr = ANop
---           | ASet Int
---           | ASetL Label
---           | AMov Id
---           | ANeg Id
---           | AAdd Id IdOrImm
---           | ASub Id IdOrImm
---           | AMul Id Id
---           | ALd Id IdOrImm Int
---           | ASt Id Id IdOrImm Int
---           | AFMovD Id
---           | AFNegD Id
---           | AFAddD Id Id
---           | AFSubD Id Id
---           | AFMulD Id Id
---           | AFDivD Id Id
---           | ALdDF Id IdOrImm Int
---           | AStDF Id Id IdOrImm Int
---           | AComment String
---           | AIfEq Id IdOrImm Asm Asm
---           | AIfLe Id IdOrImm Asm Asm
---           | AIfGe Id IdOrImm Asm Asm
---           | AIfFEq Id Id Asm Asm
---           | AIfFLe Id Id Asm Asm
---           | ACallCls Id    [Id] [Id]
---           | ACallDir Label [Id] [Id]
---           | ASave Id Id
---           | ARestore Id-- }}}
 data AExpr = ANop
            | ASet Int
            | ASetL Label -- FloatやArray (.dataセクションのやつ)
@@ -205,6 +179,7 @@ data AExpr = ANop
            | AAdd Id IdOrImm
            | ASub Id IdOrImm
            | AMul Id IdOrImm
+           | ADiv Id IdOrImm
            | ASll Id Int -- shift left logical
            | ALd Id IdOrImm
            | ASt Id Id IdOrImm

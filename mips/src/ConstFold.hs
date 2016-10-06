@@ -48,6 +48,8 @@ g env e = case e of
     | memberI x env && memberI y env -> KInt $ findI x env - findI y env
   KMul x y
     | memberI x env && memberI y env -> KInt $ findI x env * findI y env
+  KDiv x y
+    | memberI x env && memberI y env -> KInt $ findI x env * findI y env
 
   KFAdd x y
     | memberF x env && memberF y env -> KFloat $ findF x env + findF y env

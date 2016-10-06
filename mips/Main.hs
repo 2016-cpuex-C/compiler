@@ -15,21 +15,21 @@ import RegAlloc (regAlloc)
 import Simm     (simm)
 import Emit     (emit)
 
-import Prelude hiding (lex)
-import System.IO (withFile, IOMode(..))
+import           Prelude hiding (lex)
+import           System.IO      (withFile, IOMode(..))
 import qualified Data.Map as M
-import Options
+import           Options
 
 main :: IO ()
 main = runCommand $ \opts args -> do
-  let s = initialState { _threshold = inline opts
+  let s = initialState { _threshold     = inline opts
                        , _optimiseLimit = iter opts
-                       , _extTyEnv = minrtExtTyEnv
+                       , _extTyEnv      = minrtExtTyEnv
                        }
-  mapM_ (file s) args
+  mapM_ (compile s) args
 
-file :: S -> FilePath -> IO ()
-file s f = do
+compile :: S -> FilePath -> IO ()
+compile s f = do
   str <- readFile (f ++ ".ml")
   withFile (f ++ ".s") WriteMode $ \out -> do
     m <-(`runCaml` s) $ lex str
@@ -42,6 +42,7 @@ file s f = do
           >>= virtualCode
           >>= simm
           >>= regAlloc
+          {->>= \e -> liftIO (print e) >> return e-}
           >>= emit out
     case m of
       Right () -> return ()

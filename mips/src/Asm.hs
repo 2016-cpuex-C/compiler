@@ -119,6 +119,7 @@ fvAExpr = \case
   AAdd x y'    -> x : fvOfIdOrImm y'
   ASub x y'    -> x : fvOfIdOrImm y'
   AMul x y'    -> x : fvOfIdOrImm y'
+  ADiv x y'    -> x : fvOfIdOrImm y'
   ALd x y'     -> x : fvOfIdOrImm y'
   ALdDF x y'   -> x : fvOfIdOrImm y'
 
@@ -146,7 +147,7 @@ concat' a1 xt a2 = case a1 of
   AsmAns e -> AsmLet xt e a2
   AsmLet yt e a1' -> AsmLet yt e (concat' a1' xt a2)
 
+-- double から single に変わったので不要
 align :: Int -> Int
-align i | i `mod` 8 == 0 = i
-        | otherwise      = i+4
+align = id
 

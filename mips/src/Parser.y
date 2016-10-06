@@ -20,6 +20,7 @@ import Type
      '-'         { TokenMinus       }
      '+'         { TokenPlus        }
      '*'         { TokenAst         }
+     '/'         { TokenSlash       }
      '-.'        { TokenMinusDot    }
      '+.'        { TokenPlusDot     }
      '*.'        { TokenAstDot      }
@@ -71,6 +72,7 @@ Expr :: { Expr }
     | Expr '+' Expr                                    { EAdd $1 $3         }
     | Expr '-' Expr                                    { ESub $1 $3         }
     | Expr '*' Expr                                    { EMul $1 $3         }
+    | Expr '/' Expr                                    { EDiv $1 $3         }
     | Expr '=' Expr                                    { EEq  $1 $3         }
     | Expr '<>' Expr                                   { ENot (EEq $1 $3)   }
     | Expr '<' Expr                                    { ENot (ELe $3 $1)   }

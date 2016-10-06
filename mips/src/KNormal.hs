@@ -29,6 +29,7 @@ fv = \case
   KAdd  x y -> S.fromList [x ,y]
   KSub  x y -> S.fromList [x ,y]
   KMul  x y -> S.fromList [x ,y]
+  KDiv  x y -> S.fromList [x ,y]
   KFAdd x y -> S.fromList [x ,y]
   KFSub x y -> S.fromList [x ,y]
   KFMul x y -> S.fromList [x ,y]
@@ -99,6 +100,10 @@ g env e = case e of
       insertLet (g env e1) $ \x ->
       insertLet (g env e2) $ \y ->
       return (KMul x y, TInt)
+  EDiv e1 e2 ->
+      insertLet (g env e1) $ \x ->
+      insertLet (g env e2) $ \y ->
+      return (KDiv x y, TInt)
 
   EFNeg e' ->
       insertLet (g env e') $ \x ->

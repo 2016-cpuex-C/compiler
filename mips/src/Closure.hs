@@ -34,6 +34,7 @@ fv = \case
   CAdd  x y -> S.fromList [x,y]
   CSub  x y -> S.fromList [x,y]
   CMul  x y -> S.fromList [x,y]
+  CDiv  x y -> S.fromList [x,y]
   CFAdd x y -> S.fromList [x,y]
   CFSub x y -> S.fromList [x,y]
   CFMul x y -> S.fromList [x,y]
@@ -70,6 +71,7 @@ g env known = \case
   KAdd  x y -> return $ CAdd  x y
   KSub  x y -> return $ CSub  x y
   KMul  x y -> return $ CMul  x y
+  KDiv  x y -> return $ CDiv  x y
   KFAdd x y -> return $ CFAdd x y
   KFSub x y -> return $ CFSub x y
   KFMul x y -> return $ CFMul x y

@@ -30,6 +30,7 @@ tokens :-
   <0> "-"           { tk $ TokenMinus       }
   <0> "+"           { tk $ TokenPlus        }
   <0> "*"           { tk $ TokenAst         }
+  <0> "/"           { tk $ TokenSlash       }
   <0> "-."          { tk $ TokenMinusDot    }
   <0> "+."          { tk $ TokenPlusDot     }
   <0> "*."          { tk $ TokenAstDot      }
