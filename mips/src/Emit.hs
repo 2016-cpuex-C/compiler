@@ -26,9 +26,8 @@ foreign import ccall "floatAsWord" floatAsWord :: Float -> Word32
 {-floatAsWord :: Float -> Word32-}
 {-floatAsWord = undefined-}
 
--- -1 下向き +1 上向き
-stackDir :: Int
-stackDir = -1
+-- -1 下向き +1 上向き Asmに移動
+--stackDir :: Int
 
 save :: Id -> Caml ()
 save x = do
@@ -109,16 +108,16 @@ g' oc (dest,exp) =
       AFMulD y z -> write $ printf "\tmul.s\t%s, %s, %s" x y z
       AFDivD y z -> write $ printf "\tdiv.s\t%s, %s, %s" x y z
 
-      ALd y (V z) -> do
+      ALd y (V z) -> do --TODO(?) stackDir = -1 のときはどうにかしなきゃいけない
           write $ printf "\tadd\t%s, %s, %s" regAd y z
           write $ printf "\tlw\t%s, (%s)" x regAd
       ALd y (C i) -> do
-          write $ printf "\tlw\t%s, %d(%s)" x i y
+          write $ printf "\tlw\t%s, %d(%s)" x (stackDir * i) y
       ASt y z (V w) -> do
           write $ printf "\tadd\t%s, %s, %s" regAd z w
           write $ printf "\tsw\t%s, (%s)" y regAd
       ASt y z (C i) -> do
-          write $ printf "\tsw\t%s, %d(%s)" y i z
+          write $ printf "\tsw\t%s, %d(%s)" y (stackDir * i) z
 
       ALdDF y (V z) -> do
           write $ printf "\tadd\t%s, %s, %s" regAd y z
@@ -168,10 +167,10 @@ g' oc (dest,exp) =
 
       AIfFEq y z e1 e2 -> do
           write $ printf "\tc.eq.s\t%s, %s" y z
-          g'_non_tail_if oc (NonTail x) e1 e2 Nothing "bclt" "bclf"
+          g'_non_tail_if oc (NonTail x) e1 e2 Nothing "bc1t" "bc1f"
       AIfFLe y z e1 e2 -> do
           write $ printf "\tc.le.s\t%s, %s" y z
-          g'_non_tail_if oc (NonTail x) e1 e2 Nothing "bclt" "bclf"
+          g'_non_tail_if oc (NonTail x) e1 e2 Nothing "bc1t" "bc1f"
 
       ACallCls y zs ws -> do
           g'_args oc [(y, regCl)] zs ws
@@ -264,10 +263,10 @@ g' oc (dest,exp) =
       AIfGe x y' e1 e2 -> g'_tail_if oc e1 e2 (Just (x, (ppIdOrImm y'))) "bge" "blt"
       AIfFEq x y e1 e2 -> do
           write $ printf "\tc.eq.s\t%s, %s" x y
-          g'_tail_if oc e1 e2 Nothing "bclt" "bclf"
+          g'_tail_if oc e1 e2 Nothing "bc1t" "bc1f"
       AIfFLe x y e1 e2 -> do
           write $ printf "\tc.le.s\t%s, %s" x y
-          g'_tail_if oc e1 e2 Nothing "bclt" "bclf"
+          g'_tail_if oc e1 e2 Nothing "bc1t" "bc1f"
 
       ACallCls x ys zs -> do
           g'_args oc [(x, regCl)] ys zs
@@ -334,11 +333,15 @@ emit handle (AProg fdata fundefs e) = do
 
   --floats
   write $ printf ".data"
+  write $ printf "const_f_zero:"
+  write $ printf "\t.word\t0x%lx" (floatAsWord 0.0)
+  write $ printf "const_f_zero_neg:"
+  write $ printf "\t.word\t0x%lx" (floatAsWord (-0.0))
+  write $ printf "const_f_half:"
+  write $ printf "\t.word\t0x%lx" (floatAsWord 0.5)
   forM_ fdata $ \(Label x,d) -> do
       write $ printf "%s:\t# %.6f" x d
       write $ printf "\t.word\t0x%lx" (floatAsWord d)
-      --write $ printf "\t.word\t0x%lx" (gethi d)
-      --write $ printf "\t.word\t0x%lx" (getlo d)
 
   -- main routine
   write $ printf ".text"
@@ -346,9 +349,9 @@ emit handle (AProg fdata fundefs e) = do
   write $ printf "main:"
 
   --main header
-  write $ printf "\taddi\t$sp, $sp, -24"
-  write $ printf "\tsw\t$ra, 20($sp)"
-  write $ printf "\tsw\t$fp, 16($sp)"
+  write $ printf "\taddi\t$sp, $sp, %d" (stackDir * 24)
+  write $ printf "\tsw\t$ra, %d($sp)" (negate $ stackDir * 20)
+  write $ printf "\tsw\t$fp, %d($sp)" (negate $ stackDir * 16)
   write $ printf "\taddi\t$fp, $sp, 0"
 
   stackSet .= S.empty

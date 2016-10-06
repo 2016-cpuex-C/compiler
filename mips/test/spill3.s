@@ -7,16 +7,16 @@ main:
 	sw	$fp, 16($sp)
 	addi	$fp, $sp, 0
 	li	$v0, 0
-	sw	$ra, -4($sp)
-	addi	$sp, $sp, -8
+	sw	$ra, 4($sp)
+	addi	$sp, $sp, 8
 	jal	f.56
-	addi	$sp, $sp, 8
-	lw	$ra, -4($sp)
-	sw	$ra, -4($sp)
 	addi	$sp, $sp, -8
-	jal	min_caml_print_int
+	lw	$ra, 4($sp)
+	sw	$ra, 4($sp)
 	addi	$sp, $sp, 8
-	lw	$ra, -4($sp)
+	jal	min_caml_print_int
+	addi	$sp, $sp, -8
+	lw	$ra, 4($sp)
 	addi	$sp, $fp, 0
 	lw	$ra, 20($sp)
 	lw	$fp, 16($sp)
@@ -49,31 +49,31 @@ f.56:
 	add	$t8, $s7, $a2
 	sw	$t8, 0($sp)
 	add	$t8, $t8, $a3
-	sw	$t8, -4($sp)
+	sw	$t8, 4($sp)
 	add	$t8, $t8, $t0
-	sw	$t8, -8($sp)
+	sw	$t8, 8($sp)
 	add	$t8, $t8, $t1
-	sw	$t8, -12($sp)
+	sw	$t8, 12($sp)
 	add	$t8, $t8, $t2
-	sw	$t8, -16($sp)
+	sw	$t8, 16($sp)
 	add	$t8, $t8, $t3
-	sw	$t8, -20($sp)
+	sw	$t8, 20($sp)
 	add	$t8, $t8, $t4
-	sw	$t8, -24($sp)
+	sw	$t8, 24($sp)
 	add	$t8, $t8, $t5
-	sw	$t8, -28($sp)
+	sw	$t8, 28($sp)
 	add	$t8, $t8, $t6
-	sw	$t8, -32($sp)
+	sw	$t8, 32($sp)
 	add	$t8, $t8, $t7
-	sw	$t8, -36($sp)
+	sw	$t8, 36($sp)
 	add	$t8, $t8, $s0
-	sw	$t8, -40($sp)
+	sw	$t8, 40($sp)
 	add	$t8, $t8, $s1
-	sw	$t8, -44($sp)
+	sw	$t8, 44($sp)
 	add	$t8, $t8, $s2
-	sw	$t8, -48($sp)
+	sw	$t8, 48($sp)
 	add	$t8, $t8, $s3
-	sw	$v0, -52($sp)
+	sw	$v0, 52($sp)
 	add	$v0, $t8, $v0
 	add	$v1, $v1, $a0
 	add	$v1, $v1, $a1
@@ -97,33 +97,33 @@ f.56:
 	add	$v1, $v1, $s7
 	lw	$a0, 0($sp)
 	add	$v1, $v1, $a0
-	lw	$a0, -4($sp)
+	lw	$a0, 4($sp)
 	add	$v1, $v1, $a0
-	lw	$a0, -8($sp)
+	lw	$a0, 8($sp)
 	add	$v1, $v1, $a0
-	lw	$a0, -12($sp)
+	lw	$a0, 12($sp)
 	add	$v1, $v1, $a0
-	lw	$a0, -16($sp)
+	lw	$a0, 16($sp)
 	add	$v1, $v1, $a0
-	lw	$a0, -20($sp)
+	lw	$a0, 20($sp)
 	add	$v1, $v1, $a0
-	lw	$a0, -24($sp)
+	lw	$a0, 24($sp)
 	add	$v1, $v1, $a0
-	lw	$a0, -28($sp)
+	lw	$a0, 28($sp)
 	add	$v1, $v1, $a0
-	lw	$a0, -32($sp)
+	lw	$a0, 32($sp)
 	add	$v1, $v1, $a0
-	lw	$a0, -36($sp)
+	lw	$a0, 36($sp)
 	add	$v1, $v1, $a0
-	lw	$a0, -40($sp)
+	lw	$a0, 40($sp)
 	add	$v1, $v1, $a0
-	lw	$a0, -44($sp)
+	lw	$a0, 44($sp)
 	add	$v1, $v1, $a0
-	lw	$a0, -48($sp)
+	lw	$a0, 48($sp)
 	add	$v1, $v1, $a0
 	add	$v1, $v1, $t8
 	add	$v0, $v1, $v0
-	lw	$v1, -52($sp)
+	lw	$v1, 52($sp)
 	add	$v0, $v0, $v1
 	jr	$ra
 
@@ -137,7 +137,7 @@ min_caml_print_int: #$v0
 	li	$v0, 1
 	syscall
 	jr	$ra
-min_caml_print_double: #$f0
+min_caml_print_double: #$f0 doubleという名前だがfloat
 	mov.d	$f12, $f0
 	li	$v0, 3
 	syscall
@@ -148,7 +148,7 @@ min_caml_truncate: # $f0:float -> $v0:int
 	jr	$ra
 
 # align 8する必要あるんだろうか
-min_caml_create_array: #長さ$v0, 中身$v1のarray
+min_caml_create_array: # array of length $v0, initialized by $v1
 	move	$a0, $v0
 	move	$v0, $gp
 create_array_loop:
@@ -165,7 +165,7 @@ create_array_cont:
 	addi	$gp, $gp, 4
 	b	create_array_loop
 
-min_caml_create_float_array: #長さ$v0, 中身$f0のarra
+min_caml_create_float_array: # array of length $v0, initialized by $f0
 	move	$a0, $v0
 	move	$v0, $gp
 create_float_array_loop:
@@ -177,7 +177,7 @@ create_float_array_loop:
 create_float_array_exit:
 	jr	$ra
 create_float_array_cont:
-	s.s	$f0, ($gp)
+	s.s	$f0, ($gp) #ここがちがうだけ
 	addi	$a0, $a0, -1
 	addi	$gp, $gp, 4
 	b	create_float_array_loop

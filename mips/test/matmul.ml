@@ -5,7 +5,7 @@ let rec mul l m n a b c =
       if j < 0 then () else
       let rec loop3 k =
         if k < 0 then () else
-        (c.(i).(j) <- c.(i).(j) +. a.(i).(k) *. b.(k).(j);
+          (c.(i).(j) <- c.(i).(j) +. a.(i).(k) *. b.(k).(j);
          loop3 (k - 1)) in
       loop3 (m - 1);
       loop2 (j - 1) in

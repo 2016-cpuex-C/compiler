@@ -17,44 +17,44 @@ main:
 	li	$v0, 3
 	la	$v1, l.43
 	l.s	$f0, 0($v1)
-	sw	$ra, -4($sp)
-	addi	$sp, $sp, -8
-	jal	min_caml_create_float_array
+	sw	$ra, 4($sp)
 	addi	$sp, $sp, 8
-	lw	$ra, -4($sp)
+	jal	min_caml_create_float_array
+	addi	$sp, $sp, -8
+	lw	$ra, 4($sp)
 	li	$v1, 3
 	la	$a0, l.45
 	l.s	$f0, 0($a0)
 	sw	$v0, 0($sp)
 	addi	$v0, $v1, 0
-	sw	$ra, -4($sp)
-	addi	$sp, $sp, -8
-	jal	min_caml_create_float_array
+	sw	$ra, 4($sp)
 	addi	$sp, $sp, 8
-	lw	$ra, -4($sp)
+	jal	min_caml_create_float_array
+	addi	$sp, $sp, -8
+	lw	$ra, 4($sp)
 	addi	$v1, $v0, 0
 	la	$v0, l.47
 	l.s	$f0, 0($v0)
 	li	$a0, 2
 	lw	$v0, 0($sp)
-	s.s	$f0, -8($sp)
-	sw	$ra, -20($sp)
-	addi	$sp, $sp, -24
+	s.s	$f0, 8($sp)
+	sw	$ra, 20($sp)
+	addi	$sp, $sp, 24
 	jal	inprod.17
-	addi	$sp, $sp, 24
-	lw	$ra, -20($sp)
-	l.s	$f2, -8($sp)
+	addi	$sp, $sp, -24
+	lw	$ra, 20($sp)
+	l.s	$f2, 8($sp)
 	mul.s	$f0, $f2, $f0
-	sw	$ra, -20($sp)
-	addi	$sp, $sp, -24
+	sw	$ra, 20($sp)
+	addi	$sp, $sp, 24
 	jal	min_caml_truncate
-	addi	$sp, $sp, 24
-	lw	$ra, -20($sp)
-	sw	$ra, -20($sp)
 	addi	$sp, $sp, -24
-	jal	min_caml_print_int
+	lw	$ra, 20($sp)
+	sw	$ra, 20($sp)
 	addi	$sp, $sp, 24
-	lw	$ra, -20($sp)
+	jal	min_caml_print_int
+	addi	$sp, $sp, -24
+	lw	$ra, 20($sp)
 	addi	$sp, $fp, 0
 	lw	$ra, 20($sp)
 	lw	$fp, 16($sp)
@@ -74,11 +74,11 @@ inprod.17:
 	mul.s	$f0, $f0, $f2
 	addi	$a0, $a0, -1
 	s.s	$f0, 0($sp)
-	sw	$ra, -12($sp)
-	addi	$sp, $sp, -16
-	jal	inprod.17
+	sw	$ra, 12($sp)
 	addi	$sp, $sp, 16
-	lw	$ra, -12($sp)
+	jal	inprod.17
+	addi	$sp, $sp, -16
+	lw	$ra, 12($sp)
 	l.s	$f2, 0($sp)
 	add.s	$f0, $f2, $f0
 	jr	$ra
@@ -137,7 +137,7 @@ create_float_array_loop:
 create_float_array_exit:
 	jr	$ra
 create_float_array_cont:
-	s.s	$f0, ($gp)
+	s.s	$f0, ($gp) #ここがちがうだけ
 	addi	$a0, $a0, -1
 	addi	$gp, $gp, 4
 	b	create_float_array_loop

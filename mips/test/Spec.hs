@@ -27,34 +27,17 @@ import Data.Text (Text, pack)
 import qualified Data.Text.IO as TIO
 default (Text)
 
-useSim :: Bool
-useSim = False
-
-onlyCompile :: Bool
-onlyCompile = True
-
-targets :: [FilePath]
-targets = [
-    "inprod-rec"
-  , "inprod-loop"
-  , "matmul"
-  , "matmul-flat"
-  , "non-tail-if2"
-  , "spill2"
-  , "cls-bug2"
+ugokanakattargets :: [FilePath]
+ugokanakattargets = [
   ]
 
--- simで動いかないやつ
--- non-tail-if l.sが原因
--- inprod      同上
--- shuffle     no label found?
--- funcomp     わからず
-
+-- spill2 と funcomp と non-tail-if2 がうごかなくなった
 ugoitargets :: [FilePath]
 ugoitargets = [
     "ack"
   , "adder"
   , "cls-bug"
+  , "cls-bug2"
   , "cls-rec"
   , "cls-reg-bug"
   , "even-odd"
@@ -62,6 +45,8 @@ ugoitargets = [
   , "funcomp"
   , "gcd"
   , "inprod"
+  , "inprod-rec"
+  , "inprod-loop"
   , "join-reg"
   , "join-reg2"
   , "join-stack"
@@ -70,15 +55,26 @@ ugoitargets = [
   , "print"
   , "shuffle"
   , "spill"
+  , "spill2"
   , "spill3"
-  , "sum"
+  , "sum" -- nが大きいとkernel領域に入ってしまうので注意 (on Mars)
   , "sum-tail"
   , "non-tail-if"
+  , "non-tail-if2"
+  , "matmul"
+  , "matmul-flat"
   ]
+
+useSim :: Bool
+useSim = False
+
+onlyCompile :: Bool
+onlyCompile = False
 
 main :: IO ()
 main = do
-  mapM_ test $ ugoitargets -- ++ targets
+  mapM_ test $ ugoitargets
+  mapM_ test $ ugokanakattargets
 
 test :: FilePath -> IO ()
 test f = do
@@ -117,6 +113,7 @@ compile f = do
       >>= virtualCode
       >>= simm
       >>= regAlloc
+      {->>= \e -> liftIO (print e) >> return e-}
       >>= emit out
 
 

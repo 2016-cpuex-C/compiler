@@ -49,7 +49,7 @@ create_float_array_loop:
 create_float_array_exit:
 	jr	$ra
 create_float_array_cont:
-	s.s	$f0, ($gp)
+	s.s	$f0, ($gp) #ここがちがうだけ
 	addi	$a0, $a0, -1
 	addi	$gp, $gp, 4
 	b	create_float_array_loop

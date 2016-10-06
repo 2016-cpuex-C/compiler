@@ -13,6 +13,9 @@ import qualified Data.Vector as V
 
 type Register = String
 
+stackDir :: Int
+stackDir = 1
+
 fLetD :: (Id, AExpr, Asm) -> Asm
 fLetD (x,e1,a2) = AsmLet (x,TFloat) e1 a2
 

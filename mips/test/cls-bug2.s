@@ -11,12 +11,12 @@ main:
 	la	$v0, f.9
 	sw	$v0, 0($t8)
 	li	$v0, 9
-	sw	$ra, -4($sp)
-	addi	$sp, $sp, -8
+	sw	$ra, 4($sp)
+	addi	$sp, $sp, 8
 	lw	$s7, ($t8)
 	jalr	$s7
-	addi	$sp, $sp, 8
-	lw	$ra, -4($sp)
+	addi	$sp, $sp, -8
+	lw	$ra, 4($sp)
 	addi	$sp, $fp, 0
 	lw	$ra, 20($sp)
 	lw	$fp, 16($sp)
@@ -28,19 +28,19 @@ f.9:
 	li	$v1, 0
 	bgt	$v1, $v0, ble_else.27
 	sw	$v0, 0($sp)
-	sw	$t8, -4($sp)
-	sw	$ra, -12($sp)
-	addi	$sp, $sp, -16
+	sw	$t8, 4($sp)
+	sw	$ra, 12($sp)
+	addi	$sp, $sp, 16
 	jal	min_caml_print_int
-	addi	$sp, $sp, 16
-	lw	$ra, -12($sp)
-	li	$v0, 1
-	lw	$v1, -4($sp)
-	sw	$ra, -12($sp)
 	addi	$sp, $sp, -16
-	jal	min_caml_create_array
+	lw	$ra, 12($sp)
+	li	$v0, 1
+	lw	$v1, 4($sp)
+	sw	$ra, 12($sp)
 	addi	$sp, $sp, 16
-	lw	$ra, -12($sp)
+	jal	min_caml_create_array
+	addi	$sp, $sp, -16
+	lw	$ra, 12($sp)
 	lw	$t8, 0($v0)
 	lw	$v0, 0($sp)
 	addi	$v0, $v0, -1
@@ -59,7 +59,7 @@ min_caml_print_int: #$v0
 	li	$v0, 1
 	syscall
 	jr	$ra
-min_caml_print_double: #$f0
+min_caml_print_double: #$f0 doubleという名前だがfloat
 	mov.d	$f12, $f0
 	li	$v0, 3
 	syscall
@@ -70,7 +70,7 @@ min_caml_truncate: # $f0:float -> $v0:int
 	jr	$ra
 
 # align 8する必要あるんだろうか
-min_caml_create_array: #長さ$v0, 中身$v1のarray
+min_caml_create_array: # array of length $v0, initialized by $v1
 	move	$a0, $v0
 	move	$v0, $gp
 create_array_loop:
@@ -87,7 +87,7 @@ create_array_cont:
 	addi	$gp, $gp, 4
 	b	create_array_loop
 
-min_caml_create_float_array: #長さ$v0, 中身$f0のarra
+min_caml_create_float_array: # array of length $v0, initialized by $f0
 	move	$a0, $v0
 	move	$v0, $gp
 create_float_array_loop:
@@ -99,7 +99,7 @@ create_float_array_loop:
 create_float_array_exit:
 	jr	$ra
 create_float_array_cont:
-	s.s	$f0, ($gp)
+	s.s	$f0, ($gp) #ここがちがうだけ
 	addi	$a0, $a0, -1
 	addi	$gp, $gp, 4
 	b	create_float_array_loop

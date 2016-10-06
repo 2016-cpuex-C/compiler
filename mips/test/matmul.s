@@ -35,11 +35,11 @@ main:
 	li	$v0, 0
 	la	$v1, l.331
 	l.s	$f0, 0($v1)
-	sw	$ra, -4($sp)
-	addi	$sp, $sp, -8
-	jal	min_caml_create_float_array
+	sw	$ra, 4($sp)
 	addi	$sp, $sp, 8
-	lw	$ra, -4($sp)
+	jal	min_caml_create_float_array
+	addi	$sp, $sp, -8
+	lw	$ra, 4($sp)
 	addi	$t8, $gp, 0
 	addi	$gp, $gp, 8
 	la	$v1, make.183
@@ -48,38 +48,38 @@ main:
 	li	$v0, 2
 	li	$v1, 3
 	sw	$t8, 0($sp)
-	sw	$ra, -4($sp)
-	addi	$sp, $sp, -8
+	sw	$ra, 4($sp)
+	addi	$sp, $sp, 8
 	lw	$s7, ($t8)
 	jalr	$s7
-	addi	$sp, $sp, 8
-	lw	$ra, -4($sp)
+	addi	$sp, $sp, -8
+	lw	$ra, 4($sp)
 	li	$v1, 3
 	li	$a0, 2
 	lw	$t8, 0($sp)
-	sw	$v0, -4($sp)
+	sw	$v0, 4($sp)
 	addi	$v0, $v1, 0
 	addi	$v1, $a0, 0
-	sw	$ra, -12($sp)
-	addi	$sp, $sp, -16
+	sw	$ra, 12($sp)
+	addi	$sp, $sp, 16
 	lw	$s7, ($t8)
 	jalr	$s7
-	addi	$sp, $sp, 16
-	lw	$ra, -12($sp)
+	addi	$sp, $sp, -16
+	lw	$ra, 12($sp)
 	li	$v1, 2
 	li	$a0, 2
 	lw	$t8, 0($sp)
-	sw	$v0, -8($sp)
+	sw	$v0, 8($sp)
 	addi	$v0, $v1, 0
 	addi	$v1, $a0, 0
-	sw	$ra, -12($sp)
-	addi	$sp, $sp, -16
+	sw	$ra, 12($sp)
+	addi	$sp, $sp, 16
 	lw	$s7, ($t8)
 	jalr	$s7
-	addi	$sp, $sp, 16
-	lw	$ra, -12($sp)
+	addi	$sp, $sp, -16
+	lw	$ra, 12($sp)
 	addi	$a3, $v0, 0
-	lw	$a1, -4($sp)
+	lw	$a1, 4($sp)
 	lw	$v0, 0($a1)
 	la	$v1, l.340
 	l.s	$f0, 0($v1)
@@ -87,11 +87,11 @@ main:
 	lw	$v0, 0($a1)
 	la	$v1, l.344
 	l.s	$f0, 0($v1)
-	s.s	$f0, -4($v0)
+	s.s	$f0, 4($v0)
 	lw	$v0, 0($a1)
 	la	$v1, l.348
 	l.s	$f0, 0($v1)
-	s.s	$f0, -8($v0)
+	s.s	$f0, 8($v0)
 	lw	$v0, 4($a1)
 	la	$v1, l.352
 	l.s	$f0, 0($v1)
@@ -99,12 +99,12 @@ main:
 	lw	$v0, 4($a1)
 	la	$v1, l.356
 	l.s	$f0, 0($v1)
-	s.s	$f0, -4($v0)
+	s.s	$f0, 4($v0)
 	lw	$v0, 4($a1)
 	la	$v1, l.360
 	l.s	$f0, 0($v1)
-	s.s	$f0, -8($v0)
-	lw	$a2, -8($sp)
+	s.s	$f0, 8($v0)
+	lw	$a2, 8($sp)
 	lw	$v0, 0($a2)
 	la	$v1, l.364
 	l.s	$f0, 0($v1)
@@ -112,7 +112,7 @@ main:
 	lw	$v0, 0($a2)
 	la	$v1, l.368
 	l.s	$f0, 0($v1)
-	s.s	$f0, -4($v0)
+	s.s	$f0, 4($v0)
 	lw	$v0, 4($a2)
 	la	$v1, l.372
 	l.s	$f0, 0($v1)
@@ -120,7 +120,7 @@ main:
 	lw	$v0, 4($a2)
 	la	$v1, l.376
 	l.s	$f0, 0($v1)
-	s.s	$f0, -4($v0)
+	s.s	$f0, 4($v0)
 	lw	$v0, 8($a2)
 	la	$v1, l.380
 	l.s	$f0, 0($v1)
@@ -128,88 +128,88 @@ main:
 	lw	$v0, 8($a2)
 	la	$v1, l.384
 	l.s	$f0, 0($v1)
-	s.s	$f0, -4($v0)
+	s.s	$f0, 4($v0)
 	li	$v0, 2
 	li	$v1, 3
 	li	$a0, 2
-	sw	$a3, -12($sp)
-	sw	$ra, -20($sp)
-	addi	$sp, $sp, -24
-	jal	mul.140
+	sw	$a3, 12($sp)
+	sw	$ra, 20($sp)
 	addi	$sp, $sp, 24
-	lw	$ra, -20($sp)
-	lw	$v0, -12($sp)
+	jal	mul.140
+	addi	$sp, $sp, -24
+	lw	$ra, 20($sp)
+	lw	$v0, 12($sp)
 	lw	$v1, 0($v0)
 	l.s	$f0, 0($v1)
-	sw	$ra, -20($sp)
-	addi	$sp, $sp, -24
+	sw	$ra, 20($sp)
+	addi	$sp, $sp, 24
 	jal	min_caml_truncate
-	addi	$sp, $sp, 24
-	lw	$ra, -20($sp)
-	sw	$ra, -20($sp)
 	addi	$sp, $sp, -24
+	lw	$ra, 20($sp)
+	sw	$ra, 20($sp)
+	addi	$sp, $sp, 24
 	jal	min_caml_print_int
-	addi	$sp, $sp, 24
-	lw	$ra, -20($sp)
-	sw	$ra, -20($sp)
 	addi	$sp, $sp, -24
-	jal	min_caml_print_newline
+	lw	$ra, 20($sp)
+	sw	$ra, 20($sp)
 	addi	$sp, $sp, 24
-	lw	$ra, -20($sp)
-	lw	$v0, -12($sp)
+	jal	min_caml_print_newline
+	addi	$sp, $sp, -24
+	lw	$ra, 20($sp)
+	lw	$v0, 12($sp)
 	lw	$v1, 0($v0)
-	l.s	$f0, -4($v1)
-	sw	$ra, -20($sp)
-	addi	$sp, $sp, -24
+	l.s	$f0, 4($v1)
+	sw	$ra, 20($sp)
+	addi	$sp, $sp, 24
 	jal	min_caml_truncate
-	addi	$sp, $sp, 24
-	lw	$ra, -20($sp)
-	sw	$ra, -20($sp)
 	addi	$sp, $sp, -24
+	lw	$ra, 20($sp)
+	sw	$ra, 20($sp)
+	addi	$sp, $sp, 24
 	jal	min_caml_print_int
-	addi	$sp, $sp, 24
-	lw	$ra, -20($sp)
-	sw	$ra, -20($sp)
 	addi	$sp, $sp, -24
-	jal	min_caml_print_newline
+	lw	$ra, 20($sp)
+	sw	$ra, 20($sp)
 	addi	$sp, $sp, 24
-	lw	$ra, -20($sp)
-	lw	$v0, -12($sp)
+	jal	min_caml_print_newline
+	addi	$sp, $sp, -24
+	lw	$ra, 20($sp)
+	lw	$v0, 12($sp)
 	lw	$v1, 4($v0)
 	l.s	$f0, 0($v1)
-	sw	$ra, -20($sp)
-	addi	$sp, $sp, -24
+	sw	$ra, 20($sp)
+	addi	$sp, $sp, 24
 	jal	min_caml_truncate
-	addi	$sp, $sp, 24
-	lw	$ra, -20($sp)
-	sw	$ra, -20($sp)
 	addi	$sp, $sp, -24
+	lw	$ra, 20($sp)
+	sw	$ra, 20($sp)
+	addi	$sp, $sp, 24
 	jal	min_caml_print_int
-	addi	$sp, $sp, 24
-	lw	$ra, -20($sp)
-	sw	$ra, -20($sp)
 	addi	$sp, $sp, -24
-	jal	min_caml_print_newline
+	lw	$ra, 20($sp)
+	sw	$ra, 20($sp)
 	addi	$sp, $sp, 24
-	lw	$ra, -20($sp)
-	lw	$v0, -12($sp)
+	jal	min_caml_print_newline
+	addi	$sp, $sp, -24
+	lw	$ra, 20($sp)
+	lw	$v0, 12($sp)
 	lw	$v0, 4($v0)
-	l.s	$f0, -4($v0)
-	sw	$ra, -20($sp)
-	addi	$sp, $sp, -24
+	l.s	$f0, 4($v0)
+	sw	$ra, 20($sp)
+	addi	$sp, $sp, 24
 	jal	min_caml_truncate
-	addi	$sp, $sp, 24
-	lw	$ra, -20($sp)
-	sw	$ra, -20($sp)
 	addi	$sp, $sp, -24
+	lw	$ra, 20($sp)
+	sw	$ra, 20($sp)
+	addi	$sp, $sp, 24
 	jal	min_caml_print_int
-	addi	$sp, $sp, 24
-	lw	$ra, -20($sp)
-	sw	$ra, -20($sp)
 	addi	$sp, $sp, -24
-	jal	min_caml_print_newline
+	lw	$ra, 20($sp)
+	sw	$ra, 20($sp)
 	addi	$sp, $sp, 24
-	lw	$ra, -20($sp)
+	jal	min_caml_print_newline
+	addi	$sp, $sp, -24
+	lw	$ra, 20($sp)
 	addi	$sp, $fp, 0
 	lw	$ra, 20($sp)
 	lw	$fp, 16($sp)
@@ -275,16 +275,16 @@ loop2.150:
 	sw	$a3, 4($t0)
 	addi	$v1, $v1, -1
 	sw	$t8, 0($sp)
-	sw	$v0, -4($sp)
+	sw	$v0, 4($sp)
 	addi	$v0, $v1, 0
 	addi	$t8, $t0, 0
-	sw	$ra, -12($sp)
-	addi	$sp, $sp, -16
+	sw	$ra, 12($sp)
+	addi	$sp, $sp, 16
 	lw	$s7, ($t8)
 	jalr	$s7
-	addi	$sp, $sp, 16
-	lw	$ra, -12($sp)
-	lw	$v0, -4($sp)
+	addi	$sp, $sp, -16
+	lw	$ra, 12($sp)
+	lw	$v0, 4($sp)
 	addi	$v0, $v0, -1
 	lw	$t8, 0($sp)
 	lw	$s7, ($t8)
@@ -310,16 +310,16 @@ loop1.147:
 	sw	$a3, 4($t0)
 	addi	$v1, $v1, -1
 	sw	$t8, 0($sp)
-	sw	$v0, -4($sp)
+	sw	$v0, 4($sp)
 	addi	$v0, $v1, 0
 	addi	$t8, $t0, 0
-	sw	$ra, -12($sp)
-	addi	$sp, $sp, -16
+	sw	$ra, 12($sp)
+	addi	$sp, $sp, 16
 	lw	$s7, ($t8)
 	jalr	$s7
-	addi	$sp, $sp, 16
-	lw	$ra, -12($sp)
-	lw	$v0, -4($sp)
+	addi	$sp, $sp, -16
+	lw	$ra, 12($sp)
+	lw	$v0, 4($sp)
 	addi	$v0, $v0, -1
 	lw	$t8, 0($sp)
 	lw	$s7, ($t8)
@@ -347,17 +347,17 @@ init.187:
 	la	$a1, l.331
 	l.s	$f0, 0($a1)
 	sw	$t8, 0($sp)
-	sw	$a0, -4($sp)
-	sw	$v0, -8($sp)
+	sw	$a0, 4($sp)
+	sw	$v0, 8($sp)
 	addi	$v0, $v1, 0
-	sw	$ra, -12($sp)
-	addi	$sp, $sp, -16
-	jal	min_caml_create_float_array
+	sw	$ra, 12($sp)
 	addi	$sp, $sp, 16
-	lw	$ra, -12($sp)
-	lw	$v1, -8($sp)
+	jal	min_caml_create_float_array
+	addi	$sp, $sp, -16
+	lw	$ra, 12($sp)
+	lw	$v1, 8($sp)
 	sll	$a0, $v1, 2
-	lw	$a1, -4($sp)
+	lw	$a1, 4($sp)
 	add	$t9, $a1, $a0
 	sw	$v0, ($t9)
 	addi	$v0, $v1, -1
@@ -369,31 +369,31 @@ ble_else.428:
 make.183:
 	lw	$a0, 4($t8)
 	sw	$v0, 0($sp)
-	sw	$v1, -4($sp)
+	sw	$v1, 4($sp)
 	addi	$v1, $a0, 0
-	sw	$ra, -12($sp)
-	addi	$sp, $sp, -16
-	jal	min_caml_create_array
+	sw	$ra, 12($sp)
 	addi	$sp, $sp, 16
-	lw	$ra, -12($sp)
+	jal	min_caml_create_array
+	addi	$sp, $sp, -16
+	lw	$ra, 12($sp)
 	addi	$t8, $gp, 0
 	addi	$gp, $gp, 16
 	la	$v1, init.187
 	sw	$v1, 0($t8)
-	lw	$v1, -4($sp)
+	lw	$v1, 4($sp)
 	sw	$v1, 8($t8)
 	sw	$v0, 4($t8)
 	lw	$v1, 0($sp)
 	addi	$v1, $v1, -1
-	sw	$v0, -8($sp)
+	sw	$v0, 8($sp)
 	addi	$v0, $v1, 0
-	sw	$ra, -12($sp)
-	addi	$sp, $sp, -16
+	sw	$ra, 12($sp)
+	addi	$sp, $sp, 16
 	lw	$s7, ($t8)
 	jalr	$s7
-	addi	$sp, $sp, 16
-	lw	$ra, -12($sp)
-	lw	$v0, -8($sp)
+	addi	$sp, $sp, -16
+	lw	$ra, 12($sp)
+	lw	$v0, 8($sp)
 	jr	$ra
 
 min_caml_print_newline:
@@ -446,7 +446,7 @@ create_float_array_loop:
 create_float_array_exit:
 	jr	$ra
 create_float_array_cont:
-	s.s	$f0, ($gp)
+	s.s	$f0, ($gp) #ここがちがうだけ
 	addi	$a0, $a0, -1
 	addi	$gp, $gp, 4
 	b	create_float_array_loop
