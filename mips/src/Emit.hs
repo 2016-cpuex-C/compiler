@@ -340,6 +340,8 @@ emit handle (AProg fdata fundefs e) = do
   write $ printf "\t.word\t0x80000000"
   write $ printf "const_f_one:"
   write $ printf "\t.word\t0x3f800000"
+  write $ printf "const_f_two:"
+  write $ printf "\t.word\t0x40000000"
   write $ printf "const_f_half:"
   write $ printf "\t.word\t0x3f000000"
   write $ printf "const_pi:"
