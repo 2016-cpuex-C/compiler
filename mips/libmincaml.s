@@ -53,10 +53,6 @@ min_caml_create_array: # array of length $v0, initialized by $v1
 create_array_loop:
 	li	$a2, 0
 	bne	$a0, $a2, create_array_cont
-	#align 8する必要はない
-	#andi	$a1, $gp, 4
-	#beq	$a1, $a2, create_array_exit
-	#addi	$gp, $gp, 4
 create_array_exit:
 	jr	$ra
 create_array_cont:
@@ -71,13 +67,10 @@ min_caml_create_float_array: # array of length $v0, initialized by $f0
 create_float_array_loop:
 	li	$a2, 0
 	bne	$a0, $a2, create_float_array_cont
-	#andi	$a1, $gp, 4
-	#beq	$a1, $a2, create_float_array_exit
-	#addi	$gp, $gp, 4
 create_float_array_exit:
 	jr	$ra
 create_float_array_cont:
-	s.s	$f0, ($gp) #ここがちがうだけ
+	s.s	$f0, ($gp)
 	addi	$a0, $a0, -1
 	addi	$gp, $gp, 4
 	b	create_float_array_loop
