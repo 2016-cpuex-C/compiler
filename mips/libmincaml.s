@@ -22,12 +22,12 @@ min_caml_print_char: # $v0
 	jr	$ra
 
 min_caml_print_double: # $f0 doubleという名前だがfloat
-	mov.d	$f12, $f0
+	mov.s	$f12, $f0
 	li	$v0, 2
 	syscall
 	jr	$ra
 min_caml_print_float:
-	mov.d	$f12, $f0
+	mov.s	$f12, $f0
 	li	$v0, 2
 	syscall
 	jr	$ra
