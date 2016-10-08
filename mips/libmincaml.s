@@ -346,50 +346,6 @@ min_caml_sin:
 	lw	$ra, 24($sp)
 	l.s	$f2, 20($sp)
 	add.s	$f0, $f2, $f0
-	li	$v0, 6
-	lw	$t8, 0($sp)
-	s.s	$f0, 24($sp)
-	sw	$ra, 28($sp)
-	addi	$sp, $sp, 32
-	lw	$s7, ($t8)
-	jalr	$s7
-	addi	$sp, $sp, -32
-	lw	$ra, 28($sp)
-	l.s	$f2, 24($sp)
-	add.s	$f0, $f2, $f0
-	li	$v0, 7
-	lw	$t8, 0($sp)
-	s.s	$f0, 28($sp)
-	sw	$ra, 32($sp)
-	addi	$sp, $sp, 36
-	lw	$s7, ($t8)
-	jalr	$s7
-	addi	$sp, $sp, -36
-	lw	$ra, 32($sp)
-	l.s	$f2, 28($sp)
-	add.s	$f0, $f2, $f0
-	li	$v0, 8
-	lw	$t8, 0($sp)
-	s.s	$f0, 32($sp)
-	sw	$ra, 36($sp)
-	addi	$sp, $sp, 40
-	lw	$s7, ($t8)
-	jalr	$s7
-	addi	$sp, $sp, -40
-	lw	$ra, 36($sp)
-	l.s	$f2, 32($sp)
-	add.s	$f0, $f2, $f0
-	li	$v0, 9
-	lw	$t8, 0($sp)
-	s.s	$f0, 36($sp)
-	sw	$ra, 40($sp)
-	addi	$sp, $sp, 44
-	lw	$s7, ($t8)
-	jalr	$s7
-	addi	$sp, $sp, -44
-	lw	$ra, 40($sp)
-	l.s	$f2, 36($sp)
-	add.s	$f0, $f2, $f0
 	jr	$ra
 min_caml_sin_bc1t_else2:
 	l.s	$f2, const_pi
@@ -521,50 +477,6 @@ min_caml_cos:
 	addi	$sp, $sp, -28
 	lw	$ra, 24($sp)
 	l.s	$f2, 20($sp)
-	add.s	$f0, $f2, $f0
-	li	$v0, 6
-	lw	$t8, 0($sp)
-	s.s	$f0, 24($sp)
-	sw	$ra, 28($sp)
-	addi	$sp, $sp, 32
-	lw	$s7, ($t8)
-	jalr	$s7
-	addi	$sp, $sp, -32
-	lw	$ra, 28($sp)
-	l.s	$f2, 24($sp)
-	add.s	$f0, $f2, $f0
-	li	$v0, 7
-	lw	$t8, 0($sp)
-	s.s	$f0, 28($sp)
-	sw	$ra, 32($sp)
-	addi	$sp, $sp, 36
-	lw	$s7, ($t8)
-	jalr	$s7
-	addi	$sp, $sp, -36
-	lw	$ra, 32($sp)
-	l.s	$f2, 28($sp)
-	add.s	$f0, $f2, $f0
-	li	$v0, 8
-	lw	$t8, 0($sp)
-	s.s	$f0, 32($sp)
-	sw	$ra, 36($sp)
-	addi	$sp, $sp, 40
-	lw	$s7, ($t8)
-	jalr	$s7
-	addi	$sp, $sp, -40
-	lw	$ra, 36($sp)
-	l.s	$f2, 32($sp)
-	add.s	$f0, $f2, $f0
-	li	$v0, 9
-	lw	$t8, 0($sp)
-	s.s	$f0, 36($sp)
-	sw	$ra, 40($sp)
-	addi	$sp, $sp, 44
-	lw	$s7, ($t8)
-	jalr	$s7
-	addi	$sp, $sp, -44
-	lw	$ra, 40($sp)
-	l.s	$f2, 36($sp)
 	add.s	$f0, $f2, $f0
 	jr	$ra
 min_caml_cos_bc1t_else2:
@@ -881,50 +793,6 @@ min_caml_atan:
 	addi	$sp, $sp, -80
 	lw	$ra, 76($sp)
 	l.s	$f2, 72($sp)
-	add.s	$f0, $f2, $f0
-	li	$v0, 16
-	lw	$t8, 0($sp)
-	s.s	$f0, 76($sp)
-	sw	$ra, 80($sp)
-	addi	$sp, $sp, 84
-	lw	$s7, ($t8)
-	jalr	$s7
-	addi	$sp, $sp, -84
-	lw	$ra, 80($sp)
-	l.s	$f2, 76($sp)
-	add.s	$f0, $f2, $f0
-	li	$v0, 17
-	lw	$t8, 0($sp)
-	s.s	$f0, 80($sp)
-	sw	$ra, 84($sp)
-	addi	$sp, $sp, 88
-	lw	$s7, ($t8)
-	jalr	$s7
-	addi	$sp, $sp, -88
-	lw	$ra, 84($sp)
-	l.s	$f2, 80($sp)
-	add.s	$f0, $f2, $f0
-	li	$v0, 18
-	lw	$t8, 0($sp)
-	s.s	$f0, 84($sp)
-	sw	$ra, 88($sp)
-	addi	$sp, $sp, 92
-	lw	$s7, ($t8)
-	jalr	$s7
-	addi	$sp, $sp, -92
-	lw	$ra, 88($sp)
-	l.s	$f2, 84($sp)
-	add.s	$f0, $f2, $f0
-	li	$v0, 19
-	lw	$t8, 0($sp)
-	s.s	$f0, 88($sp)
-	sw	$ra, 92($sp)
-	addi	$sp, $sp, 96
-	lw	$s7, ($t8)
-	jalr	$s7
-	addi	$sp, $sp, -96
-	lw	$ra, 92($sp)
-	l.s	$f2, 88($sp)
 	add.s	$f0, $f2, $f0
 	l.s	$f2, 12($sp)
 	mul.s	$f0, $f2, $f0
