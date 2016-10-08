@@ -642,14 +642,14 @@ in
 let rec read_screen_settings _ =
 
   (* スクリーン中心の座標 *)
-  screen.(0) <- read_float ();
-  screen.(1) <- read_float ();
-  screen.(2) <- read_float ();
+  screen.(0) <- -70.;
+  screen.(1) <- 35.;
+  screen.(2) <- -20.;
   (* 回転角 *)
-  let v1 = rad (read_float ()) in
+  let v1 = rad 20. in
   let cos_v1 = cos v1 in
   let sin_v1 = sin v1 in
-  let v2 = rad (read_float ()) in
+  let v2 = rad 30. in
   let cos_v2 = cos v2 in
   let sin_v2 = sin v2 in
   (* スクリーン面の奥行き方向のベクトル 注視点からの距離200をかける *)
@@ -674,19 +674,19 @@ in
 (* 光源情報の読み込み *)
 let rec read_light _ =
 
-  let _ = read_int () in
+  let _ = 1 in
 
   (* 光線関係 *)
-  let l1 = rad (read_float ()) in
+  let l1 = rad 50. in
   let sl1 = sin l1 in
   light.(1) <- fneg sl1;
-  let l2 = rad (read_float ()) in
+  let l2 = rad 50. in
   let cl1 = cos l1 in
   let sl2 = sin l2 in
   light.(0) <- cl1 *. sl2;
   let cl2 = cos l2 in
   light.(2) <- cl1 *. cl2;
-  beam.(0) <- read_float ()
+  beam.(0) <- 255.
 
 in
 
@@ -737,7 +737,7 @@ in
 (**** オブジェクト1つのデータの読み込み ****)
 let rec read_nth_object n =
 
-  let texture = read_int () in
+  let texture = -1 in
   if texture <> -1 then
     (
       let form = read_int () in
@@ -835,7 +835,7 @@ in
 
 (* ネットワーク1つを読み込みベクトルにして返す *)
 let rec read_net_item length =
-  let item = read_int () in
+  let item = -1 in
   if item = -1 then create_array (length + 1) (-1)
   else
     let v = read_net_item (length + 1) in

@@ -1,0 +1,4 @@
+
+minrt.ml ha kanari henshu sitearu
+muhenshu noha CPUjikken dir
+henshu but onaji kyodo ha raytracer dir
