@@ -151,7 +151,7 @@ min_caml_xor_3:
 	jr	$ra
 
 min_caml_fless: # f0,f1 -> v0
-	c.le.s	$f0, $f1
+	c.lt.s	$f0, $f1
 	bc1t	min_caml_fless_1
 	li	$v0, 0
 	jr	$ra
