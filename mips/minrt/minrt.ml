@@ -1,12 +1,10 @@
 (*NOMINCAML open MiniMLRuntime;;*)
 
-(***三角関数***)
-let pi = 3.141592653589793238 in
-
-let rec fact n = if n < 2 then 1 else n * fact (n-1) in
-
+(* tri fun *)
 let rec pow x m = if m = 0 then 1.0 else x *. pow x (m-1) in
-
+let rec fact n = if n < 2 then 1 else n * fact (n-1) in
+let pi = 3.141592653589793238 in
+let rec fneg x = 0.0 -. x in
 let rec even n =
   if n = 0 then true
   else if n = 1 then false
@@ -20,8 +18,7 @@ let rec sin x =
     let m = 2 * n + 1 in
     let f = pow x m /. float_of_int (fact m) in
     if even n then f else fneg f
-  in g 0  +. g 1  +. g 2  +. g 3  +. g 4
-  +. g 5  +. g 6  +. g 7  +. g 8  +. g 9
+  in g 0  +. g 1  +. g 2  +. g 3  +. g 4 +. g 5
 in
 
 let rec cos x =
@@ -31,25 +28,23 @@ let rec cos x =
     let m = 2 * n in
     let f = pow x m /. float_of_int (fact m) in
     if even n then f else fneg f
-  in g 0  +. g 1  +. g 2  +. g 3  +. g 4
-  +. g 5  +. g 6  +. g 7  +. g 8  +. g 9
+  in g 0  +. g 1  +. g 2  +. g 3  +. g 4 +. g 5
 in
 
 let rec atan x =
   if fless 1.0 x then pi /. 2. -. atan (1. /. x) else
   let rec f n =
     let rec g k = (2. *. float_of_int k) /. (2. *. float_of_int k +. 1.) in
-    let rec hoge m = if m = 0 then 1. else (hoge (m-1)) *. g m in
-    hoge n *. pow (pow x 2 /. (1. +. pow x 2)) n
+    let rec h m = if m = 0 then 1. else (h (m-1)) *. g m in
+    h n *. pow (pow x 2 /. (1. +. pow x 2)) n
   in
   (x /. (1. +. pow x 2)) *.
   (f  0 +. f  1 +. f  2 +. f  3 +. f  4 +.
    f  5 +. f  6 +. f  7 +. f  8 +. f  9 +.
    f 10 +. f 11 +. f 12 +. f 13 +. f 14 +.
-   f 15 +. f 16 +. f 17 +. f 18 +. f 19
+   f 15
   )
 in
-
 
 
 (**************** グローバル変数の宣言 (globals.mlより移動) ****************)
@@ -642,14 +637,14 @@ in
 let rec read_screen_settings _ =
 
   (* スクリーン中心の座標 *)
-  screen.(0) <- -70.;
-  screen.(1) <- 35.;
-  screen.(2) <- -20.;
+  screen.(0) <- read_float ();
+  screen.(1) <- read_float ();
+  screen.(2) <- read_float ();
   (* 回転角 *)
-  let v1 = rad 20. in
+  let v1 = rad (read_float ()) in
   let cos_v1 = cos v1 in
   let sin_v1 = sin v1 in
-  let v2 = rad 30. in
+  let v2 = rad (read_float ()) in
   let cos_v2 = cos v2 in
   let sin_v2 = sin v2 in
   (* スクリーン面の奥行き方向のベクトル 注視点からの距離200をかける *)
@@ -674,19 +669,19 @@ in
 (* 光源情報の読み込み *)
 let rec read_light _ =
 
-  let _ = 1 in
+  let _ = read_int () in
 
   (* 光線関係 *)
-  let l1 = rad 50. in
+  let l1 = rad (read_float ()) in
   let sl1 = sin l1 in
   light.(1) <- fneg sl1;
-  let l2 = rad 50. in
+  let l2 = rad (read_float ()) in
   let cl1 = cos l1 in
   let sl2 = sin l2 in
   light.(0) <- cl1 *. sl2;
   let cl2 = cos l2 in
   light.(2) <- cl1 *. cl2;
-  beam.(0) <- 255.
+  beam.(0) <- read_float ()
 
 in
 
@@ -737,7 +732,7 @@ in
 (**** オブジェクト1つのデータの読み込み ****)
 let rec read_nth_object n =
 
-  let texture = -1 in
+  let texture = read_int () in
   if texture <> -1 then
     (
       let form = read_int () in
@@ -835,7 +830,7 @@ in
 
 (* ネットワーク1つを読み込みベクトルにして返す *)
 let rec read_net_item length =
-  let item = -1 in
+  let item = read_int () in
   if item = -1 then create_array (length + 1) (-1)
   else
     let v = read_net_item (length + 1) in
