@@ -42,7 +42,7 @@ allRegs = concat [
   ]
 
 allFRegs :: [Register]
-allFRegs = [ "$f"++show (i*2) | i <- [0..15] :: [Int]]
+allFRegs = [ "$f"++show i | i <- [0..31] :: [Int]]
 
 regs :: Vector Register
 regs = V.fromList allRegs
