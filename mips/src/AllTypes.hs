@@ -31,7 +31,7 @@ data Type = TUnit
           | TTuple [Type]
           | TArray Type
           | TVar   TV
-          deriving (Show, Eq)
+          deriving (Show, Eq, Ord)
 type TyEnv = Map Id Type
 
 data TV = TV Int (IORef (Maybe Type))
@@ -39,6 +39,8 @@ data TV = TV Int (IORef (Maybe Type))
 
 instance Show TV where
   show (TV n _) = "tv" ++ show n
+instance Ord TV where
+  compare (TV n _) (TV m _) = compare n m
 
 
 ---------------------
@@ -108,12 +110,12 @@ data KExpr = KUnit
            | KPut Id Id Id
            | KExtArray Id
            | KExtFunApp Id [Id]
-           deriving (Show, Eq)
+           deriving (Show, Eq, Ord)
 data KFunDef = KFunDef { _kname ::  (Id,Type)
                        , _kargs :: [(Id,Type)]
                        , _kbody :: KExpr
                        }
-              deriving (Show, Eq)
+              deriving (Show, Eq, Ord)
 makeLenses ''KFunDef
 
 -----------------------
@@ -173,7 +175,8 @@ data Asm = AsmAns AExpr
 
 data AExpr = ANop
            | ASet Int
-           | ASetL Label -- FloatやArray (.dataセクションのやつ)
+           | ASetF Label
+           | ASetL Label
            | AMov Id
            | ANeg Id
            | AAdd Id IdOrImm

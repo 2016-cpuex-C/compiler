@@ -105,6 +105,7 @@ fvAExpr :: AExpr -> [String]
 fvAExpr = \case
   ANop       -> []
   ASet{}     -> []
+  ASetF{}    -> []
   ASetL{}    -> []
   AComment{} -> []
   ARestore{} -> []

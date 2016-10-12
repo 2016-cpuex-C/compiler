@@ -115,8 +115,9 @@ g env = \case
            _ -> do l <- Label <$> genId "l"
                    virtualData .= (l,d):fdata
                    return l
-    x <- genId "l"
-    return $ AsmLet (x,TInt) (ASetL l) (AsmAns (ALdDF x (C 0)))
+    return $ AsmAns (ASetF l)
+    {-x <- genId "l"-}
+    {-return $ AsmLet (x,TInt) (ASetL l) (AsmAns (ALdDF x (C 0)))-}
 
   CNeg x -> return $ AsmAns $ ANeg x
   CAdd x y -> return $ AsmAns $ AAdd x (V y)

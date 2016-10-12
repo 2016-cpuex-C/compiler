@@ -206,6 +206,7 @@ g' :: (Id,Type) -> Asm -> Map Id Id -> AExpr -> Caml (Asm, Map Id Id)
 g' destt cont regenv exp = case exp of
   ANop       -> return (AsmAns exp, regenv)
   ASet{}     -> return (AsmAns exp, regenv)
+  ASetF{}    -> return (AsmAns exp, regenv)
   ASetL{}    -> return (AsmAns exp, regenv)
   AComment{} -> return (AsmAns exp, regenv)
   ARestore{} -> return (AsmAns exp, regenv)
