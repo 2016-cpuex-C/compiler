@@ -3,24 +3,22 @@
 module Main where
 
 import Base
-import FrontEnd.Lexer       (lex)
-import FrontEnd.Parser      (parse)
-import FrontEnd.Typing      (typing)
-import MiddleEnd.KNormal    (kNormalize)
-import MiddleEnd.Alpha      (alpha)
-import MiddleEnd.Optimise   (optimise)
-import MiddleEnd.Closure    (closureConvert)
+import FrontEnd.Lexer        (lex)
+import FrontEnd.Parser       (parse)
+import FrontEnd.Typing       (typing)
+import MiddleEnd.KNormal     (kNormalize)
+import MiddleEnd.Alpha       (alpha)
+import MiddleEnd.Optimise    (optimise)
+import MiddleEnd.Closure     (closureConvert)
 import BackEnd.Mips.Virtual  (virtualCode)
 import BackEnd.Mips.RegAlloc (regAlloc)
 import BackEnd.Mips.Simm     (simm)
 import BackEnd.Mips.Emit     (emit)
 
 import           Prelude hiding (lex)
-import           System.IO      --(stdout, openFile, withFile, IOMode(..))
+import           System.IO      (stdout, openFile, withFile, IOMode(..))
 import qualified Data.Map as M
-import           Options
 import           Options.Applicative
-{-import           Options.Applicative.Builder (maybeReader)-}
 
 main :: IO ()
 main = execParser (info (helper <*> parseOpt) fullDesc) >>= \opts ->
@@ -106,25 +104,11 @@ parseOpt = pure MinCamlOptions
     <=> value Nothing
     <=> showDefaultWith (const "stdout")
   <*> some (argument str (metavar "FILES.."))
+  where
+    infixr 7 $$
+    infixr 8 <=>
+    ($$) :: (a -> b) -> a -> b
+    ($$) = ($)
+    (<=>) :: Monoid m => m -> m -> m
+    (<=>) = (<>)
 
-
-infixl 6 <||>
-infixr 7 <$$>
-infixr 7 $$
-infixr 8 <=>
-infixr 9 $$$
-
-($$) :: (a -> b) -> a -> b
-($$) = ($)
-
-($$$) :: (a -> b) -> a -> b
-($$$) = ($)
-
-(<||>) :: Alternative a => a b -> a b -> a b
-(<||>) = (<|>)
-
-(<=>) :: Monoid m => m -> m -> m
-(<=>) = (<>)
-
-(<$$>) :: Functor f => (a -> b) -> f a -> f b
-(<$$>) = (<$>)
