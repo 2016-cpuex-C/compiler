@@ -1,7 +1,10 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiWayIf #-}
+{-# LANGUAGE NoImplicitPrelude #-}
 
 module MiddleEnd.Elim where
+
+import Prelude hiding (log)
 
 import           Base
 import           MiddleEnd.KNormal
@@ -29,20 +32,20 @@ elim = \case
     e2' <- elim e2
     if hasSubEffect e1' || S.member x (fv e2')
        then return $ KLet (x,t) e1' e2'
-       else liftIO (putStrLn $ "eliminating variable " ++ x) >> return e2'
+       else log ("eliminating variable " ++ x) >> return e2'
   KLetRec (KFunDef (x,t) yts e1) e2 -> do
     e1' <- elim e1
     e2' <- elim e2
     if S.member x (fv e2')
        then return $ KLetRec (KFunDef (x,t) yts e1') e2'
-       else liftIO (putStrLn $ "eliminating variable " ++ x) >> return e2'
+       else log ("eliminating variable " ++ x) >> return e2'
   KLetTuple xts y e -> do
     e' <- elim e
     let xs = map fst xts
         live x = S.member x (fv e')
     if any live xs
        then return $ KLetTuple xts y e'
-       else liftIO (putStrLn $ "eliminating variable " ++ ppList xs) >> return e'
+       else log ("eliminating variable " ++ ppList xs) >> return e'
   e -> return e
 
 

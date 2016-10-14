@@ -3,6 +3,8 @@
 module MiddleEnd.Beta where
 {- let x = y in ... みたいなのを消す -}
 
+import Prelude hiding (log)
+
 import Base
 import MiddleEnd.KNormal
 
@@ -45,7 +47,7 @@ g env e = case e of
   KLet (x,t) e1 e2 ->
       g env e1 >>= \case
         KVar y -> do
-          liftIO $ putStrLn $ "beta-reducing " ++ x ++ " = " ++ y
+          log $ "beta-reducing " ++ x ++ " = " ++ y
           g (M.insert x y env) e2
         e1' -> do
           e2' <- g env e2

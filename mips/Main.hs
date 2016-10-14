@@ -16,17 +16,23 @@ import BackEnd.Mips.Simm     (simm)
 import BackEnd.Mips.Emit     (emit)
 
 import           Prelude hiding (lex)
-import           System.IO      (withFile, IOMode(..))
+import           System.IO      --(stdout, openFile, withFile, IOMode(..))
 import qualified Data.Map as M
 import           Options
+import           Options.Applicative
+{-import           Options.Applicative.Builder (maybeReader)-}
 
 main :: IO ()
-main = runCommand $ \opts args -> do
-  let s = initialState { _threshold     = inline opts
-                       , _optimiseLimit = iter opts
-                       , _extTyEnv      = minrtExtTyEnv
-                       }
-  mapM_ (compile s) args
+main = execParser (info (helper <*> parseOpt) fullDesc) >>= \opts ->
+    let s = initialState { _threshold     = inline opts
+                         , _optimiseLimit = iter opts
+                         , _extTyEnv      = minrtExtTyEnv
+                         }
+        lg = case logf opts of
+          Nothing -> ($stdout)
+          Just f  -> withFile f WriteMode
+    in lg $ \h -> mapM_ (compile s{_logfile=h}) (args opts)
+
 
 compile :: S -> FilePath -> IO ()
 compile s f = do
@@ -75,11 +81,50 @@ minrtExtTyEnv = M.fromList
 data MinCamlOptions = MinCamlOptions
                     { inline  :: Int
                     , iter    :: Int
+                    , logf    :: Maybe String
+                    , args    :: [String]
                     }
-instance Options MinCamlOptions where
-  defineOptions = pure MinCamlOptions
-               <*> simpleOption "inline"
-                   0 "maximum size of functions inlined"
-               <*> simpleOption "iter"
-                   100 "maximum number of optimizations iterated"
 
+parseOpt :: Parser MinCamlOptions
+parseOpt = pure MinCamlOptions
+  <*> option auto
+    $$  long "inline"
+    <=> metavar "N"
+    <=> help "maximum size of functions inlined"
+    <=> value 0
+    <=> showDefault
+  <*> option auto
+    $$  long "iter"
+    <=> metavar "N"
+    <=> help "maximum number of optimizations iterated"
+    <=> value 100
+    <=> showDefault
+  <*> option (Just <$> str)
+    $$  long "log"
+    <=> metavar "FILE"
+    <=> help "file to log to"
+    <=> value Nothing
+    <=> showDefaultWith (const "stdout")
+  <*> some (argument str (metavar "FILES.."))
+
+
+infixl 6 <||>
+infixr 7 <$$>
+infixr 7 $$
+infixr 8 <=>
+infixr 9 $$$
+
+($$) :: (a -> b) -> a -> b
+($$) = ($)
+
+($$$) :: (a -> b) -> a -> b
+($$$) = ($)
+
+(<||>) :: Alternative a => a b -> a b -> a b
+(<||>) = (<|>)
+
+(<=>) :: Monoid m => m -> m -> m
+(<=>) = (<>)
+
+(<$$>) :: Functor f => (a -> b) -> f a -> f b
+(<$$>) = (<$>)

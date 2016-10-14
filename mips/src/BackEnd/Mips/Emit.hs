@@ -5,7 +5,7 @@
 
 module BackEnd.Mips.Emit where
 
-import Prelude hiding (exp)
+import Prelude hiding (exp, log)
 
 import Base
 import BackEnd.Mips.Asm
@@ -23,9 +23,10 @@ import           Text.Printf
 
 
 -- ghc-modが動かなくなるので書いている間はコメントアウト
-foreign import ccall "floatAsWord" floatAsWord :: Float -> Word32
-{-floatAsWord :: Float -> Word32-}
-{-floatAsWord = undefined-}
+{-foreign import ccall "floatAsWord" floatAsWord :: Float -> Word32-}
+
+floatAsWord :: Float -> Word32
+floatAsWord = undefined
 
 save :: Id -> Caml ()
 save x = do
@@ -330,7 +331,7 @@ h handle (AFunDef (Label x) _ _ e _) = do
 emit :: Handle -> AProg -> Caml ()
 emit handle (AProg fdata fundefs e) = do
   let write s = liftIO $ hPutStrLn handle s
-  liftIO $ putStrLn "generating assembly..."
+  log "generating assembly..."
 
   --floats
   write $ printf ".data"

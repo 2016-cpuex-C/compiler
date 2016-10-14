@@ -4,6 +4,7 @@
 
 module FrontEnd.Typing where
 
+import Prelude hiding (log)
 import Base
 import FrontEnd.Syntax
 
@@ -30,7 +31,7 @@ derefType = \case
   TArray t -> TArray <$> derefType t
   TVar tv -> readType tv >>= \case
                 Nothing -> do
-                  liftIO $ putStrLn "uninstantiated type variable detected; assuming int@."
+                  log "uninstantiated type variable detected; assuming int@."
                   writeType tv TInt
                   return TInt
                 Just t -> do
@@ -202,7 +203,7 @@ infer env e =
         Nothing -> uses extTyEnv (M.lookup x) >>= \case
           Just t -> return t
           Nothing -> do
-            liftIO $ putStrLn $ "free variable " ++ x ++ " assumed as external@."
+            log $ "free variable " ++ x ++ " assumed as external@."
             t <- genType
             extTyEnv %= M.insert x t
             return t

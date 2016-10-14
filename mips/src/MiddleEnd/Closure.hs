@@ -1,4 +1,5 @@
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE NoImplicitPrelude #-}
 {- KExpr -> CExpr -}
 
 module MiddleEnd.Closure (
@@ -9,6 +10,8 @@ module MiddleEnd.Closure (
   closureConvert,
   fv
 ) where
+
+import Prelude hiding (log)
 
 import Base
 import MiddleEnd.KNormal hiding (fv)
@@ -143,7 +146,7 @@ g env known = \case
     -- かくにん
     (known'', e1'') <- case S.toList (fv e1') L.\\ ys of
         [] -> return (known', e1')   -- OK
-        zs -> do liftIO $ putStrLn $ -- NG
+        zs -> do log $
                       "free variable(s) " ++ ppList zs ++ " " ++
                       "found in function " ++ x ++ "\n" ++
                       "function " ++ x ++ " cannot be directly applied in fact"
@@ -157,12 +160,12 @@ g env known = \case
     if S.member x (fv e2') then -- やや賢い->賢い
         return $ CMakeCls (x,t) (Closure (Label x) zs') e2'
     else do
-        liftIO $ putStrLn $ "eliminating closure(s) " ++ x
+        log $ "eliminating closure(s) " ++ x
         return e2'
 
   KApp x ys
     | S.member x known -> do
-        liftIO $ putStrLn $ "directly applying " ++ x
+        log $ "directly applying " ++ x
         return $ CAppDir (Label x) ys
     | otherwise ->
         return $ CAppCls x ys

@@ -5,7 +5,7 @@
 
 module BackEnd.Mips.RegAlloc where
 
-import Prelude hiding (exp)
+import Prelude hiding (exp,log)
 
 import Base
 import BackEnd.Mips.Asm
@@ -82,65 +82,9 @@ targetArgs src regs' n = \case
     | y == src  -> regs'!n : targetArgs src regs' (n+1) ys
     | otherwise -> targetArgs src regs' (n+1) ys
 
---source' :: Type -> AExpr -> [Id]
---source' t = \case
---  AMov x       -> [x]
---  ANeg x       -> [x]
---  AAdd x (C _) -> [x]
---  ASub x _     -> [x]
---  AFMovD x     -> [x]
---  AFNegD x     -> [x]
---  AFSubD x _   -> [x]
---  AFDivD x _   -> [x]
---    -- TODO なんで AddとSubで扱いが違うんじゃ 他
---  AAdd x (V y) -> [x,y]
---  AFAddD x y   -> [x,y]
---  AFMulD x y   -> [x,y]
---
---  AIfEq  _ _ e1 e2 -> source t e1 ++ source t e2
---  AIfLe  _ _ e1 e2 -> source t e1 ++ source t e2
---  AIfFEq _ _ e1 e2 -> source t e1 ++ source t e2
---  AIfFLe _ _ e1 e2 -> source t e1 ++ source t e2
---
---  ACallCls{} -> case t of TUnit -> []; TFloat -> [fregs!0]; _ -> [regs!0]
---  ACallDir{} -> case t of TUnit -> []; TFloat -> [fregs!0]; _ -> [regs!0]
---
---  _ -> []
-
--- 3オペランドならいらないっぽい？
---source :: Type -> Asm -> [Id]
---source t = \case
---  AsmAns exp -> source' t exp
---  AsmLet _ _ e -> source t e
-
 data AllocResult = Alloc Id
                  | Spill Id
 
--- かなりちがう
---alloc ::               Asm -> Map Id Id -> Id -> Type -> [Id] -> Caml AllocResult
---alloc cont regenv x t prefer = assert (M.notMember x regenv) $
---  let allregs = case t of
---              TUnit -> [] --dummy
---              TFloat -> allFRegs
---              _ -> allRegs
---  in if | null allregs -> return $ Alloc "%unit" -- Ad hoc (とは)
---        | isReg x      -> return $ Alloc x
---        | otherwise    ->
---            let free = fv cont
---                live = foldl' func S.empty free
---                   where
---                     func l y
---                       | isReg y   = S.insert y l
---                       | otherwise = S.insert (M.findWithDefault y y regenv) l
---            in case F.find (`S.notMember` live) (prefer++allregs) of
---                 Just r  -> return $ Alloc r
---                 Nothing -> let y = fromJust $ F.find p (reverse free)
---                                  where p y' = case M.lookup y' regenv of
---                                                Just r -> not (isReg y') && r`elem`allregs
---                                                Nothing -> False
---                                msg = "spilling " ++ y ++ " from "
---                                    ++ show (lookupJust y regenv)
---                            in liftIO (putStrLn msg) >> return (Spill y)
 alloc' :: (Id,Type) -> Asm -> Map Id Id -> Id -> Type -> Caml AllocResult
 alloc' destt cont regenv x t = assert (M.notMember x regenv) $
   let allregs = case t of
@@ -159,13 +103,13 @@ alloc' destt cont regenv x t = assert (M.notMember x regenv) $
             in case F.find (`S.notMember` live) (prefer++allregs) of
                  Just r  -> return $ Alloc r
                  Nothing -> do
-                  liftIO $ putStrLn $ "register allocation failed for " ++ x
+                  log $ "register allocation failed for " ++ x
                   let y = fromJust $ F.find p (reverse free)
                             where p y' = case M.lookup y' regenv of
                                           Just r -> not (isReg y') && r`elem`allregs
                                           Nothing -> False
                       msg = "spilling " ++ y ++ " from " ++ show (lookupJust y regenv)
-                  liftIO (putStrLn msg) >> return (Spill y)
+                  log msg >> return (Spill y)
 
 
 add :: Id -> Id -> Map Id Id -> Map Id Id
@@ -316,7 +260,7 @@ g'_and_restore destt cont regenv exp =
   g' destt cont regenv exp `catch` hdr
   where -- NoReg なら restore
     hdr (NoReg x t) = do
-      liftIO $ putStrLn $ "restoring " ++ x
+      log $ "restoring " ++ x
       g destt cont regenv (AsmLet (x, t) (ARestore x) (AsmAns exp))
     hdr e = throw e
 
@@ -367,7 +311,7 @@ h (AFunDef (Label x) ys zs e t) = do
 
 regAlloc :: AProg -> Caml AProg
 regAlloc (AProg fdata fundefs e) = do
-  liftIO $ putStrLn $
+  log $
       "register allocation: may take some time " ++
       "(up to a few minutes, depending on the size of functions)"
   fundefs' <- mapM h fundefs

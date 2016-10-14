@@ -2,6 +2,8 @@
 
 module MiddleEnd.Inline where
 
+import Prelude hiding (log)
+
 import           Base
 import           MiddleEnd.KNormal
 import qualified MiddleEnd.Alpha as Alpha
@@ -37,7 +39,7 @@ g env e = case e of
   KApp x ys ->
     case M.lookup x env of
       Just (zts,e') -> do
-        liftIO $ putStrLn $ "inlining " ++ x
+        log $ "inlining " ++ x
         let env' = M.fromList (zip (map fst zts) ys)
         Alpha.g env' e'
       _ -> return e

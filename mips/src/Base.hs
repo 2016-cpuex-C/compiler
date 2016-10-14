@@ -13,6 +13,7 @@ import                Control.Monad.Trans.Except
 import                Control.Monad.Trans.State.Lazy
 import qualified      Control.Monad.IO.Class as IOC
 import                Control.Monad.Except           (throwError, catchError)
+import                System.IO                      (Handle, stdout, hPutStrLn)
 import {-# SOURCE #-} FrontEnd.Syntax                (Expr)
 import {-# SOURCE #-} MiddleEnd.Closure              (CFunDef)
 
@@ -51,6 +52,7 @@ data S = S { _idCount :: Int                  -- for Id module
            , _stackSet :: Set Id              -- for Emit module
            , _stackMap :: [Id]                -- for Emit module
            , _optimiseLimit :: Int            -- for Optimise module (max optimise iter)
+           , _logfile :: Handle
            }
            deriving Show
 makeLenses ''S
@@ -118,6 +120,7 @@ initialState = S { _idCount = 0
                  , _stackSet = S.empty
                  , _stackMap = []
                  , _optimiseLimit = 100
+                 , _logfile = stdout
                  }
 
 liftIO :: IO a -> Caml a
@@ -125,6 +128,11 @@ liftIO = IOC.liftIO
 
 throw :: Error -> Caml a
 throw = throwError
+
+log :: String -> Caml ()
+log s = do
+  l <- use logfile
+  liftIO $ hPutStrLn l s
 
 -- NOTE: m中の状態変化はなかったことになる 気をつけて使う
 -- catch m h = StateT $ \s -> runStateT m s `catchE` \e -> runStateT (h e) s
@@ -136,8 +144,4 @@ runCamlDefault c = runExceptT $ evalStateT c initialState
 
 runCaml :: Caml a -> S -> IO (Either Error a)
 runCaml c s = runExceptT $ evalStateT c s
-
-liftEither :: Either Error a -> Caml a
-liftEither (Left e)  = throw e
-liftEither (Right a) = return a
 
