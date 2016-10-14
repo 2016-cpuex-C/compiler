@@ -2,18 +2,18 @@
 
 module Main where
 
-import AllTypes
-import Lexer    (lex)
-import Parser   (parse)
-import Typing   (typing)
-import KNormal  (kNormalize)
-import Alpha    (alpha)
-import Optimise (optimise)
-import Closure  (closureConvert)
-import Virtual  (virtualCode)
-import RegAlloc (regAlloc)
-import Simm     (simm)
-import Emit     (emit)
+import Base
+import FrontEnd.Lexer       (lex)
+import FrontEnd.Parser      (parse)
+import FrontEnd.Typing      (typing)
+import MiddleEnd.KNormal    (kNormalize)
+import MiddleEnd.Alpha      (alpha)
+import MiddleEnd.Optimise   (optimise)
+import MiddleEnd.Closure    (closureConvert)
+import BackEnd.Mips.Virtual  (virtualCode)
+import BackEnd.Mips.RegAlloc (regAlloc)
+import BackEnd.Mips.Simm     (simm)
+import BackEnd.Mips.Emit     (emit)
 
 import           Prelude hiding (lex)
 import           System.IO      (withFile, IOMode(..))
