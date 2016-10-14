@@ -6,6 +6,8 @@ module MiddleEnd.KNormal (
   KFunDef(..),
   kNormalize,
   kbody,
+  kargs,
+  kname,
   fv
 ) where
 

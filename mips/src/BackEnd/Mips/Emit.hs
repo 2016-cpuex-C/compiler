@@ -23,9 +23,9 @@ import           Text.Printf
 
 
 -- ghc-modが動かなくなるので書いている間はコメントアウト
-{-foreign import ccall "floatAsWord" floatAsWord :: Float -> Word32-}
-floatAsWord :: Float -> Word32
-floatAsWord = undefined
+foreign import ccall "floatAsWord" floatAsWord :: Float -> Word32
+{-floatAsWord :: Float -> Word32-}
+{-floatAsWord = undefined-}
 
 save :: Id -> Caml ()
 save x = do
