@@ -14,15 +14,17 @@ import BackEnd.Mips.RegAlloc (regAlloc)
 import BackEnd.Mips.Simm     (simm)
 import BackEnd.Mips.Emit     (emit)
 
-import           Prelude hiding (lex)
-import           System.IO (withFile, IOMode(..))
-import           System.FilePath.Posix ({-(</>),-} (<.>))
+import Prelude hiding (lex)
+import System.IO (openFile, withFile, IOMode(..))
+import System.FilePath.Posix ({-(</>),-} (<.>))
+import Control.Lens ((&),(.~))
 
 compile :: FilePath -> IO (Either Error ())
 compile f = do
   s <- readFile f
+  devnull <- openFile "/dev/null" WriteMode
   withFile (take (length f - 3) f <.> "s") WriteMode $ \out ->
-    runCamlDefault $ lex s
+    (`runCaml` (initialState&logfile.~devnull)) $ lex s
       >>= parse
       >>= typing
       >>= kNormalize
