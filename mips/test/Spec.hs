@@ -7,5 +7,6 @@ import Test.Hspec
 
 main :: IO ()
 main = do
+  hspec ML.spec
   hspec Unit.spec
 

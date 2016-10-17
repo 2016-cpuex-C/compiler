@@ -6,17 +6,22 @@
 
 module ML where
 
-import           Prelude hiding (lex)
-import           Control.Monad.IO.Class (liftIO)
-import           Control.Monad (when)
-import           Shelly (shelly, run, silently, Sh)
-import           Data.Text (Text, pack)
-import qualified Data.Text.IO as TIO
-import           System.FilePath.Posix ((</>), (<.>))
-
 import Common
 
-default (Text)
+import           Prelude hiding (lex)
+import           Control.Monad (forM_)
+import           System.FilePath.Posix ((</>), (<.>))
+
+import Test.Hspec
+
+spec :: Spec
+spec = describe "sim" $ forM_ targets $ \f -> do
+  let ml  = "test" </> f <.> "ml"
+      ans = "test" </> f <.> "ans"
+  it ("passed " ++ ml) $ do
+    x1 <- runML ml
+    x2 <- readFile ans
+    x1 `shouldBe` init x2 --最後の改行文字消す
 
 targets :: [FilePath]
 targets = [
@@ -50,36 +55,4 @@ targets = [
   , "matmul"
   , "matmul-flat"
   ]
-
-useSim :: Bool
-useSim = False
-
-onlyCompile :: Bool
-onlyCompile = False
-
-test :: IO ()
-test = mapM_ hoge $ targets
-
-hoge :: FilePath -> IO ()
-hoge f = do
-  putStrLn $ "[[" ++ f ++ "]]"
-  m <- compile $ "test" </> f <.> "ml"
-  case m of
-    Right () -> shelly $ do
-      res <- (if useSim then exeSim else exeMars) $ "test" </> f <.> "s"
-      ans <- read' $ "test" </> f <.> "ans"
-      liftIO $ do
-        putStr "result: " >> TIO.putStr res
-        putStr "answer: " >> TIO.putStr ans
-      when (res/=ans && not onlyCompile) $ error f
-    Left e -> error $ f ++ ":" ++ show e
-  where
-    read' file = pack <$> liftIO (readFile file)
-
--- 使うときは適修正してください
--- Marsのインストールが必要です
-exeMars :: FilePath -> Sh Text
-exeMars s = silently $ run "java" ["-jar", "/home/hogeyama/apps/Mars4_5.jar", "me", pack s]
-exeSim :: FilePath -> Sh Text
-exeSim s = silently $ run "./simulator/sim" ["<", pack s]
 

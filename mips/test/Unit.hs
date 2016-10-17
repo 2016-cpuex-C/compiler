@@ -13,8 +13,6 @@ import XFormat.Util
 import Prelude hiding (lex, (^))
 import Text.Printf
 import Text.XFormat.Show
-import System.Process
-import System.FilePath.Posix ((<.>))
 
 import Test.Hspec
 import Test.QuickCheck
@@ -77,18 +75,4 @@ spec = do
 
 floorFF :: Float -> Float
 floorFF = fromIntegral . (floor::Float->Int)
-
-sim :: (Read a) => String -> IO a
-sim str = writeFile tmpML str >> read <$> runTmpML
-
-runTmpML :: IO String
-runTmpML = do
-  compile tmpML >>= \case
-    Right _ -> readProcess "./simulator/sim" [tmpS] ""
-    Left e -> error $ show e
-
-tmpHead, tmpML, tmpS :: FilePath
-tmpHead = "/tmp/min-caml-hs"
-tmpML   = tmpHead <.> "ml"
-tmpS    = tmpHead <.> "s"
 
