@@ -50,10 +50,8 @@ runSim s = readProcess "./simulator/sim" [s] ""
 sim :: (Read a) => String -> IO a
 sim str = writeFile tmpML str >> read <$> runML tmpML
 
-tmpHead, tmpML, tmpS :: FilePath
-tmpHead = "/tmp/min-caml-hs"
-tmpML   = tmpHead <.> "ml"
-tmpS    = tmpHead <.> "s"
+tmpML :: FilePath
+tmpML = "/tmp/min-caml-hs.ml"
 
 mlToS :: FilePath -> FilePath
 mlToS ml = take (length ml - 3) ml <.> "s"
