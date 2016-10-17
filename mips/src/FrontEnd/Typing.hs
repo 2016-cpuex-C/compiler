@@ -16,7 +16,6 @@ import           Control.Lens
 -- main function
 typing :: Expr -> Caml Expr
 typing e = do
-  {-extTyEnv .= M.empty-}
   t <- infer M.empty e
   unify TUnit t `catch`
     (\Unify{} -> throw $ Failure "top level does not have type unit")

@@ -1,6 +1,7 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE TupleSections #-}
+{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
 module BackEnd.Mips.Emit where
@@ -12,14 +13,16 @@ import BackEnd.Mips.Asm
 
 import           Data.Word (Word32)
 import qualified Data.Set as S
+import           Data.Set                       (Set)
 import           Data.Vector ((!))
 import           Control.Lens
-import           Data.List (foldl')
+import           Data.List (foldl', partition)
 import           Control.Exception.Base (assert)
 import           Control.Monad (when, forM_)
-import           Data.List (partition)
 import           System.IO (Handle, hPutStrLn)
 import           Text.Printf
+import           Control.Monad.Trans.State.Lazy
+import           Control.Monad.Trans.Class (lift)
 
 
 -- ghc-modが動かなくなるので書いている間はコメントアウト
@@ -27,26 +30,32 @@ foreign import ccall "floatAsWord" floatAsWord :: Float -> Word32
 {-floatAsWord :: Float -> Word32-}
 {-floatAsWord = undefined-}
 
-save :: Id -> Caml ()
+data EmitState = EmitState { _stackSet :: Set Id
+                           , _stackMap :: [Id] }
+makeLenses ''EmitState
+type CamlE = StateT EmitState Caml
+
+
+save :: Id -> CamlE ()
 save x = do
   stackSet %= S.insert x
   stackMap %= \l -> if x `elem` l then l else l++[x]
 
 -- singleにしたのでsaveと変わらない
-savef :: Id -> Caml ()
+savef :: Id -> CamlE ()
 savef x = do
   stackSet %= S.insert x
   stackMap %= \l -> if x `elem` l then l else l++[x]
 
-locate :: Id -> Caml [Int]
+locate :: Id -> CamlE [Int]
 locate x = uses stackMap loc
   where loc [] = []
         loc (y:zs) | x == y    = 0 : map succ (loc zs)
                    | otherwise = map succ (loc zs)
-offset :: Id -> Caml Int
+offset :: Id -> CamlE Int
 offset x = (4*).head <$> locate x
 
-stackSize :: Caml Int
+stackSize :: CamlE Int
 stackSize = uses stackMap (align . (4*) . (+1) . length)
 
 ppIdOrImm :: IdOrImm -> String
@@ -55,7 +64,7 @@ ppIdOrImm (C i) = show i
 
 shuffle :: String -> [(Id,Id)] -> [(Id,Id)]
 shuffle sw xys =
-  let (_,xys'') = partition (\(x,y) -> x==y) xys
+  let (_,xys'') = partition (uncurry (==)) xys
                 --rm identical move
       tmp  = partition (\(_,y) -> memAssoc y xys) xys''
                 --(cyclic, acyclic)
@@ -69,12 +78,12 @@ shuffle sw xys =
 
 data Dest = Tail | NonTail Id
 
-g :: Handle -> (Dest,Asm) -> Caml ()
+g :: Handle -> (Dest,Asm) -> CamlE ()
 g oc = \case
   (dest, AsmAns exp) -> g' oc (dest,exp)
   (dest, AsmLet (x,_t) exp e) -> g' oc (NonTail x, exp) >> g oc (dest, e)
 
-g' :: Handle -> (Dest,AExpr) -> Caml ()
+g' :: Handle -> (Dest,AExpr) -> CamlE ()
 g' oc (dest,exp) =
   let write s = liftIO $ hPutStrLn oc s
   in case dest of
@@ -158,11 +167,11 @@ g' oc (dest,exp) =
         | otherwise -> assert False undefined
 
       AIfEq y z' e1 e2 ->
-          g'_non_tail_if oc (NonTail x) e1 e2 (Just (y, (ppIdOrImm z'))) "beq" "bne"
+          g'_non_tail_if oc (NonTail x) e1 e2 (Just (y, ppIdOrImm z')) "beq" "bne"
       AIfLe y z' e1 e2 ->
-          g'_non_tail_if oc (NonTail x) e1 e2 (Just (y, (ppIdOrImm z'))) "ble" "bgt"
+          g'_non_tail_if oc (NonTail x) e1 e2 (Just (y, ppIdOrImm z')) "ble" "bgt"
       AIfGe y z' e1 e2 ->
-          g'_non_tail_if oc (NonTail x) e1 e2 (Just (y, (ppIdOrImm z'))) "bge" "blt"
+          g'_non_tail_if oc (NonTail x) e1 e2 (Just (y, ppIdOrImm z')) "bge" "blt"
 
       AIfFEq y z e1 e2 -> do
           write $ printf "\tc.eq.s\t%s, %s" y z
@@ -211,24 +220,24 @@ g' oc (dest,exp) =
     -- 末尾だったら計算結果を第一レジスタにセットしてret
     Tail -> let ret = write $ printf "\tjr\t%s" regRa in case exp of
       ANop -> do
-          tmp <- genTmp TUnit
-          g' oc ((NonTail tmp), exp)
+          tmp <- lift $ genTmp TUnit
+          g' oc (NonTail tmp, exp)
           ret
       ASt{} -> do
-          tmp <- genTmp TUnit
-          g' oc ((NonTail tmp), exp)
+          tmp <- lift $ genTmp TUnit
+          g' oc (NonTail tmp, exp)
           ret
       AStDF{} -> do
-          tmp <- genTmp TUnit
-          g' oc ((NonTail tmp), exp)
+          tmp <- lift $ genTmp TUnit
+          g' oc (NonTail tmp, exp)
           ret
       AComment{} -> do
-          tmp <- genTmp TUnit
-          g' oc ((NonTail tmp), exp)
+          tmp <- lift $ genTmp TUnit
+          g' oc (NonTail tmp, exp)
           ret
       ASave {} -> do
-          tmp <- genTmp TUnit
-          g' oc ((NonTail tmp), exp)
+          tmp <- lift $ genTmp TUnit
+          g' oc (NonTail tmp, exp)
           ret
 
       ASet{}  -> g' oc (NonTail (regs!0), exp) >> ret
@@ -259,9 +268,9 @@ g' oc (dest,exp) =
             _ -> assert False undefined
           ret
 
-      AIfEq x y' e1 e2 -> g'_tail_if oc e1 e2 (Just (x, (ppIdOrImm y'))) "beq" "bne"
-      AIfLe x y' e1 e2 -> g'_tail_if oc e1 e2 (Just (x, (ppIdOrImm y'))) "ble" "bgt"
-      AIfGe x y' e1 e2 -> g'_tail_if oc e1 e2 (Just (x, (ppIdOrImm y'))) "bge" "blt"
+      AIfEq x y' e1 e2 -> g'_tail_if oc e1 e2 (Just (x, ppIdOrImm y')) "beq" "bne"
+      AIfLe x y' e1 e2 -> g'_tail_if oc e1 e2 (Just (x, ppIdOrImm y')) "ble" "bgt"
+      AIfGe x y' e1 e2 -> g'_tail_if oc e1 e2 (Just (x, ppIdOrImm y')) "bge" "blt"
       AIfFEq x y e1 e2 -> do
           write $ printf "\tc.eq.s\t%s, %s" x y
           g'_tail_if oc e1 e2 Nothing "bc1t" "bc1f"
@@ -277,10 +286,10 @@ g' oc (dest,exp) =
           g'_args oc [] ys zs
           write $ printf "\tj\t%s" x
 
-g'_tail_if :: Handle -> Asm -> Asm -> Maybe (Id, Id) -> String -> String -> Caml ()
+g'_tail_if :: Handle -> Asm -> Asm -> Maybe (Id, Id) -> String -> String -> CamlE ()
 g'_tail_if oc e1 e2 msrcs b bn = do
   let write s = liftIO $ hPutStrLn oc s
-  b_else <- genId (b ++ "_else")
+  b_else <- lift $ genId (b ++ "_else")
   case msrcs of
     Just (s1,s2) -> write $ printf "\t%s\t%s, %s, %s" bn s1 s2 b_else
     Nothing      -> write $ printf "\t%s\t%s" bn b_else
@@ -290,11 +299,11 @@ g'_tail_if oc e1 e2 msrcs b bn = do
   stackSet .= ssetBak
   g oc (Tail, e2)
 
-g'_non_tail_if :: Handle -> Dest -> Asm -> Asm -> Maybe (Id, Id) -> String -> String -> Caml ()
+g'_non_tail_if :: Handle -> Dest -> Asm -> Asm -> Maybe (Id, Id) -> String -> String -> CamlE ()
 g'_non_tail_if oc dest e1 e2 msrcs b bn = do
   let write s = liftIO $ hPutStrLn oc s
-  b_else <- genId (b ++ "_else")
-  b_cont <- genId (b ++ "_cont")
+  b_else <- lift $ genId (b ++ "_else")
+  b_cont <- lift $ genId (b ++ "_cont")
   case msrcs of
     Just (s1,s2) -> write $ printf "\t%s\t%s, %s, %s" bn s1 s2 b_else
     Nothing      -> write $ printf "\t%s\t%s" bn b_else
@@ -309,7 +318,7 @@ g'_non_tail_if oc dest e1 e2 msrcs b bn = do
   sset2 <- use stackSet
   stackSet .= S.intersection sset1 sset2
 
-g'_args :: Handle -> [(Id,Id)] -> [Id] -> [Id] -> Caml ()
+g'_args :: Handle -> [(Id,Id)] -> [Id] -> [Id] -> CamlE ()
 g'_args oc xRegCl ys zs = do
   let write s = liftIO $ hPutStrLn oc s
       (_i,yrs) = foldl' f (0,xRegCl) ys
@@ -319,7 +328,7 @@ g'_args oc xRegCl ys zs = do
   forM_ (shuffle regSw  yrs)  $ \(y,r)  -> write $ printf "\taddi\t%s, %s, 0" r y
   forM_ (shuffle regFSw zfrs) $ \(z,fr) -> write $ printf "\tmov.s\t%s, %s" fr z
 
-h :: Handle -> AFunDef -> Caml ()
+h :: Handle -> AFunDef -> CamlE ()
 h handle (AFunDef (Label x) _ _ e _) = do
   let write s = liftIO $ hPutStrLn handle s
   write $ printf "%s:" x
@@ -328,9 +337,12 @@ h handle (AFunDef (Label x) _ _ e _) = do
   g handle (Tail, e)
 
 emit :: Handle -> AProg -> Caml ()
-emit handle (AProg fdata fundefs e) = do
+emit handle prog = evalStateT (emit' handle prog) (EmitState S.empty [])
+
+emit' :: Handle -> AProg -> CamlE ()
+emit' handle (AProg fdata fundefs e) = do
   let write s = liftIO $ hPutStrLn handle s
-  log "generating assembly..."
+  lift $ log "generating assembly..."
 
   --floats
   write $ printf ".data"
@@ -381,8 +393,7 @@ emit handle (AProg fdata fundefs e) = do
   forM_ fundefs $ h handle
 
   -- utility
-  s <- liftIO $ readFile "libmincaml.s"
-  write s
+  write =<< liftIO (readFile "libmincaml.s")
 
 ----------
 -- Util --

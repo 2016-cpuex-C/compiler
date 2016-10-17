@@ -57,7 +57,7 @@ target' src (dest,t) = \case
   ACallCls x ys zs ->
       (True, targetArgs src  regs 0 ys ++
              targetArgs src fregs 0 zs ++
-             if x == src then [regCl] else [])
+             [regCl | x == src])
 
   ACallDir _ ys zs ->
       (True, targetArgs src  regs 0 ys ++
@@ -144,7 +144,7 @@ g destt cont regenv = \case
           return (e', regenv2)
       Alloc r -> do
           (e2', regenv2) <- g destt cont (add x r regenv1) e
-          return $ (concat' e1' (r, t) e2', regenv2)
+          return (concat' e1' (r, t) e2', regenv2)
 
 g' :: (Id,Type) -> Asm -> Map Id Id -> AExpr -> Caml (Asm, Map Id Id)
 g' destt cont regenv exp = case exp of
@@ -285,8 +285,8 @@ g'_call :: (Id,Type) -> Asm -> Map Id Id -> AExpr
 g'_call destt cont regenv _exp constr ys zs = do
   let f e x | x == fst destt || M.notMember x regenv = return e
             | otherwise = seq' (ASave (lookupJust x regenv) x, e)
-  rys <- (mapM (\y -> find y TInt   regenv) ys)
-  rzs <- (mapM (\z -> find z TFloat regenv) zs)
+  rys <- mapM (\y -> find y TInt   regenv) ys
+  rzs <- mapM (\z -> find z TFloat regenv) zs
   e <- foldlM f (AsmAns $ constr rys rzs) (fv cont)
   return (e, M.empty)
 

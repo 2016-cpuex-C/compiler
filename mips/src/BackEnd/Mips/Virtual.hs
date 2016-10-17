@@ -93,7 +93,7 @@ expandM xts ini addf addi =
 -- Util --
 ----------
 insertList :: Ord key => [(key,a)] -> Map key a -> Map key a
-insertList xts m = M.union (M.fromList xts) m
+insertList xts = M.union (M.fromList xts)
 
 -- Prelude.lookupと比べて a,b が逆
 lookupRev :: (Eq a) => a -> [(b,a)] -> Maybe b

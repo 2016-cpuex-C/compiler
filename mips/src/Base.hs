@@ -1,5 +1,6 @@
-{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE FlexibleContexts #-}
 
 module Base where
 
@@ -7,15 +8,13 @@ import                Data.IORef
 import                Control.Lens
 import                Data.Map                       (Map)
 import qualified      Data.Map as M
-import                Data.Set                       (Set)
-import qualified      Data.Set as S
 import                Control.Monad.Trans.Except
 import                Control.Monad.Trans.State.Lazy
 import qualified      Control.Monad.IO.Class as IOC
 import                Control.Monad.Except           (throwError, catchError)
+import                Control.Monad.Error.Class      (MonadError)
 import                System.IO                      (Handle, stdout, hPutStrLn)
 import {-# SOURCE #-} FrontEnd.Syntax                (Expr)
-import {-# SOURCE #-} MiddleEnd.Closure              (CFunDef)
 
 -----------
 -- Types --
@@ -43,21 +42,18 @@ instance Show TV where
 instance Ord TV where
   compare (TV n _) (TV m _) = compare n m
 
-data S = S { _idCount :: Int                  -- for Id module
-           , _tvCount :: Int                  -- for Typing module
-           , _extTyEnv  :: TyEnv              -- for Typing module
-           , _threshold :: Int                -- for Inline module (max inline size)
-           , _closureToplevel :: [CFunDef]    -- for Closure module 
-           , _virtualData :: [(Label,Float)]  -- for Virtual module
-           , _stackSet :: Set Id              -- for Emit module
-           , _stackMap :: [Id]                -- for Emit module
-           , _optimiseLimit :: Int            -- for Optimise module (max optimise iter)
-           , _logfile :: Handle
+data S = S { _idCount       :: Int             -- for Id module
+           , _tvCount       :: Int             -- for Typing module
+           , _threshold     :: Int             -- for Inline module (max inline size)
+           , _optimiseLimit :: Int             -- for Optimise module (max optimise iter)
+           , _extTyEnv      :: TyEnv           -- for Typing module
+           , _virtualData   :: [(Label,Float)] -- for Virtual module
+           , _logfile       :: Handle
            }
            deriving Show
 makeLenses ''S
 
-type Caml a = StateT S (ExceptT Error IO) a
+type Caml = StateT S (ExceptT Error IO)
 data Error = Failure String
            | Unify Type Type
            | Typing Expr Type Type
@@ -111,33 +107,30 @@ idOfType = \case
 
 -- Caml
 initialState :: S
-initialState = S { _idCount = 0
-                 , _tvCount = 0
-                 , _extTyEnv = M.empty
-                 , _threshold = 0
-                 , _closureToplevel = []
-                 , _virtualData = []
-                 , _stackSet = S.empty
-                 , _stackMap = []
+initialState = S { _idCount       = 0
+                 , _tvCount       = 0
+                 , _extTyEnv      = M.empty
+                 , _threshold     = 0
+                 , _virtualData   = []
                  , _optimiseLimit = 100
-                 , _logfile = stdout
+                 , _logfile       = stdout
                  }
 
-liftIO :: IO a -> Caml a
+liftIO :: IOC.MonadIO m => IO a -> m a
 liftIO = IOC.liftIO
 
-throw :: Error -> Caml a
+throw :: MonadError Error m => Error -> m a
 throw = throwError
+
+-- NOTE: m中の状態変化はなかったことになる 気をつけて使う
+-- catch m h = StateT $ \s -> runStateT m s `catchE` \e -> runStateT (h e) s
+catch :: MonadError Error m => m a -> (Error -> m a) -> m a
+catch = catchError
 
 log :: String -> Caml ()
 log s = do
   l <- use logfile
   liftIO $ hPutStrLn l s
-
--- NOTE: m中の状態変化はなかったことになる 気をつけて使う
--- catch m h = StateT $ \s -> runStateT m s `catchE` \e -> runStateT (h e) s
-catch :: Caml a -> (Error -> Caml a) -> Caml a
-catch = catchError
 
 runCamlDefault :: Caml a -> IO (Either Error a)
 runCamlDefault c = runExceptT $ evalStateT c initialState
