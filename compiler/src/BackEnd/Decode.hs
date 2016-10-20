@@ -15,6 +15,6 @@ decodeFloatBE = decodeU32 . BCS.pack . BCL.unpack . toLazyByteString . floatLE
 
 -- `BCS.pack . BCL.unpack` is inevitable because
 -- Data.BitSyntax uses strict ByteString (Data.ByteString.Internal) while
--- Data.ByteString.(Lazy.)Builder doesn't offers conversion function for strict ByteString
+-- Data.ByteString.(Lazy.)Builder doesn't offer conversion function for strict ByteString
 -- (there is no `toStrictByteString`)
 
