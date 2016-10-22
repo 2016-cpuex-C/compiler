@@ -3,23 +3,23 @@
 module Common where
 
 import Base
-import FrontEnd.Lexer         (lex)
-import FrontEnd.Parser        (parse)
-import FrontEnd.Typing        (typing)
-import MiddleEnd.KNormal      (kNormalize)
-import MiddleEnd.Alpha        (alpha)
-import MiddleEnd.Optimise     (optimise)
-import MiddleEnd.Closure      (closureConvert)
-import BackEnd.Mips.Virtual   (virtualCode)
-import BackEnd.Mips.RegAlloc  (regAlloc)
-import BackEnd.Mips.Simm      (simm)
-import BackEnd.Mips.Emit      (emit)
+import FrontEnd.Lexer              (lex)
+import FrontEnd.Parser             (parse)
+import FrontEnd.Typing             (typing)
+import MiddleEnd.KNormal           (kNormalize)
+import MiddleEnd.Alpha             (alpha)
+import MiddleEnd.Optimise          (optimise)
+import MiddleEnd.Closure           (closureConvert)
+import BackEnd.FirstArch.Virtual   (virtualCode)
+import BackEnd.FirstArch.RegAlloc  (regAlloc)
+import BackEnd.FirstArch.Simm      (simm)
+import BackEnd.FirstArch.Emit      (emit)
 
-import Prelude         hiding (lex)
-import System.IO              (openFile, withFile, IOMode(..))
+import Prelude              hiding (lex)
+import System.IO                   (openFile, withFile, IOMode(..))
 import System.Process
-import System.FilePath.Posix  ((<.>))
-import Control.Lens           ((&),(.~))
+import System.FilePath.Posix       ((<.>))
+import Control.Lens                ((&),(.~))
 
 -- compile "*.ml" file into "*.s"
 compile :: FilePath -> IO (Either Error ())
