@@ -381,7 +381,7 @@ emit' handle (AProg fdata fundefs e) = do
   g handle (NonTail(regs!0), e)
 
   -- main footer
-  write $ printf "\tmov\t$sp, $fp"
+  write $ printf "\tmove\t$sp, $fp"
   write $ printf "\tsubi\t$sp, $sp, 24"
   write $ printf "\tlwr\t$ra, 4($sp)"
   write $ printf "\tlwr\t$fp, 8($sp)"
