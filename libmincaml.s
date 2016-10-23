@@ -57,12 +57,12 @@ create_float_array_cont:
 	addi	$gp, $gp, 4
 	j	create_float_array_loop
 
+min_caml_truncate:
+	j	min_caml_int_of_float
 min_caml_int_of_float: # f0 -> v0
 	ftoi	$v0, $f0
 	jr	$ra
 
-min_caml_truncate:
-	j	min_caml_float_of_int
 min_caml_float_of_int: # v0 -> f0
 	itof	$f0, $v0
 	jr	$ra
