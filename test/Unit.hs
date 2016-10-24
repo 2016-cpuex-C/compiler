@@ -33,7 +33,6 @@ spec = do
       btoi :: Bool -> Int
       btoi b = if b then 1 else 0
 
-  {-
   describe "sim fiszero" $
     it "is equal to \\x -> x==0.0" $ property $
       equal1 (\(x::Float)-> btoi $ x==0.0)
@@ -64,7 +63,6 @@ spec = do
     it "is equal to floor" $ property $
       equal1 floorFF ("print_float(floor("%ff%"))")
 
-  -}
   describe "sim sin" $
     it "is equal to Prelude.sin" $ property $
       equal1 sin ("print_float(sin("%ff%"))")

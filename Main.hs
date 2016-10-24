@@ -19,6 +19,7 @@ import           Prelude hiding (lex)
 import           System.IO      (stdout, openFile, withFile, IOMode(..))
 import qualified Data.Map as M
 import           Options.Applicative
+import           System.FilePath.Posix ((-<.>))
 
 main :: IO ()
 main = execParser (info (helper <*> parseOpt) fullDesc) >>= \opts ->
@@ -34,8 +35,8 @@ main = execParser (info (helper <*> parseOpt) fullDesc) >>= \opts ->
 
 compile :: S -> FilePath -> IO ()
 compile s f = do
-  str <- readFile (f ++ ".ml")
-  withFile (f ++ ".s") WriteMode $ \out -> do
+  str <- readFile f
+  withFile (f -<.> "s") WriteMode $ \out -> do
     m <-(`runCaml` s) $ lex str
           >>= parse
           >>= typing
