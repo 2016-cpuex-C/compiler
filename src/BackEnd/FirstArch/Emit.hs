@@ -96,7 +96,7 @@ g' oc (dest,exp) =
       AAdd y (C i) -> write $ printf "\taddi\t%s, %s, %d" x y i
       ASub y (V z) -> write $ printf "\tsub\t%s, %s, %s" x y z
       ASub y (C i) -> write $ printf "\tsubi\t%s, %s, %d" x y i -- #
-      AMul y (V z) -> write $ printf "\tmult\t%s, %s" y z
+      AMul y (V z) -> write $ printf "\tmult\t%s, %s, %s" x y z
       AMul y (C i) -> write $ printf "\tmulti\t%s, %s, %d" x y i -- #
       ADiv y (V z) -> write $ printf "\tdiv\t%s, %s" y z -- #
       ADiv y (C i) -> write $ printf "\tdivi\t%s, %s, %d" x y i -- #
