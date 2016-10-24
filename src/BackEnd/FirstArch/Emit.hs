@@ -84,9 +84,10 @@ g' oc (dest,exp) =
     -- Nontailなら結果をdestにセットする.
     NonTail x -> case exp of
       ANop -> return ()
-      ASet i          -> write $ printf "\tli\t%s, %d" x i
-      ASetF (Label l) -> write $ printf "\tl.sl\t%s, %s" x l
-      ASetL (Label y) -> write $ printf "\tla\t%s, %s" x y
+      ASet i | -32768 > i || i > 32767 -> throw $ Failure "即値はみ出た"
+             | otherwise -> write $ printf "\tli\t%s, %d" x i
+      ASetF (Label l) ->    write $ printf "\tl.sl\t%s, %s" x l
+      ASetL (Label y) ->    write $ printf "\tla\t%s, %s" x y
 
       AMov y ->  when (x /= y) $ write $ printf "\taddi\t%s, %s, 0" x y
       ANeg y ->  write $ printf "\tneg\t%s, %s" x y

@@ -18,10 +18,11 @@ import           Data.Maybe (fromJust)
 g :: Map Id Int -> Asm -> Asm
 g env = \case
   AsmAns exp -> AsmAns (g' env exp)
-  AsmLet (x,t) (ASet i) e -> -- TODO iの幅を制限
-    let e' = g (M.insert x i env) e
-    in if | x `elem` fv e' -> AsmLet (x,t) (ASet i) e'
-          | otherwise        -> e'
+  AsmLet (x,t) (ASet i) e
+    | -32768 < i && i < 32767 -> -- 16bit signed int
+        let e' = g (M.insert x i env) e
+        in if | x `elem` fv e' -> AsmLet (x,t) (ASet i) e'
+              | otherwise      -> e'
   AsmLet xt (ASll y i) e
     | M.member y env ->
         let e1 = ASet $ fromJust (M.lookup y env) `shift` i
@@ -41,8 +42,8 @@ g' env = let geti var = lookupJust var env
     | M.member y env && geti y == 4 -> ASll x 2
     | M.member x env && geti x == 2 -> ASll y 1
     | M.member x env && geti x == 4 -> ASll y 2
-    {-| otherwise -> error "Simm.hs: impossible"-}
-  {-AMul _ (C _) -> e --error "Simm.hs: impossible"-} -- sinとかでありうる
+    -- | otherwise -> error "Simm.hs: impossible"
+  --AMul _ (C _) -> e --error "Simm.hs: impossible" -- sinとかでありうる
   ADiv x (V y)
     | M.member y env && geti y == 2 -> ASll x (-1)
     | otherwise -> error "Simm.hs: impossible"
