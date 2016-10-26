@@ -11,8 +11,10 @@ import           MiddleEnd.Elim    (hasSubEffect)
 import           Data.Map (Map)
 import qualified Data.Map as M
 import           Control.Monad.Reader
-import           Control.Lens ((.~), (&))
-import           Data.Maybe
+--import           Data.Maybe
+import           Data.Maybe (fromMaybe)
+fromJust :: Maybe a -> a
+fromJust = fromMaybe (error "cse.hs")
 
 hasSubEffect' :: KExpr -> Bool
 hasSubEffect' = hasSubEffect
@@ -42,7 +44,7 @@ cElim e = do
           KLetRec f@(KFunDef _ _ e1) e2 -> do
             e1' <- cElim e1
             e2' <- cElim e2
-            return $ KLetRec (f & kbody.~e1') e2'
+            return $ KLetRec f{kbody=e1'} e2'
           KLetTuple xts y e1 ->
             KLetTuple xts y <$> cElim e1
           _ -> return e

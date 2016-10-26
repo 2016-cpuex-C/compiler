@@ -5,9 +5,6 @@ module MiddleEnd.KNormal (
   KExpr(..),
   KFunDef(..),
   kNormalize,
-  kbody,
-  kargs,
-  kname,
   fv
 ) where
 
@@ -48,12 +45,11 @@ data KExpr = KUnit
            | KExtArray Id
            | KExtFunApp Id [Id]
            deriving (Show, Eq, Ord)
-data KFunDef = KFunDef { _kname ::  (Id,Type)
-                       , _kargs :: [(Id,Type)]
-                       , _kbody :: KExpr
+data KFunDef = KFunDef { kname ::  (Id,Type)
+                       , kargs :: [(Id,Type)]
+                       , kbody :: KExpr
                        }
               deriving (Show, Eq, Ord)
-makeLenses ''KFunDef
 
 fv :: KExpr -> Set Id
 fv = \case
