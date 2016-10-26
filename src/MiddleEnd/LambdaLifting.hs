@@ -11,16 +11,15 @@ import           MiddleEnd.KNormal
 
 import           Data.Map                       (Map)
 import qualified Data.Map as M
-import           Data.Set                       (fromList, Set, (\\))
+import           Data.Set                       (fromList, singleton, Set, (\\))
 import qualified Data.Set as S
 import           Data.Maybe                     (fromMaybe)
 import           Control.Lens            hiding (lifted)
---import           Control.Monad                  (unless)
 import           Control.Monad.Trans.Class      (lift)
 import           Control.Monad.Trans.State.Lazy
 
-data LL = LL { _topLevelFuns :: Set Id
-             , _liftedMap ::Map Id [Id]
+data LL = LL { _directlyCallable :: Set Id -- function without any free variables
+             , _liftedMap ::Map Id [Id]    -- lifted function and its free variables
              } deriving Show
 makeLenses ''LL
 
@@ -37,13 +36,13 @@ f env e = case e of
   KLetTuple xts y e' -> KLetTuple xts y <$> f (M.union (M.fromList xts) env) e'
 
   KLetRec fundef@(KFunDef (x,t) yts e1) e2 -> do
-    topLevelFuns %= S.insert x
-    topLevel <- use topLevelFuns
+    dcs <- use directlyCallable
     let ys = map fst yts
         envE2  = M.insert x t env
         envE1  = M.union (M.fromList yts) envE2
-    case S.toList (fv e1 \\ topLevel \\ fromList ys) of
+    case S.toList (fv e1 \\ singleton x \\ fromList ys \\ dcs) of
       [] -> do
+        directlyCallable %= S.insert x
         e1' <- f envE1 e1
         e2' <- f envE2 e2
         return $ KLetRec fundef{kbody=e1'} e2'
@@ -54,6 +53,7 @@ f env e = case e of
         let ts = map (`unsafeLookup` env) fvs
             fundef' = abstruct fundef fvs ts
             insertOrigin = KLetRec fundef{kbody=KApp (liftName x) (fvs++ys)}
+        directlyCallable %= S.insert (liftName x)
         liftedMap %= M.insert x fvs
         e1' <- f envE1 e1
         e2' <- f envE2 e2
@@ -80,8 +80,8 @@ abstruct (KFunDef (x,t) yts _) fvs ts =
       yts' = zip fvs ts ++ yts
   in  KFunDef (liftName x,t') yts' undefined
 
--- 良くないかも 考えます
+-- "_"で始まる名前は無いのでこれでOK(see FrontEnd.Lexer)
 liftName :: Id -> Id
-liftName x = "__"++x
+liftName x = "_"++x
 
 
