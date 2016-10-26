@@ -13,8 +13,12 @@ import qualified Data.Map as M
 import qualified Data.Set as S
 import           Control.Lens
 import           Data.List (foldl')
-import           Data.Maybe (fromJust)
+--import           Data.Maybe (fromJust)
 import           Data.Foldable (foldlM)
+
+import           Data.Maybe (fromMaybe)
+fromJust :: Maybe a -> a
+fromJust = fromMaybe (error "Virtual.hs")
 
 virtualCode :: CProg -> Caml AProg
 virtualCode (CProg fundefs e) = do

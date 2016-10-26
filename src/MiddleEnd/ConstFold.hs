@@ -6,8 +6,11 @@ import MiddleEnd.KNormal
 
 import           Data.Map (Map)
 import qualified Data.Map as M
-import           Data.Maybe (fromJust)
 import           Data.List (foldl')
+import           Data.Maybe (fromMaybe)
+
+fromJust :: Maybe a -> a
+fromJust = fromMaybe (error "cf.hs")
 
 constFold :: KExpr -> Caml KExpr
 constFold = return . g M.empty

@@ -13,7 +13,11 @@ import BackEnd.FirstArch.Asm
 import           Data.Map (Map)
 import qualified Data.Map as M
 import           Data.Bits (shift)
-import           Data.Maybe (fromJust)
+--import           Data.Maybe (fromJust)
+
+import           Data.Maybe (fromMaybe)
+fromJust :: Maybe a -> a
+fromJust = fromMaybe (error "Simm.hs")
 
 g :: Map Id Int -> Asm -> Asm
 g env = \case

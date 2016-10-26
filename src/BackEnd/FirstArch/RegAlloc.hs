@@ -15,10 +15,14 @@ import qualified Data.Map as M
 import qualified Data.Set as S
 import           Data.Vector (Vector, (!))
 import           Data.List (foldl')
-import           Data.Maybe (fromJust)
+--import           Data.Maybe (fromJust)
 import           Data.Foldable (foldlM)
 import           Control.Exception.Base (assert)
 import qualified Data.Foldable as F
+
+import           Data.Maybe (fromMaybe)
+fromJust :: Maybe a -> a
+fromJust = fromMaybe (error "RegAlloc.hs")
 
 
 target' :: Id -> (Id,Type) -> AExpr -> (Bool, [Id])
