@@ -37,20 +37,19 @@ main = execParser (info (helper <*> parseOpt) fullDesc) >>= \opts ->
 compile :: S -> FilePath -> IO ()
 compile s f = do
   input <- readFile f
-  withFile (f -<.> "s") WriteMode $ \out -> do
+  withFile (f -<.> "s") WriteMode $ \h -> do
     m <-(`runCaml` s) $ lex input
           >>= parse
           >>= typing
           >>= kNormalize
-          >>= alpha
           >>= lambdaLift
+          >>= alpha
           >>= optimise
           >>= closureConvert
           >>= virtualCode
           >>= simm
           >>= regAlloc
-          {->>= \e -> liftIO (print e) >> return e-}
-          >>= emit out
+          >>= emit h
     case m of
       Right () -> return ()
       Left e -> error $ f ++ ": " ++ show e

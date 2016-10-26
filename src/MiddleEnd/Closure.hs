@@ -162,7 +162,7 @@ g env known = \case
                  e1'' <- g env'' known e1
                  return (known, e1'')
     let zs'  = S.toList (fv e1'') L.\\ (x:ys)
-        zts' = [(z, fromMaybe (error $ "hoge  " ++ z) (M.lookup z env')) | z <- zs']
+        zts' = [(z, fromMaybe (error $ "Closure.g: " ++ z) (M.lookup z env')) | z <- zs']
     modify (CFunDef (Label x, t) yts zts' e1'' :) -- 追加
     e2' <- g env' known'' e2
     if S.member x (fv e2') then -- やや賢い->賢い
