@@ -31,26 +31,10 @@ lambdaLift e = evalStateT (f M.empty e) (LL S.empty M.empty)
 
 f :: Map Id Type -> KExpr -> CamlLL KExpr
 f env e = case e of
-  KUnit    -> return   KUnit
-  KInt i   -> return $ KInt i
-  KFloat d -> return $ KFloat d
-
-  KNeg  x -> return $ KNeg x
-  KFNeg x -> return $ KFNeg x
-
-  KAdd  x y -> return $ KAdd  x y
-  KSub  x y -> return $ KSub  x y
-  KMul  x y -> return $ KMul  x y
-  KDiv  x y -> return $ KDiv  x y
-  KFAdd x y -> return $ KFAdd x y
-  KFSub x y -> return $ KFSub x y
-  KFMul x y -> return $ KFMul x y
-  KFDiv x y -> return $ KFDiv x y
-
   KIfEq x y e1 e2 -> KIfEq x y <$> f env e1 <*> f env e2
   KIfLe x y e1 e2 -> KIfLe x y <$> f env e1 <*> f env e2
-
   KLet (x,t) e1 e2 -> KLet (x,t) <$> f env e1 <*> f (M.insert x t env) e2
+  KLetTuple xts y e' -> KLetTuple xts y <$> f (M.union (M.fromList xts) env) e'
 
   KLetRec fundef@(KFunDef (x,t) yts e1) e2 -> do
     topLevelFuns %= S.insert x
@@ -83,16 +67,7 @@ f env e = case e of
       Nothing  -> return $ KApp x ys
       Just fvs -> return $ KApp (liftName x) (fvs++ys)
 
-  KTuple xs -> return $ KTuple xs
-
-  KVar x -> return $ KVar x
-
-  KLetTuple xts y e' -> KLetTuple xts y <$> f (M.union (M.fromList xts) env) e'
-
-  KGet x y        -> return $ KGet x y
-  KPut x y z      -> return $ KPut x y z
-  KExtArray x     -> return $ KExtArray x
-  KExtFunApp x ys -> return $ KExtFunApp x ys
+  _ -> return e
 
 unsafeLookup :: (Show a, Ord a) => a -> Map a b -> b
 unsafeLookup key dic = fromMaybe (error $ "unsafeLookup: " ++ show key) (M.lookup key dic)
