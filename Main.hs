@@ -3,20 +3,21 @@
 module Main where
 
 import Base
-import FrontEnd.Lexer        (lex)
-import FrontEnd.Parser       (parse)
-import FrontEnd.Typing       (typing)
-import MiddleEnd.KNormal     (kNormalize)
-import MiddleEnd.Alpha       (alpha)
-import MiddleEnd.Optimise    (optimise)
-import MiddleEnd.Closure     (closureConvert)
+import FrontEnd.Lexer             (lex)
+import FrontEnd.Parser            (parse)
+import FrontEnd.Typing            (typing)
+import MiddleEnd.KNormal          (kNormalize)
+import MiddleEnd.Alpha            (alpha)
+import MiddleEnd.Optimise         (optimise)
+import MiddleEnd.Closure          (closureConvert)
+import MiddleEnd.LambdaLifting    (lambdaLift)
 import BackEnd.FirstArch.Virtual  (virtualCode)
 import BackEnd.FirstArch.RegAlloc (regAlloc)
 import BackEnd.FirstArch.Simm     (simm)
 import BackEnd.FirstArch.Emit     (emit)
 
 import           Prelude hiding (lex)
-import           System.IO      (stdout, openFile, withFile, IOMode(..))
+import           System.IO      (stdout, withFile, IOMode(..))
 import qualified Data.Map as M
 import           Options.Applicative
 import           System.FilePath.Posix ((-<.>))
@@ -35,13 +36,14 @@ main = execParser (info (helper <*> parseOpt) fullDesc) >>= \opts ->
 
 compile :: S -> FilePath -> IO ()
 compile s f = do
-  str <- readFile f
+  input <- readFile f
   withFile (f -<.> "s") WriteMode $ \out -> do
-    m <-(`runCaml` s) $ lex str
+    m <-(`runCaml` s) $ lex input
           >>= parse
           >>= typing
           >>= kNormalize
           >>= alpha
+          >>= lambdaLift
           >>= optimise
           >>= closureConvert
           >>= virtualCode
