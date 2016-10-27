@@ -15,10 +15,14 @@ import qualified Data.Map as M
 import qualified Data.Set as S
 import           Data.Vector (Vector, (!))
 import           Data.List (foldl')
-import           Data.Maybe (fromJust)
+--import           Data.Maybe (fromJust)
 import           Data.Foldable (foldlM)
 import           Control.Exception.Base (assert)
 import qualified Data.Foldable as F
+
+import           Data.Maybe (fromMaybe)
+fromJust :: Maybe a -> a
+fromJust = fromMaybe (error "RegAlloc.hs")
 
 
 target' :: Id -> (Id,Type) -> AExpr -> (Bool, [Id])
@@ -246,12 +250,20 @@ g' destt cont regenv exp = case exp of
       ry <- find y TFloat regenv
       g'_if destt cont regenv exp (AIfFLe rx ry) e1 e2
 
-  ACallCls x ys zs -> do
-      rx <- find x TInt regenv
-      g'_call destt cont regenv exp (ACallCls rx) ys zs
+  ACallCls x ys zs
+    | length ys > length allRegs  - 2 || --cls reg & swap reg
+      length zs > length allFRegs - 1 ->
+        throw $ Failure $ "cannot allocate registers for arugments to " ++ x
+    | otherwise -> do
+        rx <- find x TInt regenv
+        g'_call destt cont regenv exp (ACallCls rx) ys zs
 
-  ACallDir l ys zs -> do
-      g'_call destt cont regenv exp (ACallDir l) ys zs
+  ACallDir l ys zs
+    | length ys > length allRegs  - 1 || --swap reg
+      length zs > length allFRegs - 1 ->
+        throw $ Failure $ "cannot allocate registers for arugments to " ++ show l
+    | otherwise ->
+        g'_call destt cont regenv exp (ACallDir l) ys zs
 
   ASave{} -> assert False undefined
 
