@@ -8,6 +8,8 @@ import Prelude hiding (log)
 
 import           Base
 import           MiddleEnd.KNormal
+import           MiddleEnd.Alpha
+import           MiddleEnd.Elim
 
 import           Data.Map                       (Map)
 import qualified Data.Map as M
@@ -15,18 +17,19 @@ import           Data.Set                       (fromList, singleton, Set, (\\))
 import qualified Data.Set as S
 import           Data.Maybe                     (fromMaybe)
 import           Control.Lens            hiding (lifted)
+import           Control.Monad                  (when)
 import           Control.Monad.Trans.Class      (lift)
 import           Control.Monad.Trans.State.Lazy
 
 data LL = LL { _directlyCallable :: Set Id -- function without any free variables
-             , _liftedMap ::Map Id [Id]    -- lifted function and its free variables
+             , _liftedMap :: Map Id [Id]   -- lifted function and its free variables
              } deriving Show
 makeLenses ''LL
 
 type CamlLL = StateT LL Caml
 
 lambdaLift :: KExpr -> Caml KExpr
-lambdaLift e = evalStateT (f M.empty e) (LL S.empty M.empty)
+lambdaLift e = evalStateT (f M.empty e) (LL S.empty M.empty) >>= alpha >>= elim
 
 f :: Map Id Type -> KExpr -> CamlLL KExpr
 f env e = case e of
@@ -37,6 +40,7 @@ f env e = case e of
 
   KLetRec fundef@(KFunDef (x,t) yts e1) e2 -> do
     dcs <- use directlyCallable
+    maxN <- lift (use maxArgs)
     let ys = map fst yts
         envE2  = M.insert x t env
         envE1  = M.union (M.fromList yts) envE2
@@ -49,12 +53,14 @@ f env e = case e of
 
       fvs -> do
         lift.log $ "free variable(s) " ++ ppList fvs ++ " " ++
-                   "found in function " ++ x ++ "\n"
-        let ts = map (`unsafeLookup` env) fvs
-            fundef' = abstruct fundef fvs ts
-            insertOrigin = KLetRec fundef{kbody=KApp (liftName x) (fvs++ys)}
-        directlyCallable %= S.insert (liftName x)
-        liftedMap %= M.insert x fvs
+                   "found in function " ++ x
+        let (fvs1,fvs2) = splitAt (maxN - length ys) fvs
+            ts = map (`unsafeLookup` env) fvs1
+            fundef' = abstruct fundef fvs1 ts
+            insertOrigin = KLetRec fundef{kbody=KApp (liftName x) (fvs1++ys)}
+        when (null fvs2) $ do
+          directlyCallable %= S.insert (liftName x)
+          liftedMap %= M.insert x fvs1
         e1' <- f envE1 e1
         e2' <- f envE2 e2
         return $ KLetRec fundef'{kbody=insertOrigin e1'} $ insertOrigin e2'
