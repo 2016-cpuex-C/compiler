@@ -9,11 +9,12 @@ module BackEnd.FirstArch.Emit where
 import Prelude hiding (exp, log)
 
 import Base
-import BackEnd.Decode (decodeFloatLE)
+import BackEnd.Decode
 import BackEnd.FirstArch.Asm
 
 import qualified Data.Set as S
-import           Data.Set                       (Set)
+import           Data.Set    (Set)
+import           Data.Int    (Int16)
 import           Data.Vector ((!))
 import           Control.Lens
 import           Data.List (foldl', partition)
@@ -84,10 +85,16 @@ g' oc (dest,exp) =
     -- Nontailなら結果をdestにセットする.
     NonTail x -> case exp of
       ANop -> return ()
-      ASet i | -32768 <= i || i <= 32767 ->
+      ASet i | fromIntegral (minBound::Int16) <= i &&
+               i <= fromIntegral (maxBound::Int16) ->
                     write $ printf "\tli\t%s, %d" x i
              | otherwise -> do
-                    undefined
+                    let (hi,lo) = devideInteger i
+                    lift.log $ show i ++ " is out of 16bits range\n" ++
+                               "devide into " ++ show hi ++ " and " ++ show lo
+                    write $ printf "\tli\t%s, %d" x hi
+                    write $ printf "\tsll\t%s, %s, 16" x x
+                    write $ printf "\taddi\t%s, %s, %d" x x lo
       ASetF (Label l) ->    write $ printf "\tl.sl\t%s, %s" x l
       ASetL (Label y) ->    write $ printf "\tla\t%s, %s" x y
 
