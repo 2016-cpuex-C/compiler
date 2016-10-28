@@ -49,8 +49,8 @@ locate x = uses stackMap loc
 offset :: Id -> CamlE Int
 offset x = (4*).head <$> locate x
 
-stackSize :: CamlE Int
-stackSize = uses stackMap (align . (4*) . (+1) . length)
+stackSize :: CamlE Integer
+stackSize = uses stackMap (align . (4*) . (+1) . fromIntegral . length)
 
 ppIdOrImm :: IdOrImm -> String
 ppIdOrImm (V x) = x
@@ -84,8 +84,10 @@ g' oc (dest,exp) =
     -- Nontailなら結果をdestにセットする.
     NonTail x -> case exp of
       ANop -> return ()
-      ASet i | -32768 > i || i > 32767 -> throw $ Failure "即値はみ出た"
-             | otherwise -> write $ printf "\tli\t%s, %d" x i
+      ASet i | -32768 <= i || i <= 32767 ->
+                    write $ printf "\tli\t%s, %d" x i
+             | otherwise -> do
+                    undefined
       ASetF (Label l) ->    write $ printf "\tl.sl\t%s, %s" x l
       ASetL (Label y) ->    write $ printf "\tla\t%s, %s" x y
 

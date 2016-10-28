@@ -10,7 +10,7 @@ import Control.Lens
 ---------------------
 data Expr = EUnit
           | EBool     Bool
-          | EInt      Int
+          | EInt      Integer
           | EFloat    Float
           | ENot      Expr
           | ENeg      Expr

@@ -19,7 +19,7 @@ import           Data.Maybe (fromMaybe)
 fromJust :: Maybe a -> a
 fromJust = fromMaybe (error "Simm.hs")
 
-g :: Map Id Int -> Asm -> Asm
+g :: Map Id Integer -> Asm -> Asm
 g env = \case
   AsmAns exp -> AsmAns (g' env exp)
   AsmLet (x,t) (ASet i) e
@@ -33,7 +33,7 @@ g env = \case
         in  g env (AsmLet xt e1 e)
   AsmLet xt exp e -> AsmLet xt (g' env exp) (g env e)
 
-g' :: Map Id Int -> AExpr -> AExpr
+g' :: Map Id Integer -> AExpr -> AExpr
 g' env = let geti var = lookupJust var env
              get  var = C (geti var) in \case
   AAdd x (V y)

@@ -20,7 +20,7 @@ import qualified Data.Map as M
 -- KNormal.t = KExpr --
 -----------------------
 data KExpr = KUnit
-           | KInt Int
+           | KInt Integer
            | KFloat Float
            | KNeg  Id
            | KAdd  Id Id

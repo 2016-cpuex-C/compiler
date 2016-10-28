@@ -14,7 +14,7 @@ import           Control.Lens
 -----------------
 -- Asm.t = Asm --
 -----------------
-type Immediate = Int
+type Immediate = Integer
 data IdOrImm = V Id
              | C Immediate
              deriving (Show, Eq)
@@ -25,7 +25,7 @@ data Asm = AsmAns AExpr
          deriving Show
 
 data AExpr = ANop
-           | ASet Int
+           | ASet Integer
            | ASetF Label
            | ASetL Label
            | AMov Id
@@ -203,6 +203,6 @@ concat' a1 xt a2 = case a1 of
   AsmLet yt e a1' -> AsmLet yt e (concat' a1' xt a2)
 
 -- double から single に変わったので不要
-align :: Int -> Int
+align :: Integer -> Integer
 align = id
 

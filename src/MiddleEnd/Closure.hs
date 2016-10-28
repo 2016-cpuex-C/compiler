@@ -21,16 +21,15 @@ import qualified Data.Map as M
 import           Data.Set       (Set)
 import qualified Data.Set as S
 import qualified Data.List as L
---import           Data.Maybe     (fromJust)
 import           Control.Monad.Trans.State.Lazy
 import           Control.Monad.Trans.Class (lift)
 
 import           Data.Maybe (fromMaybe)
-fromJust :: Maybe a -> a
-fromJust = fromMaybe (error "Closure.hs")
+--fromJust :: Maybe a -> a
+--fromJust = fromMaybe (error "Closure.hs")
 
 data CExpr = CUnit
-           | CInt      Int
+           | CInt      Integer
            | CFloat    Float
            | CNeg      Id
            | CAdd      Id Id

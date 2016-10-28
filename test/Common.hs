@@ -9,7 +9,7 @@ import FrontEnd.Typing             (typing)
 import MiddleEnd.KNormal           (kNormalize)
 import MiddleEnd.Alpha             (alpha)
 import MiddleEnd.Optimise          (optimise)
-import MiddleEnd.LambdaLifting     (lambdaLift)
+--import MiddleEnd.LambdaLifting     (lambdaLift)
 import MiddleEnd.Closure           (closureConvert)
 import BackEnd.FirstArch.Virtual   (virtualCode)
 import BackEnd.FirstArch.RegAlloc  (regAlloc)
@@ -28,14 +28,15 @@ compile ml = do
   s <- readFile ml
   devnull <- openFile "/dev/null" WriteMode
   withFile (mlToS ml) WriteMode $ \out ->
-    (`runCaml` (initialState&logfile.~devnull)) $ lex s
+    (`runCaml` (initialState&logfile.~devnull
+                            &threshold.~0
+               )
+    )   $ lex s
       >>= parse
       >>= typing
       >>= kNormalize
       >>= alpha
-      {->>= \e -> liftIO (print e) >> return e-}
-      >>= lambdaLift
-      {->>= \e -> liftIO (print e) >> return e-}
+      {->>= lambdaLift-}
       >>= optimise
       >>= closureConvert
       >>= virtualCode
