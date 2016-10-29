@@ -12,15 +12,11 @@ import MiddleEnd.CSE
 import Control.Lens (use)
 
 optimise :: KExpr -> Caml KExpr
-optimise e = do
-  n <- use optimiseLimit
-  optimise' n e
-
-optimise' :: Int -> KExpr -> Caml KExpr
-optimise' 0 e = return e
-optimise' n e = do
-  e' <- cse =<< elim =<< constFold =<< inline =<< assoc =<< beta e
-  if e==e'
-    then return e
-    else optimise' (n-1) e'
+optimise e = use optimiseLimit >>= go e
+  where
+    go e' n = do
+      e'' <- cse =<< elim =<< constFold =<< inline =<< assoc =<< beta e'
+      if e'==e''
+        then return e'
+        else go e'' (n-1)
 
