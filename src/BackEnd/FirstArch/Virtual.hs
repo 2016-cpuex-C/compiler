@@ -35,7 +35,7 @@ h (CFunDef (Label x,t) yts zts e) = do
       e' <- g (M.insert x t (insertList yts $ insertList zts M.empty)) e
       let f1 z    offset load = AsmLet (z, TFloat) (ALdDF x (C offset)) load
           f2 z t' offset load = AsmLet (z,t')      (ALd   x (C offset)) load
-      return $ expand zts (4,e') f1 f2
+      return $ expand zts (1,e') f1 f2
   case t of
     TFun _ t2 -> return $ AFunDef (Label x) int float load t2
     _ -> error "Virtual.h"
@@ -74,9 +74,9 @@ expand xts ini addf addi =
   classify xts ini
     (\(offset, acc) x ->
         let offset' = align offset in
-        (offset' + 4, addf x offset' acc))
+        (offset' + 1, addf x offset' acc))
     (\(offset, acc) x t ->
-      (offset + 4, addi x t offset acc))
+      (offset + 1, addi x t offset acc))
 
 expandM :: [(Id, Type)]
         -> (Integer, Asm)
@@ -88,10 +88,10 @@ expandM xts ini addf addi =
     (\(offset, acc) x -> do
         let offset' = align offset
         z <- addf x offset acc
-        return (offset' + 4, z))
+        return (offset' + 1, z))
     (\(offset, acc) x t -> do
         z <- addi x t offset acc
-        return (offset + 4, z))
+        return (offset + 1, z))
 
 ----------
 -- Util --
@@ -162,7 +162,7 @@ g env = \case
     (offset,storeFv) <-
         let addf y   offset storeFv = seq' (AStDF y x (C offset), storeFv)
             addi y _ offset storeFv = seq' (ASt   y x (C offset), storeFv)
-        in  expandM (zip ys ts) (4,e2') addf addi
+        in  expandM (zip ys ts) (1,e2') addf addi
     e1 <- do
         e2'' <- do
             z <- genId "l"
