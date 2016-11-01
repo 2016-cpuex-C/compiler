@@ -48,10 +48,10 @@ locate x = uses stackMap loc
         loc (y:zs) | x == y    = 0 : map succ (loc zs)
                    | otherwise = map succ (loc zs)
 offset :: Id -> CamlE Int
-offset x = (4*).head <$> locate x
+offset x = (1*).head <$> locate x
 
 stackSize :: CamlE Integer
-stackSize = uses stackMap (align . (4*) . (+1) . fromIntegral . length)
+stackSize = uses stackMap (align . (1*) . (+1) . fromIntegral . length)
 
 ppIdOrImm :: IdOrImm -> String
 ppIdOrImm (V x) = x
@@ -191,14 +191,14 @@ g' oc (dest,exp) =
           g'_args oc [(y, regCl)] zs ws
           ss <- stackSize
 
-          write $ printf "\tsw\t%s, %d(%s)" regRa (ss-4) regSp
+          write $ printf "\tsw\t%s, %d(%s)" regRa (ss-1) regSp
 
           when (ss>0) $ write $ printf "\taddi\t%s, %s, %d" regSp regSp ss
           write $ printf "\tlwr\t%s, 0(%s)" regSw regCl
           write $ printf "\tjalr\t%s" regSw
           when (ss>0) $ write $ printf "\taddi\t%s, %s, %d" regSp regSp (-ss)
 
-          write $ printf "\tlwr\t%s, %d(%s)" regRa (ss-4) regSp
+          write $ printf "\tlwr\t%s, %d(%s)" regRa (ss-1) regSp
 
           if | (x `elem` allRegs && x /= regs!0) ->
                     write $ printf "\taddi\t%s, %s, 0" x (regs!0)
@@ -210,13 +210,13 @@ g' oc (dest,exp) =
           g'_args oc [] zs ws
           ss <- stackSize
 
-          write $ printf "\tsw\t%s, %d(%s)" regRa (ss-4) regSp
+          write $ printf "\tsw\t%s, %d(%s)" regRa (ss-1) regSp
 
           when (ss>0) $ write $ printf "\taddi\t%s, %s, %d" regSp regSp ss
           write $ printf "\tjal\t%s" y
           when (ss>0) $ write $ printf "\taddi\t%s, %s, %d" regSp regSp (-ss)
 
-          write $ printf "\tlwr\t%s, %d(%s)" regRa (ss-4) regSp
+          write $ printf "\tlwr\t%s, %d(%s)" regRa (ss-1) regSp
 
           if | (x `elem` allRegs && x /= regs!0) ->
                     write $ printf "\taddi\t%s, %s, 0" x (regs!0)
@@ -381,9 +381,9 @@ emit' handle (AProg fdata fundefs e) = do
   write $ printf "main:"
 
   --main header
-  write $ printf "\tsw\t$ra, 4($sp)"
-  write $ printf "\tsw\t$fp, 8($sp)"
-  write $ printf "\taddi\t$sp, $sp, 24"
+  write $ printf "\tsw\t$ra, 1($sp)"
+  write $ printf "\tsw\t$fp, 2($sp)"
+  write $ printf "\taddi\t$sp, $sp, 6"
   write $ printf "\taddi\t$fp, $sp, 0"
 
   stackSet .= S.empty
@@ -392,9 +392,9 @@ emit' handle (AProg fdata fundefs e) = do
 
   -- main footer
   write $ printf "\tmove\t$sp, $fp"
-  write $ printf "\tsubi\t$sp, $sp, 24"
-  write $ printf "\tlwr\t$ra, 4($sp)"
-  write $ printf "\tlwr\t$fp, 8($sp)"
+  write $ printf "\tsubi\t$sp, $sp, 6"
+  write $ printf "\tlwr\t$ra, 1($sp)"
+  write $ printf "\tlwr\t$fp, 2($sp)"
   write $ printf "\tli\t%s, 0" (regs!0)
 
   --write $ printf "\tli\t$v0, 10"

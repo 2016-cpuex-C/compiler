@@ -24,7 +24,6 @@ import           Data.Maybe (fromMaybe)
 fromJust :: Maybe a -> a
 fromJust = fromMaybe (error "RegAlloc.hs")
 
-
 target' :: Id -> (Id,Type) -> AExpr -> (Bool, [Id])
 target' src (dest,t) = \case
   AMov x
