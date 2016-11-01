@@ -29,7 +29,7 @@ compile ml = do
   devnull <- openFile "/dev/null" WriteMode
   withFile (mlToS ml) WriteMode $ \out ->
     (`runCaml` (initialState&logfile.~devnull
-                            &threshold.~0
+                            &threshold.~100
                )
     )   $ lex s
       >>= parse
