@@ -21,12 +21,15 @@ import qualified Data.Map as M
 import           Data.Set       (Set)
 import qualified Data.Set as S
 import qualified Data.List as L
-import           Data.Maybe     (fromJust)
 import           Control.Monad.Trans.State.Lazy
 import           Control.Monad.Trans.Class (lift)
 
+import           Data.Maybe (fromMaybe)
+--fromJust :: Maybe a -> a
+--fromJust = fromMaybe (error "Closure.hs")
+
 data CExpr = CUnit
-           | CInt      Int
+           | CInt      Integer
            | CFloat    Float
            | CNeg      Id
            | CAdd      Id Id
@@ -158,7 +161,7 @@ g env known = \case
                  e1'' <- g env'' known e1
                  return (known, e1'')
     let zs'  = S.toList (fv e1'') L.\\ (x:ys)
-        zts' = [(z, fromJust (M.lookup z env')) | z <- zs']
+        zts' = [(z, fromMaybe (error $ "Closure.g: " ++ z) (M.lookup z env')) | z <- zs']
     modify (CFunDef (Label x, t) yts zts' e1'' :) -- 追加
     e2' <- g env' known'' e2
     if S.member x (fv e2') then -- やや賢い->賢い

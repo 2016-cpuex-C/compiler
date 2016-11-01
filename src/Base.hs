@@ -44,10 +44,11 @@ instance Ord TV where
 
 data S = S { _idCount       :: Int             -- for Id module
            , _tvCount       :: Int             -- for Typing module
-           , _threshold     :: Int             -- for Inline module (max inline size)
-           , _optimiseLimit :: Int             -- for Optimise module (max optimise iter)
-           , _extTyEnv      :: TyEnv           -- for Typing module
-           , _virtualData   :: [(Label,Float)] -- for Virtual module
+           , _maxArgs       :: Int             -- max number of args
+           , _threshold     :: Int             -- max inline size
+           , _optimiseLimit :: Int             -- max number of optimise iteration
+           , _extTyEnv      :: TyEnv           -- type of ext functions
+           , _virtualData   :: [(Label,Float)] -- floating constant
            , _logfile       :: Handle
            }
            deriving Show
@@ -109,6 +110,7 @@ idOfType = \case
 initialState :: S
 initialState = S { _idCount       = 0
                  , _tvCount       = 0
+                 , _maxArgs       = 21 -- number of registers - 2 (for cls & swap)
                  , _extTyEnv      = M.empty
                  , _threshold     = 0
                  , _virtualData   = []
@@ -119,13 +121,12 @@ initialState = S { _idCount       = 0
 liftIO :: IOC.MonadIO m => IO a -> m a
 liftIO = IOC.liftIO
 
-throw :: MonadError Error m => Error -> m a
-throw = throwError
-
 -- NOTE: m中の状態変化はなかったことになる 気をつけて使う
--- catch m h = StateT $ \s -> runStateT m s `catchE` \e -> runStateT (h e) s
 catch :: MonadError Error m => m a -> (Error -> m a) -> m a
 catch = catchError
+
+throw :: MonadError Error m => Error -> m a
+throw = throwError
 
 log :: String -> Caml ()
 log s = do

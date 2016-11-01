@@ -6,8 +6,11 @@ import MiddleEnd.KNormal
 
 import           Data.Map (Map)
 import qualified Data.Map as M
-import           Data.Maybe (fromJust)
 import           Data.List (foldl')
+import           Data.Maybe (fromMaybe)
+
+fromJust :: Maybe a -> a
+fromJust = fromMaybe (error "cf.hs")
 
 constFold :: KExpr -> Caml KExpr
 constFold = return . g M.empty
@@ -24,7 +27,7 @@ memberT :: Id -> Map Id KExpr -> Bool
 memberT x env = case M.lookup x env of
                   Just (KTuple _) -> True
                   _ -> False
-findI :: Id -> Map Id KExpr -> Int
+findI :: Id -> Map Id KExpr -> Integer
 findI x env = case fromJust $ M.lookup x env of KInt i -> i; _ -> error "findI"
 findF :: Id -> Map Id KExpr -> Float
 findF x env = case fromJust $ M.lookup x env of KFloat f -> f; _ -> error "findF"
@@ -50,7 +53,7 @@ g env e = case e of
   KMul x y
     | memberI x env && memberI y env -> KInt $ findI x env * findI y env
   KDiv x y
-    | memberI x env && memberI y env -> KInt $ findI x env * findI y env
+    | memberI x env && memberI y env -> KInt $ findI x env `div` findI y env
 
   KFAdd x y
     | memberF x env && memberF y env -> KFloat $ findF x env + findF y env

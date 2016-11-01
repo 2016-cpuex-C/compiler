@@ -9,11 +9,12 @@ module BackEnd.FirstArch.Emit where
 import Prelude hiding (exp, log)
 
 import Base
-import BackEnd.Decode (decodeFloatLE)
+import BackEnd.Decode
 import BackEnd.FirstArch.Asm
 
 import qualified Data.Set as S
-import           Data.Set                       (Set)
+import           Data.Set    (Set)
+import           Data.Int    (Int16)
 import           Data.Vector ((!))
 import           Control.Lens
 import           Data.List (foldl', partition)
@@ -47,10 +48,10 @@ locate x = uses stackMap loc
         loc (y:zs) | x == y    = 0 : map succ (loc zs)
                    | otherwise = map succ (loc zs)
 offset :: Id -> CamlE Int
-offset x = (4*).head <$> locate x
+offset x = (1*).head <$> locate x
 
-stackSize :: CamlE Int
-stackSize = uses stackMap (align . (4*) . (+1) . length)
+stackSize :: CamlE Integer
+stackSize = uses stackMap (align . (1*) . (+1) . fromIntegral . length)
 
 ppIdOrImm :: IdOrImm -> String
 ppIdOrImm (V x) = x
@@ -84,8 +85,16 @@ g' oc (dest,exp) =
     -- Nontailなら結果をdestにセットする.
     NonTail x -> case exp of
       ANop -> return ()
-      ASet i | -32768 > i || i > 32767 -> throw $ Failure "即値はみ出た"
-             | otherwise -> write $ printf "\tli\t%s, %d" x i
+      ASet i | fromIntegral (minBound::Int16) <= i &&
+               i <= fromIntegral (maxBound::Int16) ->
+                    write $ printf "\tli\t%s, %d" x i
+             | otherwise -> do
+                    let (hi,lo) = devideInteger i
+                    lift.log $ show i ++ " is out of 16bits range\n" ++
+                               "devide into " ++ show hi ++ " and " ++ show lo
+                    write $ printf "\tli\t%s, %d" x hi
+                    write $ printf "\tsll\t%s, %s, 16" x x
+                    write $ printf "\taddi\t%s, %s, %d" x x lo
       ASetF (Label l) ->    write $ printf "\tl.sl\t%s, %s" x l
       ASetL (Label y) ->    write $ printf "\tla\t%s, %s" x y
 
@@ -182,14 +191,14 @@ g' oc (dest,exp) =
           g'_args oc [(y, regCl)] zs ws
           ss <- stackSize
 
-          write $ printf "\tsw\t%s, %d(%s)" regRa (ss-4) regSp
+          write $ printf "\tsw\t%s, %d(%s)" regRa (ss-1) regSp
 
           when (ss>0) $ write $ printf "\taddi\t%s, %s, %d" regSp regSp ss
           write $ printf "\tlwr\t%s, 0(%s)" regSw regCl
           write $ printf "\tjalr\t%s" regSw
           when (ss>0) $ write $ printf "\taddi\t%s, %s, %d" regSp regSp (-ss)
 
-          write $ printf "\tlwr\t%s, %d(%s)" regRa (ss-4) regSp
+          write $ printf "\tlwr\t%s, %d(%s)" regRa (ss-1) regSp
 
           if | (x `elem` allRegs && x /= regs!0) ->
                     write $ printf "\taddi\t%s, %s, 0" x (regs!0)
@@ -201,13 +210,13 @@ g' oc (dest,exp) =
           g'_args oc [] zs ws
           ss <- stackSize
 
-          write $ printf "\tsw\t%s, %d(%s)" regRa (ss-4) regSp
+          write $ printf "\tsw\t%s, %d(%s)" regRa (ss-1) regSp
 
           when (ss>0) $ write $ printf "\taddi\t%s, %s, %d" regSp regSp ss
           write $ printf "\tjal\t%s" y
           when (ss>0) $ write $ printf "\taddi\t%s, %s, %d" regSp regSp (-ss)
 
-          write $ printf "\tlwr\t%s, %d(%s)" regRa (ss-4) regSp
+          write $ printf "\tlwr\t%s, %d(%s)" regRa (ss-1) regSp
 
           if | (x `elem` allRegs && x /= regs!0) ->
                     write $ printf "\taddi\t%s, %s, 0" x (regs!0)
@@ -372,9 +381,9 @@ emit' handle (AProg fdata fundefs e) = do
   write $ printf "main:"
 
   --main header
-  write $ printf "\tsw\t$ra, 4($sp)"
-  write $ printf "\tsw\t$fp, 8($sp)"
-  write $ printf "\taddi\t$sp, $sp, 24"
+  write $ printf "\tsw\t$ra, 1($sp)"
+  write $ printf "\tsw\t$fp, 2($sp)"
+  write $ printf "\taddi\t$sp, $sp, 6"
   write $ printf "\taddi\t$fp, $sp, 0"
 
   stackSet .= S.empty
@@ -383,9 +392,9 @@ emit' handle (AProg fdata fundefs e) = do
 
   -- main footer
   write $ printf "\tmove\t$sp, $fp"
-  write $ printf "\tsubi\t$sp, $sp, 24"
-  write $ printf "\tlwr\t$ra, 4($sp)"
-  write $ printf "\tlwr\t$fp, 8($sp)"
+  write $ printf "\tsubi\t$sp, $sp, 6"
+  write $ printf "\tlwr\t$ra, 1($sp)"
+  write $ printf "\tlwr\t$fp, 2($sp)"
   write $ printf "\tli\t%s, 0" (regs!0)
 
   --write $ printf "\tli\t$v0, 10"

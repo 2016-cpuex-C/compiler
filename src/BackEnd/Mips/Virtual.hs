@@ -62,10 +62,10 @@ classifyM xts ini addf addi = foldlM func ini xts
           TFloat -> addf acc x
           _      -> addi acc x t
 
-expand :: [(Id, Type)] -> (Int, Asm)
-       -> (Id -> Int -> Asm -> Asm) -- float
-       -> (Id -> Type -> Int -> Asm -> Asm) -- other
-       -> (Int, Asm)
+expand :: [(Id, Type)] -> (Integer, Asm)
+       -> (Id -> Integer -> Asm -> Asm) -- float
+       -> (Id -> Type -> Integer -> Asm -> Asm) -- other
+       -> (Integer, Asm)
 expand xts ini addf addi =
   classify xts ini
     (\(offset, acc) x ->
@@ -75,10 +75,10 @@ expand xts ini addf addi =
       (offset + 4, addi x t offset acc))
 
 expandM :: [(Id, Type)]
-        -> (Int, Asm)
-        -> (Id -> Int ->Asm-> Caml Asm)
-        -> (Id -> Type -> Int ->Asm-> Caml Asm)
-        -> Caml (Int, Asm)
+        -> (Integer, Asm)
+        -> (Id -> Integer ->Asm-> Caml Asm)
+        -> (Id -> Type -> Integer ->Asm-> Caml Asm)
+        -> Caml (Integer, Asm)
 expandM xts ini addf addi =
   classifyM xts ini
     (\(offset, acc) x -> do

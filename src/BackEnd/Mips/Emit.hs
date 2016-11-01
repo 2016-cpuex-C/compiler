@@ -41,16 +41,16 @@ savef x = do
   stackSet %= S.insert x
   stackMap %= \l -> if x `elem` l then l else l++[x]
 
-locate :: Id -> CamlE [Int]
+locate :: Id -> CamlE [Integer]
 locate x = uses stackMap loc
   where loc [] = []
         loc (y:zs) | x == y    = 0 : map succ (loc zs)
                    | otherwise = map succ (loc zs)
-offset :: Id -> CamlE Int
+offset :: Id -> CamlE Integer
 offset x = (4*).head <$> locate x
 
-stackSize :: CamlE Int
-stackSize = uses stackMap (align . (4*) . (+1) . length)
+stackSize :: CamlE Integer
+stackSize = uses stackMap (align . (4*) . (+1) . fromIntegral . length)
 
 ppIdOrImm :: IdOrImm -> String
 ppIdOrImm (V x) = x

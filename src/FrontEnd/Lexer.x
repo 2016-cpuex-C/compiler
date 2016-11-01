@@ -64,7 +64,7 @@ tokens :-
 
 {
 data Token = TokenBool Bool
-           | TokenInt Int
+           | TokenInt Integer
            | TokenFloat Float
            | TokenNot
            | TokenMinus
