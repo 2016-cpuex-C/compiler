@@ -25,6 +25,9 @@ import           Text.Printf
 import           Control.Monad.Trans.State.Lazy
 import           Control.Monad.Trans.Class (lift)
 
+import           Data.FileEmbed
+import qualified Data.ByteString.Char8 as BC
+
 data EmitState = EmitState { _stackSet :: Set Id
                            , _stackMap :: [Id] }
 makeLenses ''EmitState
@@ -405,7 +408,10 @@ emit' handle (AProg fdata fundefs e) = do
   forM_ fundefs $ h handle
 
   -- utility
-  write =<< liftIO (readFile "libmincaml.s")
+  write libmincaml
+
+libmincaml :: String
+libmincaml = BC.unpack $(embedFile "src/libmincaml.s")
 
 ----------
 -- Util --
