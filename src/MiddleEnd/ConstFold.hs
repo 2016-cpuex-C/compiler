@@ -4,29 +4,24 @@ module MiddleEnd.ConstFold where
 import Base
 import MiddleEnd.KNormal
 
-import           Data.Map (Map)
+import           Data.Map    (Map)
 import qualified Data.Map as M
-import           Data.List (foldl')
-import           Data.Maybe (fromMaybe)
+import           Data.List   (foldl')
+import           Data.Maybe  (fromMaybe)
 
 fromJust :: Maybe a -> a
-fromJust = fromMaybe (error "cf.hs")
+fromJust = fromMaybe (error "ConstFold.hs")
 
 constFold :: KExpr -> Caml KExpr
 constFold = return . g M.empty
 
 memberI :: Id -> Map Id KExpr -> Bool
-memberI x env = case M.lookup x env of
-                  Just (KInt _) -> True
-                  _ -> False
+memberI x env = case M.lookup x env of Just (KInt _) -> True; _ -> False
 memberF :: Id -> Map Id KExpr -> Bool
-memberF x env = case M.lookup x env of
-                  Just (KFloat _) -> True
-                  _ -> False
+memberF x env = case M.lookup x env of Just (KFloat _) -> True; _ -> False
 memberT :: Id -> Map Id KExpr -> Bool
-memberT x env = case M.lookup x env of
-                  Just (KTuple _) -> True
-                  _ -> False
+memberT x env = case M.lookup x env of Just (KTuple _) -> True; _ -> False
+
 findI :: Id -> Map Id KExpr -> Integer
 findI x env = case fromJust $ M.lookup x env of KInt i -> i; _ -> error "findI"
 findF :: Id -> Map Id KExpr -> Float
@@ -66,15 +61,15 @@ g env e = case e of
 
   KIfEq x y e1 e2
     | memberI x env && memberI y env && findI x env == findI y env -> g env e1
-    | memberI x env && memberI y env                               -> g env e2
+    | memberI x env && memberI y env && otherwise                  -> g env e2
     | memberF x env && memberF y env && findF x env == findF y env -> g env e1
-    | memberF x env && memberF y env                               -> g env e2
+    | memberF x env && memberF y env && otherwise                  -> g env e2
     | otherwise -> KIfEq x y (g env e1) (g env e2)
   KIfLe x y e1 e2
     | memberI x env && memberI y env && findI x env <= findI y env -> g env e1
-    | memberI x env && memberI y env                               -> g env e2
+    | memberI x env && memberI y env && otherwise                  -> g env e2
     | memberF x env && memberF y env && findF x env <= findF y env -> g env e1
-    | memberF x env && memberF y env                               -> g env e2
+    | memberF x env && memberF y env && otherwise                  -> g env e2
     | otherwise -> KIfLe x y (g env e1) (g env e2)
 
   KLet (x,t) e1 e2 ->

@@ -28,7 +28,6 @@ min_caml_read_float:
 	read_f	$f0
 	jr	$ra
 
-
 min_caml_create_array: # array of length $v0, initialized by $v1
 	move	$a0, $v0
 	move	$v0, $gp
@@ -42,7 +41,7 @@ create_array_cont:
 	addi	$a0, $a0, -1
 	addi	$gp, $gp, 4
 	j	create_array_loop
-#
+
 min_caml_create_float_array: # array of length $v0, initialized by $f0
 	move	$a0, $v0
 	move	$v0, $gp
@@ -167,6 +166,4 @@ min_caml_cos:
 min_caml_atan:
 	atan	$f0, $f0
 	jr	$ra
-
-
 

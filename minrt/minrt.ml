@@ -2400,7 +2400,7 @@ let rec rt size_x size_y =
  scan_line 0 prev cur next 2
 )
 in
-let _ = rt 512 512
+let _ = rt 128 128
 
 in ()
 
