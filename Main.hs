@@ -108,8 +108,6 @@ parseOpt = pure MinCamlOptions
   where
     infixr 7 $$
     infixr 8 <=>
-    ($$) :: (a -> b) -> a -> b
     ($$) = ($)
-    (<=>) :: Monoid m => m -> m -> m
     (<=>) = (<>)
 
