@@ -9,7 +9,7 @@ import MiddleEnd.KNormal          (kNormalize)
 import MiddleEnd.Alpha            (alpha)
 import MiddleEnd.Optimise         (optimise)
 import MiddleEnd.Closure          (closureConvert)
---import MiddleEnd.LambdaLifting    (lambdaLift)
+import MiddleEnd.LambdaLifting    (lambdaLift)
 import BackEnd.FirstArch.Virtual  (virtualCode)
 import BackEnd.FirstArch.RegAlloc (regAlloc)
 import BackEnd.FirstArch.Simm     (simm)
@@ -32,7 +32,6 @@ main = execParser (info (helper <*> parseOpt) fullDesc) >>= \opts ->
           Just f  -> withFile f WriteMode
     in lg $ \h -> mapM_ (compile s{_logfile=h}) (args opts)
 
-
 compile :: S -> FilePath -> IO ()
 compile s f = do
   input <- readFile f
@@ -43,7 +42,7 @@ compile s f = do
           >>= kNormalize
           >>= alpha
           >>= optimise
-          {->>= lambdaLift-}
+          >>= lambdaLift
           >>= closureConvert
           >>= virtualCode
           >>= simm
@@ -108,6 +107,8 @@ parseOpt = pure MinCamlOptions
   where
     infixr 7 $$
     infixr 8 <=>
+    ($$) :: (a -> b) -> a -> b
     ($$) = ($)
+    (<=>) :: Monoid m => m -> m -> m
     (<=>) = (<>)
 
