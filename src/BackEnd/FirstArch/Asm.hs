@@ -88,11 +88,12 @@ allRegs = concat [
   , [ "$t"++show i | i <- [0..7] :: [Int]] -- temporary    (8-15)
   , [ "$s"++show i | i <- [0..7] :: [Int]] -- saved        (16-23)
   , [ "$t"++show i | i <- [8..8] :: [Int]] -- temporary    (24-24)
---, [ "$k"++show i | i <- [0..1] :: [Int]] -- reserved by kernel
+  , [ "$k"++show i | i <- [0..1] :: [Int]] -- reserved by kernel
 --, [ "$gp" ]                              -- global pointer (base of global data)
 --, [ "$sp" ]                              -- stack pointer
---, [ "$fp" ]                              -- frame pointer
+  , [ "$fp" ]                              -- frame pointer
 --, [ "$ra" ]                              -- return address
+  , [ "$zero", "$at" ]
   ]
 
 allFRegs :: [Register]
@@ -117,7 +118,6 @@ regFSw = fregs ! (V.length fregs-1)
 -- address for ld, st instruction
 regAd :: Register
 regAd = "$t9"
-
 
 -- stack pointer
 regSp :: Register
