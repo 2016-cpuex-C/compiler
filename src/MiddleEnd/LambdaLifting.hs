@@ -17,7 +17,6 @@ import           Data.Set                       (fromList, singleton, Set, (\\))
 import qualified Data.Set as S
 import           Data.Maybe                     (fromMaybe)
 import           Control.Lens            hiding (lifted)
---import           Control.Monad                  (when, unless)
 import           Control.Monad.Trans.Class      (lift)
 import           Control.Monad.Trans.State.Lazy
 
@@ -89,13 +88,16 @@ f env e = case e of
                    "found in function " ++ x
         let (fvs1,fvs2) = splitAt (maxN - length ys) fvs
             ts = map (`unsafeLookup` env) fvs1
-            fundef' = abstruct fundef fvs1 ts
+            fundef' = liftFun fundef fvs1 ts
             insertOrigin = KLetRec fundef{kbody=KApp (liftName x) (fvs1++ys)}
-        if null fvs2 then do
+            -- e.g. fundef: f = fun y -> x + y のとき
+            --    fundef': _f = fun x y -> x + y
+            --    origin : f  = fun y -> _f x y
+        if null fvs2 then
           directlyCallable %= S.insert (liftName x)
-          liftedMap %= M.insert x fvs1
         else lift.log $
           "there are so many free variables in " ++ x ++ " that I can't lift all of them"
+        liftedMap %= M.insert x fvs1
         e1' <- f envE1 e1
         e2' <- f envE2 e2
         return $ KLetRec fundef'{kbody=insertOrigin e1'} $ insertOrigin e2'
@@ -113,8 +115,8 @@ f env e = case e of
 unsafeLookup :: (Show a, Ord a) => a -> Map a b -> b
 unsafeLookup key dic = fromMaybe (error $ "unsafeLookup: " ++ show key) (M.lookup key dic)
 
-abstruct :: KFunDef -> [Id] -> [Type] -> KFunDef
-abstruct (KFunDef (x,t) yts _) fvs ts =
+liftFun :: KFunDef -> [Id] -> [Type] -> KFunDef
+liftFun (KFunDef (x,t) yts _) fvs ts =
   let t' = case t of
              TFun targs tret -> TFun (ts++targs) tret
              _ -> error "まじで"

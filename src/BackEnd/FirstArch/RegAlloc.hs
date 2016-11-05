@@ -13,16 +13,13 @@ import BackEnd.FirstArch.Asm
 import           Data.Map (Map)
 import qualified Data.Map as M
 import qualified Data.Set as S
-import           Data.Vector (Vector, (!))
 import           Data.List (foldl')
+import           Data.Vector (Vector, (!))
+import           Data.Maybe (fromMaybe)
 import           Data.Foldable (foldlM)
 import           Control.Lens
 import           Control.Exception.Base (assert)
 import qualified Data.Foldable as F
-
-import           Data.Maybe (fromMaybe)
-fromJust :: Maybe a -> a
-fromJust = fromMaybe (error "RegAlloc.hs")
 
 target' :: Id -> (Id,Type) -> AExpr -> (Bool, [Id])
 target' src (dest,t) = \case
@@ -111,7 +108,7 @@ alloc' destt cont regenv x t = assert (M.notMember x regenv) $
                             where p y' = case M.lookup y' regenv of
                                           Just r -> not (isReg y') && r`elem`allregs
                                           Nothing -> False
-                      msg = "spilling " ++ y ++ " from " ++ show (lookupJust y regenv)
+                      msg = "spilling " ++ y ++ " from " ++ show (unsafeLookup y regenv)
                   log msg >> return (Spill y)
 
 
@@ -123,7 +120,7 @@ add x r regenv
 find :: Id -> Type -> Map Id Id -> Caml Id
 find x t regenv
   | isReg x           = return x
-  | M.member x regenv = return (lookupJust x regenv)
+  | M.member x regenv = return (unsafeLookup x regenv)
   | otherwise         = throw (NoReg x t)
 
 find' :: IdOrImm -> Map Id Id -> Caml IdOrImm
@@ -138,7 +135,7 @@ g destt cont regenv = \case
     (e1',regenv1) <- g'_and_restore xt cont' regenv exp
     alloc' destt cont' regenv1 x t >>= \case
       Spill y -> do
-          let r = lookupJust y regenv1
+          let r = unsafeLookup y regenv1
           (e2',regenv2) <- g destt cont (add x r (M.delete y regenv1)) e
           let save = case M.lookup y regenv of
                        Just r'  -> ASave r' y
@@ -287,7 +284,7 @@ g'_if destt cont regenv _exp constr e1 e2 = do
                     (Just r1, Just r2) | r1 /= r2  -> env
                     _ -> env
       f e x | x == fst destt || M.notMember x regenv || M.member x regenv' = return e
-            | otherwise = seq' (ASave (lookupJust x regenv) x, e)
+            | otherwise = seq' (ASave (unsafeLookup x regenv) x, e)
   e <- foldlM f (AsmAns $ constr e1' e2') (fv cont)
   return (e, regenv')
 
@@ -295,7 +292,7 @@ g'_call :: (Id,Type) -> Asm -> Map Id Id -> AExpr
         -> ([Id] -> [Id] -> AExpr) -> [Id] -> [Id] -> Caml (Asm, Map Id Id)
 g'_call destt cont regenv _exp constr ys zs = do
   let f e x | x == fst destt || M.notMember x regenv = return e
-            | otherwise = seq' (ASave (lookupJust x regenv) x, e)
+            | otherwise = seq' (ASave (unsafeLookup x regenv) x, e)
   rys <- mapM (\y -> find y TInt   regenv) ys
   rzs <- mapM (\z -> find z TFloat regenv) zs
   e <- foldlM f (AsmAns $ constr rys rzs) (fv cont)
@@ -333,6 +330,9 @@ regAlloc (AProg fdata fundefs e) = do
 ----------
 -- Util --
 ----------
-lookupJust :: Ord k => k -> Map k a -> a
-lookupJust x env = fromJust $ M.lookup x env
+unsafeLookup :: Ord k => k -> Map k a -> a
+unsafeLookup x env = fromJust $ M.lookup x env
+
+fromJust :: Maybe a -> a
+fromJust = fromMaybe (error "RegAlloc.hs")
 
