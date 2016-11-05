@@ -81,13 +81,12 @@ seq' (e1,a2) = do
 
 allRegs :: [Register]
 allRegs = concat [
---  [ "$zero" ]                            -- assigned to 0
---  [ "$at" ]                              -- reserved by something
     [ "$v"++show i | i <- [0..1] :: [Int]] -- return value (2-3)
   , [ "$a"++show i | i <- [0..3] :: [Int]] -- arguments    (4-7)
   , [ "$t"++show i | i <- [0..7] :: [Int]] -- temporary    (8-15)
   , [ "$s"++show i | i <- [0..7] :: [Int]] -- saved        (16-23)
   , [ "$t"++show i | i <- [8..8] :: [Int]] -- temporary    (24-24)
+--, [ "$t9" ]
   , [ "$k"++show i | i <- [0..1] :: [Int]] -- reserved by kernel
 --, [ "$gp" ]                              -- global pointer (base of global data)
 --, [ "$sp" ]                              -- stack pointer

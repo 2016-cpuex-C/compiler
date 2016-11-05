@@ -62,9 +62,10 @@ fv = \case
     dcs <- use directlyCallable
     lm  <- use liftedMap
     return . S.fromList $ case (S.member x dcs, M.lookup x lm) of
-      (False, _   ) -> x:ys
-      (_, Just fvs) -> ys++fvs
-      (_, Nothing ) -> ys
+      (True,  Just fvs) -> ys++fvs    -- xはLambdaLiftingによってfvsなしに
+      (True,  Nothing ) -> ys         -- xは元からfvsなし
+      (False, Just fvs) -> x:ys++fvs  -- xはLambdaLiftingしたものの引数いっぱい
+      (False, Nothing ) -> x:ys       -- recursive function
 
 
 f :: Map Id Type -> KExpr -> CamlLL KExpr
@@ -82,6 +83,7 @@ f env e = case e of
     fvs' <- fv e1
     case S.toList (fvs' \\ singleton x \\ fromList ys) of
       [] -> do
+        lift.log $ x ++ " is directly callable"
         directlyCallable %= S.insert x
         e1' <- f envE1 e1
         e2' <- f envE2 e2
@@ -97,7 +99,8 @@ f env e = case e of
             -- e.g. fundef: f = fun y -> x + y のとき
             --    fundef': _f = fun x y -> x + y
             --    origin : f  = fun y -> _f x y
-        if null fvs2 then
+        if null fvs2 then do
+          lift.log $ x ++ " is directly callable"
           directlyCallable %= S.insert x
         else lift.log $
           "there are so many free variables in " ++ x ++

@@ -110,7 +110,7 @@ idOfType = \case
 initialState :: S
 initialState = S { _idCount       = 0
                  , _tvCount       = 0
-                 , _maxArgs       = 21 -- number of registers - 2 (for cls & swap)
+                 , _maxArgs       = 25 -- number of registers - 2 (for cls & swap)
                  , _extTyEnv      = M.empty
                  , _threshold     = 0
                  , _virtualData   = []
