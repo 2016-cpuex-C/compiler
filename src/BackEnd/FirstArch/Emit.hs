@@ -383,25 +383,10 @@ emit' handle (AProg fdata fundefs e) = do
   write $ printf ".globl\tmain"
   write $ printf "main:"
 
-  --main header
-  write $ printf "\tsw\t$ra, 1($sp)"
-  write $ printf "\tsw\t$fp, 2($sp)"
-  write $ printf "\taddi\t$sp, $sp, 6"
-  write $ printf "\taddi\t$fp, $sp, 0"
-
   stackSet .= S.empty
   stackMap .= []
   g handle (NonTail(regs!0), e)
 
-  -- main footer
-  write $ printf "\tmove\t$sp, $fp"
-  write $ printf "\tsubi\t$sp, $sp, 6"
-  write $ printf "\tlwr\t$ra, 1($sp)"
-  write $ printf "\tlwr\t$fp, 2($sp)"
-  write $ printf "\tli\t%s, 0" (regs!0)
-
-  --write $ printf "\tli\t$v0, 10"
-  --write $ printf "\tsyscall"
   write $ printf "\texit"
 
   -- funcions
