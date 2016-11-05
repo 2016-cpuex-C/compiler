@@ -84,7 +84,7 @@ f env e = case e of
         return $ KLetRec fundef{kbody=e1'} e2'
 
       fvs -> do
-        lift.log $ "free variable(s) " ++ ppList fvs ++ " " ++
+        lift.log $ "LambdaLifting: free variable(s) " ++ ppList fvs ++ " " ++
                    "found in function " ++ x
         let (fvs1,fvs2) = splitAt (maxN - length ys) fvs
             ts = map (`unsafeLookup` env) fvs1
@@ -94,9 +94,11 @@ f env e = case e of
             --    fundef': _f = fun x y -> x + y
             --    origin : f  = fun y -> _f x y
         if null fvs2 then
-          directlyCallable %= S.insert (liftName x)
+          directlyCallable %= S.insert x
         else lift.log $
-          "there are so many free variables in " ++ x ++ " that I can't lift all of them"
+          "there are so many free variables in " ++ x ++
+          " that can't lift all of them: " ++ show (length fvs2) ++
+          " variables remains unlifted"
         liftedMap %= M.insert x fvs1
         e1' <- f envE1 e1
         e2' <- f envE2 e2
