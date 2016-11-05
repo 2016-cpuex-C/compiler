@@ -8,7 +8,7 @@ import Prelude hiding (log)
 
 import           Base
 import           MiddleEnd.KNormal       hiding (fv)
-import           MiddleEnd.Alpha
+import           MiddleEnd.Alpha                (alpha)
 import           MiddleEnd.Elim
 
 import           Data.Map                       (Map)
@@ -60,7 +60,11 @@ fv = \case
   KLetTuple xts y e -> S.insert y . (\\ S.fromList (map fst xts)) <$> fv e
   KApp x ys -> do
     dcs <- use directlyCallable
-    return $ S.fromList (if S.member x dcs then ys else x:ys)
+    lm  <- use liftedMap
+    return . S.fromList $ case (S.member x dcs, M.lookup x lm) of
+      (False, _   ) -> x:ys
+      (_, Just fvs) -> ys++fvs
+      (_, Nothing ) -> ys
 
 
 f :: Map Id Type -> KExpr -> CamlLL KExpr
@@ -103,8 +107,6 @@ f env e = case e of
         e1' <- f envE1 e1
         e2' <- f envE2 e2
         return $ KLetRec fundef'{kbody=insertOrigin e1'} $ insertOrigin e2'
-        -- e1,e2中の, 関数適用でないxはclosureにするしか無いのでinsertOriginが必要
-        -- 例: let f x = let g y = x + y in g の最後のg
 
   KApp x ys -> do
     lifted <- use liftedMap
@@ -119,13 +121,18 @@ unsafeLookup key dic = fromMaybe (error $ "unsafeLookup: " ++ show key) (M.looku
 
 liftFun :: KFunDef -> [Id] -> [Type] -> KFunDef
 liftFun (KFunDef (x,t) yts _) fvs ts =
-  let t' = case t of
-             TFun targs tret -> TFun (ts++targs) tret
-             _ -> error "まじで"
+  let t' = liftTy t ts
       yts' = zip fvs ts ++ yts
   in  KFunDef (liftName x,t') yts' undefined
 
 -- "_"で始まる名前は無いのでこれでOK(see FrontEnd.Lexer)
 liftName :: Id -> Id
 liftName x = "_"++x
+
+liftTy :: Type -> [Type] -> Type
+liftTy t ts = case t of
+  TFun targs tret -> TFun (ts++targs) tret
+  _ -> error "まじで"
+
+
 
