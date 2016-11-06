@@ -62,10 +62,10 @@ fv = \case
     dcs <- use directlyCallable
     lm  <- use liftedMap
     return . S.fromList $ case (S.member x dcs, M.lookup x lm) of
-      (True,  Just fvs) -> ys++fvs    -- xはLambdaLiftingによってfvsなしに
-      (True,  Nothing ) -> ys         -- xは元からfvsなし
-      (False, Just fvs) -> x:ys++fvs  -- xはLambdaLiftingしたものの引数いっぱい
-      (False, Nothing ) -> x:ys       -- recursive function
+      (True,  Nothing ) -> ys                  -- xは元からfvsなし
+      (True,  Just fvs) -> ys++fvs             -- xはLambdaLiftingによってfvsなしに
+      (False, Nothing ) -> x:ys                -- (recursive function)
+      (False, Just fvs) -> liftName x:ys++fvs  -- xはLambdaLiftingしたものの引数いっぱい
 
 
 f :: Map Id Type -> KExpr -> CamlLL KExpr
@@ -96,6 +96,7 @@ f env e = case e of
             ts = map (`unsafeLookup` env) fvs1
             fundef' = liftFun fundef fvs1 ts
             insertOrigin = KLetRec fundef{kbody=KApp (liftName x) (fvs1++ys)}
+            envE2' = M.insert (liftName x) (liftTy t ts) envE2
             -- e.g. fundef: f = fun y -> x + y のとき
             --    fundef': _f = fun x y -> x + y
             --    origin : f  = fun y -> _f x y
@@ -107,8 +108,8 @@ f env e = case e of
           " that can't lift all of them: " ++ show (length fvs2) ++
           " variables remains unlifted"
         liftedMap %= M.insert x fvs1
-        e1' <- f envE1 e1
-        e2' <- f envE2 e2
+        e1' <- f envE1  e1
+        e2' <- f envE2' e2
         return $ KLetRec fundef'{kbody=insertOrigin e1'} $ insertOrigin e2'
 
   KApp x ys -> do
@@ -136,6 +137,4 @@ liftTy :: Type -> [Type] -> Type
 liftTy t ts = case t of
   TFun targs tret -> TFun (ts++targs) tret
   _ -> error "まじで"
-
-
 

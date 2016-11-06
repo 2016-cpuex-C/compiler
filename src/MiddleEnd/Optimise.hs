@@ -11,10 +11,14 @@ import MiddleEnd.Elim
 import MiddleEnd.CSE
 import Control.Lens (use)
 
+import Prelude hiding (log)
+
 optimise :: KExpr -> Caml KExpr
 optimise e = use optimiseLimit >>= go e
   where
+    go e' 0 = return e'
     go e' n = do
+      log $ "iter: " ++ show n
       e'' <- cse =<< elim =<< constFold =<< inline =<< assoc =<< beta e'
       if e'==e''
         then return e'
