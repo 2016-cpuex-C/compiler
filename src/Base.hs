@@ -42,13 +42,14 @@ instance Show TV where
 instance Ord TV where
   compare (TV n _) (TV m _) = compare n m
 
-data S = S { _idCount       :: Int             -- for Id module
-           , _tvCount       :: Int             -- for Typing module
-           , _maxArgs       :: Int             -- max number of args
-           , _threshold     :: Int             -- max inline size
-           , _optimiseLimit :: Int             -- max number of optimise iteration
-           , _extTyEnv      :: TyEnv           -- type of ext functions
-           , _virtualData   :: [(Label,Float)] -- floating constant
+data S = S { _idCount       :: Int                    -- for Id module
+           , _tvCount       :: Int                    -- for Typing module
+           , _threshold     :: Int                    -- max inline size
+           , _optimiseLimit :: Int                    -- max number of optimise iteration
+           , _extTyEnv      :: TyEnv                  -- type of ext functions
+           , _constFloats   :: [(Label,Float)]        -- floating constant
+           , _globalHeap    :: Map Id (Integer,Type)  -- global array and its address
+           , _startGP       :: Integer                -- sum of global array size
            , _logfile       :: Handle
            }
            deriving Show
@@ -110,13 +111,16 @@ idOfType = \case
 initialState :: S
 initialState = S { _idCount       = 0
                  , _tvCount       = 0
-                 , _maxArgs       = 25 -- number of registers - 2 (for cls & swap)
                  , _extTyEnv      = M.empty
                  , _threshold     = 0
-                 , _virtualData   = []
+                 , _constFloats   = []
+                 , _globalHeap    = M.empty
+                 , _startGP       = 10000 -- !! stackの最大値を超えないように
                  , _optimiseLimit = 100
                  , _logfile       = stdout
                  }
+maxArgs :: Int
+maxArgs = 25
 
 liftIO :: IOC.MonadIO m => IO a -> m a
 liftIO = IOC.liftIO

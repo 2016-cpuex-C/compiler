@@ -1,5 +1,4 @@
-{-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE LambdaCase #-}{-# LANGUAGE NoImplicitPrelude #-}
 {- KExpr -> CExpr -}
 
 module MiddleEnd.Closure (
@@ -18,15 +17,14 @@ import MiddleEnd.KNormal hiding (fv)
 
 import           Data.Map       (Map)
 import qualified Data.Map as M
-import           Data.Set       (Set)
+import           Data.Set       (Set, toList, fromList, (\\))
 import qualified Data.Set as S
 import qualified Data.List as L
+import           Control.Lens
 import           Control.Monad.Trans.State.Lazy
 import           Control.Monad.Trans.Class (lift)
 
 import           Data.Maybe (fromMaybe)
---fromJust :: Maybe a -> a
---fromJust = fromMaybe (error "Closure.hs")
 
 data CExpr = CUnit
            | CInt      Integer
@@ -76,42 +74,51 @@ f e = do
   toplevel <- get
   return $ CProg (reverse toplevel) e'
 
-fv :: CExpr -> Set Id
-fv = \case
-  CUnit       -> S.empty
-  CInt{}      -> S.empty
-  CFloat{}    -> S.empty
-  CExtArray{} -> S.empty
+fv :: CExpr -> Caml (Set Id)
+fv e = do
+  stArrays <- uses globalHeap (map fst . M.toList)
+  case e of
+    CUnit       -> return S.empty
+    CInt{}      -> return S.empty
+    CFloat{}    -> return S.empty
+    CExtArray{} -> return S.empty
 
-  CNeg  x -> S.singleton x
-  CFNeg x -> S.singleton x
-  CVar  x -> S.singleton x
+    CNeg  x -> return $ S.singleton x
+    CFNeg x -> return $ S.singleton x
+    CVar  x -> return $ S.singleton x
 
-  CAdd  x y -> S.fromList [x,y]
-  CSub  x y -> S.fromList [x,y]
-  CMul  x y -> S.fromList [x,y]
-  CDiv  x y -> S.fromList [x,y]
-  CFAdd x y -> S.fromList [x,y]
-  CFSub x y -> S.fromList [x,y]
-  CFMul x y -> S.fromList [x,y]
-  CFDiv x y -> S.fromList [x,y]
-  CGet  x y -> S.fromList [x,y]
+    CAdd  x y -> return $ S.fromList [x,y]
+    CSub  x y -> return $ S.fromList [x,y]
+    CMul  x y -> return $ S.fromList [x,y]
+    CDiv  x y -> return $ S.fromList [x,y]
+    CFAdd x y -> return $ S.fromList [x,y]
+    CFSub x y -> return $ S.fromList [x,y]
+    CFMul x y -> return $ S.fromList [x,y]
+    CFDiv x y -> return $ S.fromList [x,y]
 
-  CIfEq x y e1 e2 -> S.insert x $ S.insert y $ S.union (fv e1) (fv e2)
-  CIfLe x y e1 e2 -> S.insert x $ S.insert y $ S.union (fv e1) (fv e2)
+    CIfEq x y e1 e2 -> S.insert x . S.insert y <$> (S.union <$> fv e1 <*> fv e2)
+    CIfLe x y e1 e2 -> S.insert x . S.insert y <$> (S.union <$> fv e1 <*> fv e2)
 
-  CLet (x,_t) e1 e2 -> S.union (fv e1) (S.delete x (fv e2))
+    CLet (x,_t) e1 e2 -> S.union <$> fv e1 <*> (S.delete x <$> fv e2)
 
-  CMakeCls (x,_t) (Closure _l ys) e -> S.delete x (S.union (S.fromList ys) (fv e))
+    CMakeCls (x,_t) (Closure _l ys) e' -> S.delete x . S.union (S.fromList ys) <$> fv e'
 
-  CAppCls x ys -> S.fromList $ x:ys
-  CAppDir _ xs -> S.fromList xs
+    CAppCls x ys -> return $ S.fromList $ x:ys
+    CAppDir _ xs -> return $ S.fromList xs
 
-  CTuple xs -> S.fromList xs
+    CTuple xs -> return $ S.fromList xs
 
-  CLetTuple xts y e -> S.insert y $ (fv e) S.\\ (S.fromList (map fst xts))
+    CLetTuple xts y e' -> S.insert y . (S.\\ S.fromList (map fst xts)) <$> fv e'
 
-  CPut x y z -> S.fromList [x,y,z]
+    CGet x y
+      | (`isPrefixOf` x) `any` stArrays -> return $ S.singleton y
+      | otherwise                       -> return $ S.fromList [x,y]
+    CPut x y z
+      | (`isPrefixOf` x) `any` stArrays -> return $ S.fromList [y,z]
+      | otherwise                       -> return $ S.fromList [x,y,z]
+
+  where
+    isPrefixOf x y = take (length x) y == x
 
 
 -- known = known to be able to apply directly
@@ -150,8 +157,8 @@ g env known = \case
         (ys,_ts) = unzip yts
     e1' <- g env'' known' e1
 
-    -- かくにん
-    (known'', e1'') <- case S.toList (fv e1') L.\\ ys of
+    fve1' <- lift $ fv e1'
+    (known'', e1'') <- case toList $ fve1' \\ fromList ys of
         [] -> return (known', e1')   -- OK
         zs -> do lift.log $
                       "free variable(s) " ++ ppList zs ++ " " ++
@@ -160,11 +167,13 @@ g env known = \case
                  put toplevelBackup
                  e1'' <- g env'' known e1
                  return (known, e1'')
-    let zs'  = S.toList (fv e1'') L.\\ (x:ys)
+    fve1'' <- lift $ fv e1''
+    let zs'  = toList fve1'' L.\\ (x:ys)
         zts' = [(z, fromMaybe (error $ "Closure.g: " ++ z) (M.lookup z env')) | z <- zs']
     modify (CFunDef (Label x, t) yts zts' e1'' :) -- 追加
     e2' <- g env' known'' e2
-    if S.member x (fv e2') then -- やや賢い->賢い
+    fve2' <- lift $ fv e2'
+    if S.member x fve2' then -- やや賢い->賢い
         return $ CMakeCls (x,t) (Closure (Label x) zs') e2'
     else do
         lift.log $ "eliminating closure(s) " ++ x
@@ -178,11 +187,13 @@ g env known = \case
         return $ CAppCls x ys
 
   KTuple xs -> return $ CTuple xs
+  KArray x y -> return $ CAppDir (Label "min_caml_create_array") [x,y]
+  KFArray x y -> return $ CAppDir (Label "min_caml_create_float_array") [x,y]
 
   KLetTuple xts y e -> CLetTuple xts y <$> g (M.union (M.fromList xts) env) known e
 
   KGet x y        -> return $ CGet x y
   KPut x y z      -> return $ CPut x y z
   KExtArray x     -> return $ CExtArray (Label x)
-  KExtFunApp x ys -> return $ CAppDir (Label ("min_caml_" ++ x)) ys
+  KExtFunApp x ys -> return $ CAppDir   (Label ("min_caml_" ++ x)) ys
 

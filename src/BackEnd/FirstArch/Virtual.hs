@@ -22,10 +22,10 @@ fromJust = fromMaybe (error "Virtual.hs")
 
 virtualCode :: CProg -> Caml AProg
 virtualCode (CProg fundefs e) = do
-  virtualData .= []
+  constFloats .= []
   fundefs' <- mapM h fundefs
   e' <- g M.empty e
-  fdata <- use virtualData
+  fdata <- use constFloats
   return $ AProg fdata fundefs' e'
 
 h :: CFunDef -> Caml AFunDef
@@ -112,15 +112,13 @@ g env = \case
   CUnit -> return $ AsmAns ANop
   CInt i -> return $ AsmAns $ ASet i
   CFloat d -> do
-    fdata <- use virtualData
+    fdata <- use constFloats
     l <- case lookupRev d fdata of
            Just l -> return l
            _ -> do l <- Label <$> genId "l"
-                   virtualData .= (l,d):fdata
+                   constFloats .= (l,d):fdata
                    return l
     return $ AsmAns (ASetF l)
-    {-x <- genId "l"-}
-    {-return $ AsmLet (x,TInt) (ASetL l) (AsmAns (ALdDF x (C 0)))-}
 
   CNeg x -> return $ AsmAns $ ANeg x
   CAdd x y -> return $ AsmAns $ AAdd x (V y)
@@ -188,9 +186,9 @@ g env = \case
               (AsmLet (regHp,TInt) (AAdd regHp (C $ align offset)) store)
 
   CLetTuple xts y e2 -> do
-    let s = fv e2
+    s <- fv e2
     (_offset, load) <- do
-        let addf x offset load --名前逆では
+        let addf x offset load
                 | S.member x s = fLetD (x, ALdDF y (C offset), load)
                 | otherwise    = load
             addi x t offset load
@@ -200,23 +198,27 @@ g env = \case
         return $ expand xts (0,e2') addf addi
     return load
 
-  CGet x y -> genId "o" >>= \offset -> case M.lookup x env of
-    Just (TArray TUnit)  ->
-      return $ AsmAns ANop
-    Just (TArray TFloat) ->
-      return $ AsmLet (offset, TInt) (ASll y 2) (AsmAns (ALdDF x (V offset)))
-    Just (TArray _)      ->
-      return $ AsmLet (offset, TInt) (ASll y 2) (AsmAns (ALd x (V offset)))
-    _ -> error "Virtual.g CGet"
+  CGet x y -> do
+    heap <- use globalHeap
+    case M.lookup x heap of
+      Just (addr, TArray TFloat) -> return $ AsmAns (ALdDF y (C addr))
+      Just (addr, _)             -> return $ AsmAns (ALd   y (C addr))
+      Nothing -> case M.lookup x env of
+        Just (TArray TUnit)  -> return $ AsmAns ANop
+        Just (TArray TFloat) -> return $ (AsmAns (ALdDF x (V y)))
+        Just (TArray _)      -> return $ (AsmAns (ALd x (V y)))
+        e -> error $ "Virtual.g CGet: " ++ x ++ ": " ++ show e
 
-  CPut x y z -> genId "o" >>= \offset -> case M.lookup x env of
-    Just (TArray TUnit)  ->
-      return $ AsmAns ANop
-    Just (TArray TFloat) ->
-      return $ AsmLet (offset, TInt) (ASll y 2) (AsmAns (AStDF z x (V offset)))
-    Just (TArray _)      ->
-      return $ AsmLet (offset, TInt) (ASll y 2) (AsmAns (ASt z x (V offset)))
-    _ -> error "Virtual.g CPut"
+  CPut x y z -> do
+    heap <- use globalHeap
+    case M.lookup x heap of
+      Just (addr, TArray TFloat) -> return $ AsmAns (AStDF z y (C addr))
+      Just (addr, _)             -> return $ AsmAns (ASt   z y (C addr))
+      Nothing -> case M.lookup x env of
+        Just (TArray TUnit)  -> return $ AsmAns ANop
+        Just (TArray TFloat) -> return $ (AsmAns (AStDF z x (V y)))
+        Just (TArray _)      -> return $ (AsmAns (ASt z x (V y)))
+        e -> error $ "Virtual.g CPut: " ++ x ++ ": " ++ show e
 
   CExtArray (Label x) -> return $ AsmAns $ ASetL $ Label $ "min_caml_" ++ x
 

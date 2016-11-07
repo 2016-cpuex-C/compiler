@@ -64,6 +64,8 @@ g env e = case e of
   KApp       x ys -> return $ KApp (find x env) (map (`find` env) ys)
   KExtFunApp x ys -> return $ KExtFunApp x      (map (`find` env) ys)
 
-  KTuple xs -> return $ KTuple (map (`find` env) xs)
+  KTuple xs   -> return $ KTuple (map (`find` env) xs)
+  KArray x y  -> return $ KArray (find x env) (find y env)
+  KFArray x y -> return $ KFArray (find x env) (find y env)
   KExtArray x -> return $ KExtArray x
 

@@ -9,11 +9,11 @@ import Prelude hiding (log)
 import           Base
 import           MiddleEnd.KNormal       hiding (fv)
 import           MiddleEnd.Alpha                (alpha)
-import           MiddleEnd.Elim
+import           MiddleEnd.Elim                 (elim)
 
 import           Data.Map                       (Map)
 import qualified Data.Map as M
-import           Data.Set                       (fromList, singleton, Set, (\\))
+import           Data.Set                       (toList, fromList, singleton, Set, (\\))
 import qualified Data.Set as S
 import           Data.Maybe                     (fromMaybe)
 import           Control.Lens            hiding (lifted)
@@ -28,45 +28,52 @@ makeLenses ''LL
 type CamlLL = StateT LL Caml
 
 lambdaLift :: KExpr -> Caml KExpr
-lambdaLift e = evalStateT (f M.empty e) (LL S.empty M.empty) >>= alpha >>= elim
+lambdaLift e = evalStateT (f M.empty e) (LL S.empty M.empty) >>= elim
 
 fv :: KExpr -> CamlLL (Set Id)
-fv = \case
-  KUnit           -> return $ S.empty
-  KInt _          -> return $ S.empty
-  KFloat _        -> return $ S.empty
-  KExtArray _     -> return $ S.empty
-  KVar  x         -> return $ S.singleton x
-  KNeg  x         -> return $ S.singleton x
-  KFNeg x         -> return $ S.singleton x
-  KAdd  x y       -> return $ S.fromList [x ,y]
-  KSub  x y       -> return $ S.fromList [x ,y]
-  KMul  x y       -> return $ S.fromList [x ,y]
-  KDiv  x y       -> return $ S.fromList [x ,y]
-  KFAdd x y       -> return $ S.fromList [x ,y]
-  KFSub x y       -> return $ S.fromList [x ,y]
-  KFMul x y       -> return $ S.fromList [x ,y]
-  KFDiv x y       -> return $ S.fromList [x ,y]
-  KGet  x y       -> return $ S.fromList [x ,y]
-  KPut  x y z     -> return $ S.fromList [x,y,z]
-  KTuple xs       -> return $ S.fromList xs
-  KExtFunApp _ xs -> return $ S.fromList xs
-  KIfEq x y e1 e2 -> S.insert x . S.insert y <$> (S.union <$> fv e1 <*> fv e2)
-  KIfLe x y e1 e2 -> S.insert x . S.insert y <$> (S.union <$> fv e1 <*> fv e2)
-  KLet (x,_t) e1 e2 -> S.union <$> fv e1 <*> (S.delete x <$> fv e2)
-  KLetRec (KFunDef (x,_t) yts e1) e2 ->
-    let ys = S.fromList $ map fst yts
-    in  S.delete x <$> (S.union <$> ((\\ ys) <$> fv e1) <*> fv e2)
-  KLetTuple xts y e -> S.insert y . (\\ S.fromList (map fst xts)) <$> fv e
-  KApp x ys -> do
-    dcs <- use directlyCallable
-    lm  <- use liftedMap
-    return . S.fromList $ case (S.member x dcs, M.lookup x lm) of
-      (True,  Nothing ) -> ys                  -- xは元からfvsなし
-      (True,  Just fvs) -> ys++fvs             -- xはLambdaLiftingによってfvsなしに
-      (False, Nothing ) -> x:ys                -- (recursive function)
-      (False, Just fvs) -> liftName x:ys++fvs  -- xはLambdaLiftingしたものの引数いっぱい
-
+fv e = do
+  stArrays <- lift $ uses globalHeap (map fst . M.toList) --何度も呼び出すのもったいない
+  case e of
+    KUnit           -> return $ S.empty
+    KInt _          -> return $ S.empty
+    KFloat _        -> return $ S.empty
+    KExtArray _     -> return $ S.empty
+    KVar  x         -> return $ S.singleton x
+    KNeg  x         -> return $ S.singleton x
+    KFNeg x         -> return $ S.singleton x
+    KAdd  x y       -> return $ S.fromList [x,y]
+    KSub  x y       -> return $ S.fromList [x,y]
+    KMul  x y       -> return $ S.fromList [x,y]
+    KDiv  x y       -> return $ S.fromList [x,y]
+    KFAdd x y       -> return $ S.fromList [x,y]
+    KFSub x y       -> return $ S.fromList [x,y]
+    KFMul x y       -> return $ S.fromList [x,y]
+    KFDiv x y       -> return $ S.fromList [x,y]
+    KTuple xs       -> return $ S.fromList xs
+    KArray x y      -> return $ S.fromList [x,y]
+    KFArray x y     -> return $ S.fromList [x,y]
+    KExtFunApp _ xs -> return $ S.fromList xs
+    KIfEq x y e1 e2 -> S.insert x . S.insert y <$> (S.union <$> fv e1 <*> fv e2)
+    KIfLe x y e1 e2 -> S.insert x . S.insert y <$> (S.union <$> fv e1 <*> fv e2)
+    KLet (x,_t) e1 e2 -> S.union <$> fv e1 <*> (S.delete x <$> fv e2)
+    KLetRec (KFunDef (x,_t) yts e1) e2 ->
+      let ys = S.fromList $ map fst yts
+      in  S.delete x <$> (S.union <$> ((\\ ys) <$> fv e1) <*> fv e2)
+    KLetTuple xts y e' -> S.insert y . (\\ S.fromList (map fst xts)) <$> fv e'
+    KApp x ys -> do
+      dcs <- use directlyCallable
+      lm  <- use liftedMap
+      return . S.fromList $ case (S.member x dcs, M.lookup x lm) of
+        (True,  Nothing ) -> ys                  -- xは元からfvsなし
+        (True,  Just fvs) -> ys++fvs             -- xはLambdaLiftingによってfvsなしに
+        (False, Nothing ) -> x:ys                -- (recursive function)
+        (False, Just fvs) -> liftName x:ys++fvs  -- xはLambdaLiftingしたものの引数いっぱい
+    KGet x y
+      | x `elem` stArrays -> return $ S.singleton y
+      | otherwise         -> return $ S.fromList [x,y]
+    KPut x y z
+      | x `elem` stArrays -> return $ S.fromList [y,z]
+      | otherwise         -> return $ S.fromList [x,y,z]
 
 f :: Map Id Type -> KExpr -> CamlLL KExpr
 f env e = case e of
@@ -79,9 +86,8 @@ f env e = case e of
     let ys = map fst yts
         envE2  = M.insert x t env
         envE1  = M.union (M.fromList yts) envE2
-    maxN <- lift (use maxArgs)
     fvs' <- fv e1
-    case S.toList (fvs' \\ singleton x \\ fromList ys) of
+    case toList $ fvs' \\ singleton x \\ fromList ys of
       [] -> do
         lift.log $ x ++ " is directly callable"
         directlyCallable %= S.insert x
@@ -92,7 +98,7 @@ f env e = case e of
       fvs -> do
         lift.log $ "LambdaLifting: free variable(s) " ++ ppList fvs ++ " " ++
                    "found in function " ++ x
-        let (fvs1,fvs2) = splitAt (maxN - length ys) fvs
+        let (fvs1,fvs2) = splitAt (maxArgs - length ys) fvs
             ts = map (`unsafeLookup` env) fvs1
             fundef' = liftFun fundef fvs1 ts
             insertOrigin = KLetRec fundef{kbody=KApp (liftName x) (fvs1++ys)}

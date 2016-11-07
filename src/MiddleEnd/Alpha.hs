@@ -15,6 +15,7 @@ alpha = g M.empty
 find :: Id -> Map Id Id -> Id
 find x env = fromMaybe x (M.lookup x env)
 
+-- TODO globalHeapにも変換を施す
 g :: Map Id Id -> KExpr -> Caml KExpr
 g env e = case e of
   KUnit    -> return e
@@ -60,6 +61,9 @@ g env e = case e of
       xs' <- mapM genId xs
       let env' = M.union (M.fromList (zip xs xs')) env
       KLetTuple (zip xs' ts) (find y env) <$> g env' e'
+
+  KArray x y -> return $ KArray (find x env) (find y env)
+  KFArray x y -> return $ KFArray (find x env) (find y env)
 
   KApp x ys -> return $ KApp (find x env) (map (`find` env) ys)
   KExtArray x -> return $ KExtArray x

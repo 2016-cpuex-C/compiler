@@ -14,12 +14,27 @@ import BackEnd.FirstArch.Virtual  (virtualCode)
 import BackEnd.FirstArch.RegAlloc (regAlloc)
 import BackEnd.FirstArch.Simm     (simm)
 import BackEnd.FirstArch.Emit     (emit)
+import MiddleEnd.Global           (staticArray)
 
-import           Prelude hiding (lex)
+
+import           Prelude hiding (lex, log)
 import           System.IO      (stdout, withFile, IOMode(..))
 import qualified Data.Map as M
+import           Control.Lens   (use)
 import           Options.Applicative
 import           System.FilePath.Posix ((-<.>))
+
+--main :: IO ()
+--main = do
+--  let t = KLet ("z", TInt) (KInt 1)
+--            (KLet ("x", TArray TInt) (KArray "z" "z")
+--              (KVar "x"))
+--  _ <- runCamlDefault $ do
+--    t' <- staticArray t
+--    heap <- use globalHeap
+--    liftIO $ print t'
+--    liftIO $ print heap
+--  return ()
 
 main :: IO ()
 main = execParser (info (helper <*> parseOpt) fullDesc) >>= \opts ->
@@ -43,6 +58,9 @@ compile s f = do
           >>= alpha
           >>= optimise
           >>= lambdaLift
+          >>= \e -> do { heap <- use globalHeap
+                       ; log (show heap)
+                       ; return e}
           >>= closureConvert
           >>= virtualCode
           >>= simm
@@ -51,6 +69,7 @@ compile s f = do
     case m of
       Right () -> return ()
       Left e -> error $ f ++ ": " ++ show e
+
 
 minrtExtTyEnv :: TyEnv
 minrtExtTyEnv = M.fromList

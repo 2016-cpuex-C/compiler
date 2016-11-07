@@ -383,6 +383,10 @@ emit' handle (AProg fdata fundefs e) = do
   write $ printf ".globl\tmain"
   write $ printf "main:"
 
+  -- gp
+  sgp <- lift (use startGP)
+  write $ printf "\tli\t$gp, %d" sgp
+
   stackSet .= S.empty
   stackMap .= []
   g handle (NonTail(regs!0), e)

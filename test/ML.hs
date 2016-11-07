@@ -34,7 +34,7 @@ targets = [
   , "even-odd"
   , "fib"
   , "funcomp"
---  , "gcd"
+  , "gcd"
   , "inprod"
   , "inprod-rec"
   , "inprod-loop"

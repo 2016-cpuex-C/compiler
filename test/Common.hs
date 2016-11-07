@@ -9,7 +9,7 @@ import FrontEnd.Typing             (typing)
 import MiddleEnd.KNormal           (kNormalize)
 import MiddleEnd.Alpha             (alpha)
 import MiddleEnd.Optimise          (optimise)
---import MiddleEnd.LambdaLifting     (lambdaLift)
+import MiddleEnd.LambdaLifting     (lambdaLift)
 import MiddleEnd.Closure           (closureConvert)
 import BackEnd.FirstArch.Virtual   (virtualCode)
 import BackEnd.FirstArch.RegAlloc  (regAlloc)
@@ -36,7 +36,7 @@ compile ml = do
       >>= typing
       >>= kNormalize
       >>= alpha
-      {->>= lambdaLift-}
+      >>= lambdaLift
       >>= optimise
       >>= closureConvert
       >>= virtualCode

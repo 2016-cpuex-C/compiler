@@ -93,11 +93,6 @@ Expr :: { Expr }
     | Expr ';' Expr                                    { % eseq $1 $3       }
     | ArrayCreate SimpleExpr SimpleExpr %prec prec_app { EArray $2 $3       }
     | error                                            { % parseError []    }
-        -- TODO
-        --     { failwith
-        --        (Printf.sprintf "parse error near characters %d-%d"
-        --          (Parsing.symbol_start ())
-        --          (Parsing.symbol_end ())) }
 
 SimpleExpr :: { Expr }
     : '(' Expr ')'                { $2         }

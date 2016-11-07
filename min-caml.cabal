@@ -34,13 +34,9 @@ library
                      , MiddleEnd.CSE
                      , MiddleEnd.Elim
                      , MiddleEnd.LambdaLifting
+                     , MiddleEnd.Global
                      , MiddleEnd.Closure
                      , BackEnd.Decode
-                     , BackEnd.Mips.Asm
-                     , BackEnd.Mips.Virtual
-                     , BackEnd.Mips.RegAlloc
-                     , BackEnd.Mips.Simm
-                     , BackEnd.Mips.Emit
                      , BackEnd.FirstArch.Asm
                      , BackEnd.FirstArch.Virtual
                      , BackEnd.FirstArch.RegAlloc
@@ -53,6 +49,7 @@ executable min-caml
   main-is:             Main.hs
   ghc-options:         -threaded -rtsopts -with-rtsopts=-N -O3
   build-depends:       base
+                     , lens
                      , min-caml
                      , filepath
                      , containers
