@@ -75,50 +75,54 @@ f e = do
   return $ CProg (reverse toplevel) e'
 
 fv :: CExpr -> Caml (Set Id)
-fv e = do
+fv e_ = do
   stArrays <- uses globalHeap (map fst . M.toList)
-  case e of
-    CUnit       -> return S.empty
-    CInt{}      -> return S.empty
-    CFloat{}    -> return S.empty
-    CExtArray{} -> return S.empty
-
-    CNeg  x -> return $ S.singleton x
-    CFNeg x -> return $ S.singleton x
-    CVar  x -> return $ S.singleton x
-
-    CAdd  x y -> return $ S.fromList [x,y]
-    CSub  x y -> return $ S.fromList [x,y]
-    CMul  x y -> return $ S.fromList [x,y]
-    CDiv  x y -> return $ S.fromList [x,y]
-    CFAdd x y -> return $ S.fromList [x,y]
-    CFSub x y -> return $ S.fromList [x,y]
-    CFMul x y -> return $ S.fromList [x,y]
-    CFDiv x y -> return $ S.fromList [x,y]
-
-    CIfEq x y e1 e2 -> S.insert x . S.insert y <$> (S.union <$> fv e1 <*> fv e2)
-    CIfLe x y e1 e2 -> S.insert x . S.insert y <$> (S.union <$> fv e1 <*> fv e2)
-
-    CLet (x,_t) e1 e2 -> S.union <$> fv e1 <*> (S.delete x <$> fv e2)
-
-    CMakeCls (x,_t) (Closure _l ys) e' -> S.delete x . S.union (S.fromList ys) <$> fv e'
-
-    CAppCls x ys -> return $ S.fromList $ x:ys
-    CAppDir _ xs -> return $ S.fromList xs
-
-    CTuple xs -> return $ S.fromList xs
-
-    CLetTuple xts y e' -> S.insert y . (S.\\ S.fromList (map fst xts)) <$> fv e'
-
-    CGet x y
-      | (`isPrefixOf` x) `any` stArrays -> return $ S.singleton y
-      | otherwise                       -> return $ S.fromList [x,y]
-    CPut x y z
-      | (`isPrefixOf` x) `any` stArrays -> return $ S.fromList [y,z]
-      | otherwise                       -> return $ S.fromList [x,y,z]
-
+  fv' stArrays e_
   where
-    isPrefixOf x y = take (length x) y == x
+    fv' ign e = case e of
+      CUnit       -> return S.empty
+      CInt{}      -> return S.empty
+      CFloat{}    -> return S.empty
+      CExtArray{} -> return S.empty
+
+      CNeg  x -> return $ S.singleton x
+      CFNeg x -> return $ S.singleton x
+      CVar  x -> return $ S.singleton x
+
+      CAdd  x y -> return $ S.fromList [x,y]
+      CSub  x y -> return $ S.fromList [x,y]
+      CMul  x y -> return $ S.fromList [x,y]
+      CDiv  x y -> return $ S.fromList [x,y]
+      CFAdd x y -> return $ S.fromList [x,y]
+      CFSub x y -> return $ S.fromList [x,y]
+      CFMul x y -> return $ S.fromList [x,y]
+      CFDiv x y -> return $ S.fromList [x,y]
+
+      CIfEq x y e1 e2 ->
+        S.insert x . S.insert y <$> (S.union <$> fv' ign e1 <*> fv' ign e2)
+      CIfLe x y e1 e2 ->
+        S.insert x . S.insert y <$> (S.union <$> fv' ign e1 <*> fv' ign e2)
+
+      CLet (x,_t) e1 e2 ->
+        S.union <$> fv' ign e1 <*> (S.delete x <$> fv' ign e2)
+
+      CMakeCls (x,_t) (Closure _l ys) e' ->
+        S.delete x . S.union (S.fromList ys) <$> fv' ign e'
+
+      CAppCls x ys -> return $ S.fromList $ x:ys
+      CAppDir _ xs -> return $ S.fromList xs
+
+      CTuple xs -> return $ S.fromList xs
+
+      CLetTuple xts y e' ->
+        S.insert y . (S.\\ S.fromList (map fst xts)) <$> fv' ign e'
+
+      CGet x y
+        | x `elem` ign -> return $ S.singleton y
+        | otherwise    -> return $ S.fromList [x,y]
+      CPut x y z
+        | x `elem` ign -> return $ S.fromList [y,z]
+        | otherwise    -> return $ S.fromList [x,y,z]
 
 
 -- known = known to be able to apply directly
