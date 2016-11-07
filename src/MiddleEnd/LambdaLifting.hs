@@ -28,7 +28,7 @@ makeLenses ''LL
 type CamlLL = StateT LL Caml
 
 lambdaLift :: KExpr -> Caml KExpr
-lambdaLift e = evalStateT (f M.empty e) (LL S.empty M.empty) >>= elim
+lambdaLift e = evalStateT (f M.empty e) (LL S.empty M.empty) >>= alpha >>= elim
 
 fv :: KExpr -> CamlLL (Set Id)
 fv e = do

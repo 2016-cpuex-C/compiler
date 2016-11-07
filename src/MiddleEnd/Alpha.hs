@@ -8,6 +8,7 @@ import MiddleEnd.KNormal
 import           Data.Map (Map)
 import qualified Data.Map as M
 import           Data.Maybe (fromMaybe)
+import           Control.Lens
 
 alpha :: KExpr -> Caml KExpr
 alpha = g M.empty
@@ -15,7 +16,6 @@ alpha = g M.empty
 find :: Id -> Map Id Id -> Id
 find x env = fromMaybe x (M.lookup x env)
 
--- TODO globalHeapにも変換を施す
 g :: Map Id Id -> KExpr -> Caml KExpr
 g env e = case e of
   KUnit    -> return e
@@ -41,26 +41,27 @@ g env e = case e of
   KIfLe x y e1 e2 -> KIfLe (find x env) (find y env) <$> g env e1 <*> g env e2
 
   KLet (x,t) e1 e2 -> do
-      x' <- genId x
-      e1' <- g env e1
-      e2' <- g (M.insert x x' env) e2
-      return $ KLet (x',t) e1' e2'
+    x' <- genId x
+    e1' <- g env e1
+    e2' <- g (M.insert x x' env) e2
+    globalHeap %= M.mapKeys (\y -> if x==y then x' else y)
+    return $ KLet (x',t) e1' e2'
 
   KLetRec (KFunDef (x,t) yts e1) e2 -> do
-      x' <- genId x
-      let (ys,ts) = unzip yts
-      ys' <- mapM genId ys
-      let env'  = M.insert x x' env
-          env'' = M.union (M.fromList (zip ys ys')) env'
-      e1' <- g env'' e1
-      e2' <- g env'  e2
-      return $ KLetRec (KFunDef (x',t) (zip ys' ts) e1') e2'
+    x' <- genId x
+    let (ys,ts) = unzip yts
+    ys' <- mapM genId ys
+    let env'  = M.insert x x' env
+        env'' = M.union (M.fromList (zip ys ys')) env'
+    e1' <- g env'' e1
+    e2' <- g env'  e2
+    return $ KLetRec (KFunDef (x',t) (zip ys' ts) e1') e2'
 
   KLetTuple xts y e' -> do
-      let (xs,ts) = unzip xts
-      xs' <- mapM genId xs
-      let env' = M.union (M.fromList (zip xs xs')) env
-      KLetTuple (zip xs' ts) (find y env) <$> g env' e'
+    let (xs,ts) = unzip xts
+    xs' <- mapM genId xs
+    let env' = M.union (M.fromList (zip xs xs')) env
+    KLetTuple (zip xs' ts) (find y env) <$> g env' e'
 
   KArray x y -> return $ KArray (find x env) (find y env)
   KFArray x y -> return $ KFArray (find x env) (find y env)
