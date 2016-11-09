@@ -119,10 +119,12 @@ g env = \case
   CFDiv x y -> return $ AsmAns $ AFDivD x y
 
   CIfEq x y e1 e2 -> case M.lookup x env of
+    Just TBool ->  AsmAns <$> (AIfEq  x (V y) <$> g env e1 <*> g env e2)
     Just TInt  ->  AsmAns <$> (AIfEq  x (V y) <$> g env e1 <*> g env e2)
     Just TFloat -> AsmAns <$> (AIfFEq x    y  <$> g env e1 <*> g env e2)
     _ -> throw $ Failure "equality supported only for int, and float"
   CIfLe x y e1 e2 -> case M.lookup x env of
+    Just TBool ->  AsmAns <$> (AIfEq  x (V y) <$> g env e1 <*> g env e2)
     Just TInt  ->  AsmAns <$> (AIfLe  x (V y) <$> g env e1 <*> g env e2)
     Just TFloat -> AsmAns <$> (AIfFLe x    y  <$> g env e1 <*> g env e2)
     _ -> throw $ Failure "equality supported only for int, and float"
