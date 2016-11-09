@@ -195,16 +195,14 @@ g' oc (dest,exp) =
           ss <- stackSize
 
           write $ printf "\tsw\t%s, %d(%s)" regRa (ss-1) regSp
-
-          when (ss>0) $ write $ printf "\taddi\t%s, %s, %d" regSp regSp ss
+          write $ printf "\taddi\t%s, %s, %d" regSp regSp ss
           write $ printf "\tlwr\t%s, 0(%s)" regSw regCl
           write $ printf "\tjalr\t%s" regSw
-          when (ss>0) $ write $ printf "\taddi\t%s, %s, %d" regSp regSp (-ss)
-
+          write $ printf "\taddi\t%s, %s, %d" regSp regSp (-ss)
           write $ printf "\tlwr\t%s, %d(%s)" regRa (ss-1) regSp
 
           if | (x `elem` allRegs && x /= regs!0) ->
-                    write $ printf "\taddi\t%s, %s, 0" x (regs!0)
+                    write $ printf "\tmove\t%s, %s" x (regs!0)
              | (x `elem` allFRegs && x /= fregs!0) ->
                     write $ printf "\tmov.s\t%s, %s" x (fregs!0)
              | otherwise -> assert (x==regs!0 || x==fregs!0 || x=="%unit") $ return ()
@@ -214,15 +212,13 @@ g' oc (dest,exp) =
           ss <- stackSize
 
           write $ printf "\tsw\t%s, %d(%s)" regRa (ss-1) regSp
-
-          when (ss>0) $ write $ printf "\taddi\t%s, %s, %d" regSp regSp ss
+          write $ printf "\taddi\t%s, %s, %d" regSp regSp ss
           write $ printf "\tjal\t%s" y
-          when (ss>0) $ write $ printf "\taddi\t%s, %s, %d" regSp regSp (-ss)
-
+          write $ printf "\taddi\t%s, %s, %d" regSp regSp (-ss)
           write $ printf "\tlwr\t%s, %d(%s)" regRa (ss-1) regSp
 
           if | (x `elem` allRegs && x /= regs!0) ->
-                    write $ printf "\taddi\t%s, %s, 0" x (regs!0)
+                    write $ printf "\tmove\t%s, %s" x (regs!0)
              | (x `elem` allFRegs && x /= fregs!0) ->
                     write $ printf "\tmov.s\t%s, %s" x (fregs!0)
              | otherwise -> assert (x==regs!0 || x==fregs!0 || x=="%unit") $ return ()

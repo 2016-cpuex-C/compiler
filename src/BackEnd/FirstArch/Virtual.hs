@@ -13,12 +13,8 @@ import qualified Data.Map as M
 import qualified Data.Set as S
 import           Control.Lens
 import           Data.List (foldl')
---import           Data.Maybe (fromJust)
+import           Data.Maybe (fromJust)
 import           Data.Foldable (foldlM)
-
-import           Data.Maybe (fromMaybe)
-fromJust :: Maybe a -> a
-fromJust = fromMaybe (error "Virtual.hs")
 
 virtualCode :: CProg -> Caml AProg
 virtualCode (CProg fundefs e) = do
@@ -94,16 +90,6 @@ expandM xts ini addf addi =
         return (offset + 1, z))
 
 ----------
--- Util --
-----------
-insertList :: Ord key => [(key,a)] -> Map key a -> Map key a
-insertList xts = M.union (M.fromList xts)
-
--- Prelude.lookupと比べて a,b が逆
-lookupRev :: (Eq a) => a -> [(b,a)] -> Maybe b
-lookupRev i = let f (p,q) = (q,p) in lookup i . map f
-
-----------
 -- Main --
 ----------
 
@@ -133,15 +119,13 @@ g env = \case
   CFDiv x y -> return $ AsmAns $ AFDivD x y
 
   CIfEq x y e1 e2 -> case M.lookup x env of
-    Just TBool ->  AsmAns <$> (AIfEq  x (V y) <$> g env e1 <*> g env e2)
     Just TInt  ->  AsmAns <$> (AIfEq  x (V y) <$> g env e1 <*> g env e2)
     Just TFloat -> AsmAns <$> (AIfFEq x    y  <$> g env e1 <*> g env e2)
-    _ -> throw $ Failure "equality supported only for bool, int, and float"
+    _ -> throw $ Failure "equality supported only for int, and float"
   CIfLe x y e1 e2 -> case M.lookup x env of
-    Just TBool ->  AsmAns <$> (AIfLe  x (V y) <$> g env e1 <*> g env e2)
     Just TInt  ->  AsmAns <$> (AIfLe  x (V y) <$> g env e1 <*> g env e2)
     Just TFloat -> AsmAns <$> (AIfFLe x    y  <$> g env e1 <*> g env e2)
-    _ -> throw $ Failure "equality supported only for bool, int, and float"
+    _ -> throw $ Failure "equality supported only for int, and float"
 
   CLet (x,t1) e1 e2 -> do
     e1' <- g env e1
@@ -153,7 +137,6 @@ g env = \case
     Just TFloat -> return $ AsmAns $ AFMovD x
     _ -> return $ AsmAns $ AMov x
 
-  -- 重要 よくわかってない
   CMakeCls (x,t) (Closure l ys) e2 -> do
     e2' <- g (M.insert x t env) e2
     let ts = [ fromJust (M.lookup y env) | y <- ys ]
@@ -205,8 +188,8 @@ g env = \case
       Just (addr, _)             -> return $ AsmAns (ALd   y (C addr))
       Nothing -> case M.lookup x env of
         Just (TArray TUnit)  -> return $ AsmAns ANop
-        Just (TArray TFloat) -> return $ (AsmAns (ALdDF x (V y)))
-        Just (TArray _)      -> return $ (AsmAns (ALd x (V y)))
+        Just (TArray TFloat) -> return $ AsmAns (ALdDF x (V y))
+        Just (TArray _)      -> return $ AsmAns (ALd x (V y))
         e -> error $ "Virtual.g CGet: " ++ x ++ ": " ++ show e
 
   CPut x y z -> do
@@ -216,9 +199,20 @@ g env = \case
       Just (addr, _)             -> return $ AsmAns (ASt   z y (C addr))
       Nothing -> case M.lookup x env of
         Just (TArray TUnit)  -> return $ AsmAns ANop
-        Just (TArray TFloat) -> return $ (AsmAns (AStDF z x (V y)))
-        Just (TArray _)      -> return $ (AsmAns (ASt z x (V y)))
+        Just (TArray TFloat) -> return $ AsmAns (AStDF z x (V y))
+        Just (TArray _)      -> return $ AsmAns (ASt z x (V y))
         e -> error $ "Virtual.g CPut: " ++ x ++ ": " ++ show e
 
   CExtArray (Label x) -> return $ AsmAns $ ASetL $ Label $ "min_caml_" ++ x
+
+----------
+-- Util --
+----------
+
+insertList :: Ord key => [(key,a)] -> Map key a -> Map key a
+insertList xts = M.union (M.fromList xts)
+
+-- Prelude.lookupと比べて a,b が逆
+lookupRev :: (Eq a) => a -> [(b,a)] -> Maybe b
+lookupRev i = let f (p,q) = (q,p) in lookup i . map f
 

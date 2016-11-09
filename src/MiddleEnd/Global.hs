@@ -17,7 +17,7 @@ import           Control.Lens
 staticArray :: KExpr -> Caml KExpr
 staticArray = f Nothing M.empty
 
--- mname : 現在定義中の変数名(配列に限る)
+-- mname : 現在定義中の配列の名前
 -- env   : Int型定数の環境
 f :: Maybe (Id,Type) -> Map Id Integer -> KExpr -> Caml KExpr
 f mname env e = case e of
@@ -33,10 +33,9 @@ f mname env e = case e of
     -- TODO recursiveでなければ同じ所にallocしてよさげ(相互再帰は無いのでチェックは楽)
 
   KLet (x,TInt) (KInt i) e2 -> KLet (x,TInt) (KInt i) <$> f mname (M.insert x i env) e2
-    -- ConstFoldが進むに連れてenvが充実する
+    -- ConstFoldが進むに連れてenvが充実するのでKIntに制限して良い
 
   KLet (x,t@(TArray _)) e1 e2 -> KLet (x,t) <$> f (Just (x,t)) env e1 <*> f mname env e2
-    -- TODO 不安
 
   KLet (x,t) e1 e2 -> KLet (x,t) <$> f mname env e1 <*> f mname env e2
 
@@ -65,7 +64,7 @@ f mname env e = case e of
       (Just (name,t), Just (addr,t'))
         | t==t' -> globalHeap %= M.insert name (addr,t)
               -- let arr = let x = createArray 0 0 in x みたいな場合
-              -- この時点でxとtに同じ場所を割り当てて良い.
+              -- この時点でxとarrに同じ場所を割り当てて良い.
         | otherwise -> error "Global.hs: Impossible"
       _ -> return ()
     return e
@@ -73,11 +72,11 @@ f mname env e = case e of
   _ -> return e
 
 initializeArray :: Id -> (Integer,Integer) -> Id -> Caml KExpr
-initializeArray createArray (addr,size) x = do
+initializeArray initArray (addr,size) x = do
   vaddr <- genId "addr"
   vsize <- genId "size"
   return $
     KLet (vaddr,TInt) (KInt addr) $
       KLet (vsize,TInt) (KInt size) $
-        KExtFunApp createArray [vaddr,vsize,x]
+        KExtFunApp initArray [vaddr,vsize,x]
 

@@ -43,25 +43,25 @@ create_array_cont_:
 	addi	$a2, $a2, 1
 	j	create_array_loop_
 
-min_caml_create_array: # array of length $v0, initialized by $v1
-	add	$gp, $gp, $v0
-	move	$a0, $v1
-	move	$v1, $v0
-	sub	$v0, $gp, $v0
-	j	min_caml_array_init
 #min_caml_create_array: # array of length $v0, initialized by $v1
-#	move	$a0, $v0 # counter
-#	move	$v0, $gp # return address
-#	li	$a2, 0
-#create_array_loop:
-#	bne	$a0, $a2, create_array_cont
-#create_array_exit:
-#	jr	$ra
-#create_array_cont:
-#	sw	$v1, 0($gp)
-#	addi	$a0, $a0, -1
-#	addi	$gp, $gp, 1
-#	j	create_array_loop
+#	add	$gp, $gp, $v0
+#	move	$a0, $v1
+#	move	$v1, $v0
+#	sub	$v0, $gp, $v0
+#	j	min_caml_array_init
+min_caml_create_array: # array of length $v0, initialized by $v1
+	move	$a0, $v0 # counter
+	move	$v0, $gp # return address
+	li	$a2, 0
+create_array_loop:
+	bne	$a0, $a2, create_array_cont
+create_array_exit:
+	jr	$ra
+create_array_cont:
+	sw	$v1, 0($gp)
+	addi	$a0, $a0, -1
+	addi	$gp, $gp, 1
+	j	create_array_loop
 
 min_caml_float_array_init:	# write $f0 in ($v0)~($v0+$v1-1), return $v0 itself
 				# f0: elem, v0: init addr, v1: cnt
@@ -77,24 +77,24 @@ create_float_array_cont_:
 	addi	$a2, $a2, 1
 	j	create_float_array_loop_
 
-min_caml_create_float_array: # array of length $v0, initialized by $f0
-	add	$gp, $gp, $v0
-	move	$v1, $v0
-	sub	$v0, $gp, $v0
-	j	min_caml_float_array_init
 #min_caml_create_float_array: # array of length $v0, initialized by $f0
-#	move	$a0, $v0
-#	move	$v0, $gp
-#	li	$a2, 0
-#create_float_array_loop:
-#	bne	$a0, $a2, create_float_array_cont
-#create_float_array_exit:
-#	jr	$ra
-#create_float_array_cont:
-#	s.s	$f0, 0($gp)
-#	addi	$a0, $a0, -1
-#	addi	$gp, $gp, 1
-#	j	create_float_array_loop
+#	add	$gp, $gp, $v0
+#	move	$v1, $v0
+#	sub	$v0, $gp, $v0
+#	j	min_caml_float_array_init
+min_caml_create_float_array: # array of length $v0, initialized by $f0
+	move	$a0, $v0
+	move	$v0, $gp
+	li	$a2, 0
+create_float_array_loop:
+	bne	$a0, $a2, create_float_array_cont
+create_float_array_exit:
+	jr	$ra
+create_float_array_cont:
+	s.s	$f0, 0($gp)
+	addi	$a0, $a0, -1
+	addi	$gp, $gp, 1
+	j	create_float_array_loop
 
 min_caml_truncate:
 	j	min_caml_int_of_float
@@ -143,28 +143,35 @@ min_caml_fisneg_t:
 	li	$v0, 1 # true
 	jr	$ra
 
-min_caml_xor: # v0, v1 -> v0
-	li	$a0, 0
-	beq	$v0, $a0, min_caml_xor_2
-	# v0=t
-	beq	$v1, $a0, min_caml_xor_1
-	# v0=t, v1=t
-	li	$v0, 0
-	jr	$ra
-min_caml_xor_1:
-	# v0=t, v1=f
+min_caml_xor:
+	add	$v1, $v0, $v1
 	li	$v0, 1
-	jr	$ra
-min_caml_xor_2:
-	# v0=f
-	beq	$v1, $a0, min_caml_xor_3
-	# v0=f, v1=t
-	li	$v0, 1
-	jr	$ra
-min_caml_xor_3:
-	# v0=f, v1=f
+	beq	$v0, $v1 min_caml_xor_
 	li	$v0, 0
+min_caml_xor_:
 	jr	$ra
+#min_caml_xor: # v0, v1 -> v0
+#	li	$a0, 0
+#	beq	$v0, $a0, min_caml_xor_2
+#	# v0=t
+#	beq	$v1, $a0, min_caml_xor_1
+#	# v0=t, v1=t
+#	li	$v0, 0
+#	jr	$ra
+#min_caml_xor_1:
+#	# v0=t, v1=f
+#	li	$v0, 1
+#	jr	$ra
+#min_caml_xor_2:
+#	# v0=f
+#	beq	$v1, $a0, min_caml_xor_3
+#	# v0=f, v1=t
+#	li	$v0, 1
+#	jr	$ra
+#min_caml_xor_3:
+#	# v0=f, v1=f
+#	li	$v0, 0
+#	jr	$ra
 
 min_caml_fless: # f0,f1 -> v0
 	c.lt.s	$f0, $f1, min_caml_fless_true
