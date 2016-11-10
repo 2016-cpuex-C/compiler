@@ -55,6 +55,13 @@ tokens :-
   <0> "."           { tk $ TokenDot         }
   <0> "<-"          { tk $ TokenRArrow      }
   <0> ";"           { tk $ TokenSemi        }
+
+  -- ad hoc
+  <0> fless         { tk $ TokenFLess       }
+  <0> fispos        { tk $ TokenFIsPos      }
+  <0> fisneg        { tk $ TokenFIsNeg      }
+  <0> fiszero       { tk $ TokenFIsZero     }
+
   <0> @ident        { mktk TokenID id       }
 
   <comment> "(*"    { incCommentDepth       }
@@ -97,6 +104,10 @@ data Token = TokenBool Bool
            | TokenRParen
            | TokenEOF
            | TokenWild
+           | TokenFLess
+           | TokenFIsPos
+           | TokenFIsNeg
+           | TokenFIsZero
            deriving (Eq,Show)
 
 lex :: String -> Caml [Token]

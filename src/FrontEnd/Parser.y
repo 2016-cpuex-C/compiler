@@ -12,40 +12,46 @@ import FrontEnd.Syntax
 %error { parseError }
 
 %token
-     bool        { TokenBool $$     }
-     int         { TokenInt $$      }
-     float       { TokenFloat $$    }
-     not         { TokenNot         }
-     '-'         { TokenMinus       }
-     '+'         { TokenPlus        }
-     '*'         { TokenAst         }
-     '/'         { TokenSlash       }
-     '-.'        { TokenMinusDot    }
-     '+.'        { TokenPlusDot     }
-     '*.'        { TokenAstDot      }
-     '/.'        { TokenSlashDot    }
-     '='         { TokenEq          }
-     '<>'        { TokenLtGt        }
-     '<='        { TokenLe          }
-     '>='        { TokenGe          }
-     '<'         { TokenLt          }
-     '>'         { TokenGt          }
-     if          { TokenIf          }
-     then        { TokenThen        }
-     else        { TokenElse        }
-     id          { TokenID $$       }
-     let         { TokenLet         }
-     in          { TokenIn          }
-     rec         { TokenRec         }
-     ','         { TokenComma       }
-     ArrayCreate { TokenArrayCreate }
-     '.'         { TokenDot         }
-     '<-'        { TokenRArrow      }
-     ';'         { TokenSemi        }
-     '('         { TokenLParen      }
-     ')'         { TokenRParen      }
-     eof         { TokenEOF         }
-     wild        { TokenWild        }
+    bool        { TokenBool $$     }
+    int         { TokenInt $$      }
+    float       { TokenFloat $$    }
+    not         { TokenNot         }
+    '-'         { TokenMinus       }
+    '+'         { TokenPlus        }
+    '*'         { TokenAst         }
+    '/'         { TokenSlash       }
+    '-.'        { TokenMinusDot    }
+    '+.'        { TokenPlusDot     }
+    '*.'        { TokenAstDot      }
+    '/.'        { TokenSlashDot    }
+    '='         { TokenEq          }
+    '<>'        { TokenLtGt        }
+    '<='        { TokenLe          }
+    '>='        { TokenGe          }
+    '<'         { TokenLt          }
+    '>'         { TokenGt          }
+    if          { TokenIf          }
+    then        { TokenThen        }
+    else        { TokenElse        }
+    id          { TokenID $$       }
+    let         { TokenLet         }
+    in          { TokenIn          }
+    rec         { TokenRec         }
+    ','         { TokenComma       }
+    ArrayCreate { TokenArrayCreate }
+    '.'         { TokenDot         }
+    '<-'        { TokenRArrow      }
+    ';'         { TokenSemi        }
+    '('         { TokenLParen      }
+    ')'         { TokenRParen      }
+    eof         { TokenEOF         }
+    wild        { TokenWild        }
+    -- ad hoc
+    fless       { TokenFLess       }
+    fispos      { TokenFIsPos      }
+    fisneg      { TokenFIsNeg      }
+    fiszero     { TokenFIsZero     }
+
 %right prec_let
 %right ';'
 %right prec_if
@@ -92,6 +98,12 @@ Expr :: { Expr }
     | SimpleExpr '.' '(' Expr ')' '<-' Expr            { EPut $1 $4 $7      }
     | Expr ';' Expr                                    { % eseq $1 $3       }
     | ArrayCreate SimpleExpr SimpleExpr %prec prec_app { EArray $2 $3       }
+    -- ad hoc
+    | fless   Expr Expr                                { ELe $2 $3          }
+    | fispos  Expr                                     { ELe (EFloat 0) $2  }
+    | fisneg  Expr                                     { ELe $2 (EFloat 0)  }
+    | fiszero Expr                                     { EEq $2 (EFloat 0)  }
+
     | error                                            { % parseError []    }
 
 SimpleExpr :: { Expr }

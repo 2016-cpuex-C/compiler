@@ -1,4 +1,5 @@
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE TemplateHaskell #-}
 
 module Common where
 
@@ -22,6 +23,9 @@ import System.Process
 import System.FilePath.Posix       ((<.>))
 import Control.Lens                ((&),(.~))
 
+import           Data.FileEmbed
+import qualified Data.ByteString.Char8 as BC
+
 -- compile "*.ml" file into "*.s"
 compile :: FilePath -> IO (Either Error ())
 compile ml = do
@@ -31,7 +35,7 @@ compile ml = do
     (`runCaml` (initialState&logfile.~devnull
                             &threshold.~100
                )
-    )   $ lex s
+    )   $ lex (libmincamlML ++ s)
       >>= parse
       >>= typing
       >>= kNormalize
@@ -61,3 +65,5 @@ tmpML = "/tmp/min-caml-hs.ml"
 mlToS :: FilePath -> FilePath
 mlToS ml = take (length ml - 3) ml <.> "s"
 
+libmincamlML :: String
+libmincamlML = BC.unpack $(embedFile "src/libmincaml.ml")

@@ -1,3 +1,4 @@
+{-# LANGUAGE TemplateHaskell #-}
 
 module Main where
 
@@ -18,6 +19,8 @@ import BackEnd.FirstArch.Emit     (emit)
 import           Prelude hiding        (lex, log)
 import           System.IO             (stdout, withFile, IOMode(..))
 import qualified Data.Map as M
+import           Data.FileEmbed
+import qualified Data.ByteString.Char8 as BC
 import           Control.Lens          (use)
 import           Options.Applicative
 import           System.FilePath.Posix ((-<.>))
@@ -29,7 +32,7 @@ main = execParser (info (helper <*> parseOpt) fullDesc) >>= \opts ->
                          , _extTyEnv      = minrtExtTyEnv
                          }
         lg = case logf opts of
-          Nothing -> ($stdout)
+          Nothing -> ($ stdout)
           Just f  -> withFile f WriteMode
     in lg $ \h -> mapM_ (compile s{_logfile=h}) (args opts)
 
@@ -37,7 +40,7 @@ compile :: S -> FilePath -> IO ()
 compile s f = do
   input <- readFile f
   withFile (f -<.> "s") WriteMode $ \h -> do
-    m <-(`runCaml` s) $ lex input
+    m <- (`runCaml` s) $ lex (libmincamlML ++ input)
           >>= parse
           >>= typing
           >>= kNormalize
@@ -114,4 +117,7 @@ parseOpt = pure MinCamlOptions
     ($$) = ($)
     (<=>) :: Monoid m => m -> m -> m
     (<=>) = (<>)
+
+libmincamlML :: String
+libmincamlML = BC.unpack $(embedFile "src/libmincaml.ml")
 

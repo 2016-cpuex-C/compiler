@@ -393,10 +393,10 @@ emit' handle (AProg fdata fundefs e) = do
   forM_ fundefs $ h handle
 
   -- utility
-  write libmincaml
+  write libmincamlS
 
-libmincaml :: String
-libmincaml = BC.unpack $(embedFile "src/libmincaml.s")
+libmincamlS :: String
+libmincamlS = BC.unpack $(embedFile "src/libmincaml.s")
 
 ----------
 -- Util --

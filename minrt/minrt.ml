@@ -1079,6 +1079,7 @@ let rec solver_second_fast2 m dconst sconst b0 b1 b2 =
     else 0
 in
 
+(* 5.8million *)
 (* solverの、dirvec+startテーブル使用高速版 *)
 let rec solver_fast2 index dirvec =
   let m = objects.(index) in
@@ -1465,46 +1466,42 @@ in
    光線と物体の交差判定 高速版
  *****************************************************************************)
 
+(* 6.9 million *)
 let rec solve_each_element_fast iand_ofs and_group dirvec =
   let vec = (d_vec dirvec) in
   let iobj = and_group.(iand_ofs) in
   if iobj = -1 then ()
   else (
     let t0 = solver_fast2 iobj dirvec in
-    if t0 <> 0 then
-      (
+    if t0 <> 0 then (
         (* 交点がある時は、その交点が他の要素の中に含まれるかどうか調べる。*)
         (* 今までの中で最小の t の値と比べる。*)
-       let t0p = solver_dist.(0) in
+      let t0p = solver_dist.(0) in
 
-       if (fless 0.0 t0p) then
-         if (fless t0p tmin.(0)) then
-           (
-            let t = t0p +. 0.01 in
-            let q0 = vec.(0) *. t +. startp_fast.(0) in
-            let q1 = vec.(1) *. t +. startp_fast.(1) in
-            let q2 = vec.(2) *. t +. startp_fast.(2) in
-            if check_all_inside 0 and_group q0 q1 q2 then
-              (
-                tmin.(0) <- t;
-                vecset intersection_point q0 q1 q2;
-                intersected_object_id.(0) <- iobj;
-                intsec_rectside.(0) <- t0
-               )
-            else ()
-           )
-         else ()
-       else ();
-       solve_each_element_fast (iand_ofs + 1) and_group dirvec
-      )
-    else
-       (* 交点がなく、しかもその物体は内側が真ならこれ以上交点はない *)
-       if o_isinvert (objects.(iobj)) then
-         solve_each_element_fast (iand_ofs + 1) and_group dirvec
-       else ()
-   )
+      if (fless 0.0 t0p) then
+        if (fless t0p tmin.(0)) then (
+          let t = t0p +. 0.01 in
+          let q0 = vec.(0) *. t +. startp_fast.(0) in
+          let q1 = vec.(1) *. t +. startp_fast.(1) in
+          let q2 = vec.(2) *. t +. startp_fast.(2) in
+          if check_all_inside 0 and_group q0 q1 q2 then (
+              tmin.(0) <- t;
+              vecset intersection_point q0 q1 q2;
+              intersected_object_id.(0) <- iobj;
+              intsec_rectside.(0) <- t0
+          ) else ()
+        ) else ()
+      else ();
+      solve_each_element_fast (iand_ofs + 1) and_group dirvec
+    ) else
+      (* 交点がなく、しかもその物体は内側が真ならこれ以上交点はない *)
+      if o_isinvert (objects.(iobj)) then
+        solve_each_element_fast (iand_ofs + 1) and_group dirvec
+      else ()
+  )
 in
 
+(* 2.6 million *)
 (**** 1つの OR-group について交点を調べる ****)
 let rec solve_one_or_network_fast ofs or_group dirvec =
   let head = or_group.(ofs) in
