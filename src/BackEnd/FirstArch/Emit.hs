@@ -101,7 +101,7 @@ g' oc (dest,exp) =
       ASetF (Label l) ->    write $ printf "\tl.sl\t%s, %s" x l
       ASetL (Label y) ->    write $ printf "\tla\t%s, %s" x y
 
-      AMov y ->  when (x /= y) $ write $ printf "\taddi\t%s, %s, 0" x y
+      AMov y ->  when (x /= y) $ write $ printf "\tmove\t%s, %s" x y
       ANeg y ->  write $ printf "\tneg\t%s, %s" x y
 
       AAdd y (V z) -> write $ printf "\tadd\t%s, %s, %s" x y z
@@ -335,7 +335,7 @@ g'_args oc xRegCl ys zs = do
           where f (i,yrs') y = (i+1, (y,regs!i) : yrs')
       (_d,zfrs) = foldl' f (0,[]) zs
           where f (d,zfrs') z = (d+1, (z,fregs!d) : zfrs')
-  forM_ (shuffle regSw  yrs)  $ \(y,r)  -> write $ printf "\taddi\t%s, %s, 0" r y
+  forM_ (shuffle regSw  yrs)  $ \(y,r)  -> write $ printf "\tmove\t%s, %s" r y
   forM_ (shuffle regFSw zfrs) $ \(z,fr) -> write $ printf "\tmov.s\t%s, %s" fr z
 
 h :: Handle -> AFunDef -> CamlE ()
