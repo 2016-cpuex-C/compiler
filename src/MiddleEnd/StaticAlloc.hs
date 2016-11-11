@@ -2,8 +2,9 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
-module MiddleEnd.Global where
--- global array をコンパイル時に確保する
+module MiddleEnd.StaticAlloc where
+-- サイズが静的に分かるarrayをメモリにallocateする
+-- TODO タプルもやる
 
 import Prelude hiding (log)
 
@@ -14,8 +15,8 @@ import           Data.Map (Map)
 import qualified Data.Map as M
 import           Control.Lens
 
-staticArray :: KExpr -> Caml KExpr
-staticArray = f Nothing M.empty
+staticAlloc :: KExpr -> Caml KExpr
+staticAlloc = f Nothing M.empty
 
 -- mname : 現在定義中の配列の名前
 -- env   : Int型定数の環境

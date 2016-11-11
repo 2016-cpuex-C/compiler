@@ -34,7 +34,7 @@ library
                      , MiddleEnd.CSE
                      , MiddleEnd.Elim
                      , MiddleEnd.LambdaLifting
-                     , MiddleEnd.Global
+                     , MiddleEnd.StaticAlloc
                      , MiddleEnd.Closure
                      , BackEnd.Decode
                      , BackEnd.FirstArch.Asm
