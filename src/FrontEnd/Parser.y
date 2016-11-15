@@ -99,12 +99,12 @@ Expr :: { Expr }
     | Expr ';' Expr                                    { % eseq $1 $3       }
     | ArrayCreate SimpleExpr SimpleExpr %prec prec_app { EArray $2 $3       }
     -- ad hoc
-    | fless   Expr Expr                                { ELe $2 $3          }
-    | fispos  Expr                                     { ELe (EFloat 0) $2  }
-    | fisneg  Expr                                     { ELe $2 (EFloat 0)  }
-    | fiszero Expr                                     { EEq $2 (EFloat 0)  }
+    | fless   Expr Expr                                { ENot (ELe $3 $2)         }
+    | fispos  Expr                                     { ENot (ELe $2 (EFloat 0)) }
+    | fisneg  Expr                                     { ENot (ELe (EFloat 0) $2) }
+    | fiszero Expr                                     { EEq $2 (EFloat 0)        }
 
-    | error                                            { % parseError []    }
+    | error                                            { % parseError []          }
 
 SimpleExpr :: { Expr }
     : '(' Expr ')'                { $2         }

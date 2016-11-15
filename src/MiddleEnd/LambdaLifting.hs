@@ -15,7 +15,6 @@ import           Data.Map                       (Map)
 import qualified Data.Map as M
 import           Data.Set                       (toList, fromList, singleton, Set, (\\))
 import qualified Data.Set as S
-import           Data.Maybe                     (fromMaybe)
 import           Control.Lens            hiding (lifted)
 import           Control.Monad.Trans.Class      (lift)
 import           Control.Monad.Trans.State.Lazy
@@ -28,7 +27,7 @@ makeLenses ''LL
 type CamlLL = StateT LL Caml
 
 lambdaLift :: KExpr -> Caml KExpr
-lambdaLift e = evalStateT (f M.empty e) (LL S.empty M.empty) >>= alpha >>= elim
+lambdaLift e = evalStateT (f M.empty e) (LL S.empty M.empty) >>= elim
 
 fv :: KExpr -> CamlLL (Set Id)
 fv e_ = do
@@ -39,6 +38,7 @@ fv e_ = do
     fv' ign e = case e of
       KUnit           -> return $ S.empty
       KInt _          -> return $ S.empty
+      KBool _         -> return $ S.empty
       KFloat _        -> return $ S.empty
       KExtArray _     -> return $ S.empty
       KVar  x         -> return $ S.singleton x
@@ -54,7 +54,7 @@ fv e_ = do
       KFDiv x y       -> return $ S.fromList [x,y]
       KTuple xs       -> return $ S.fromList xs
       KArray x y      -> return $ S.fromList [x,y]
-      KFArray x y     -> return $ S.fromList [x,y]
+      KArrayInit _ x  -> return $ S.singleton x
       KExtFunApp _ xs -> return $ S.fromList xs
       KIfEq x y e1 e2 ->
         S.insert x . S.insert y <$> (S.union <$> fv' ign e1 <*> fv' ign e2)
@@ -85,12 +85,12 @@ f env e = case e of
   KIfEq x y e1 e2 -> KIfEq x y <$> f env e1 <*> f env e2
   KIfLe x y e1 e2 -> KIfLe x y <$> f env e1 <*> f env e2
   KLet (x,t) e1 e2 -> KLet (x,t) <$> f env e1 <*> f (M.insert x t env) e2
-  KLetTuple xts y e' -> KLetTuple xts y <$> f (M.union (M.fromList xts) env) e'
+  KLetTuple xts y e' -> KLetTuple xts y <$> f (insertList xts env) e'
 
   KLetRec fundef@(KFunDef (x,t) yts e1) e2 -> do
     let ys = map fst yts
         envE2  = M.insert x t env
-        envE1  = M.union (M.fromList yts) envE2
+        envE1  = insertList yts envE2
     fvs' <- fv e1
     case toList $ fvs' \\ singleton x \\ fromList ys of
       [] -> do
@@ -130,9 +130,6 @@ f env e = case e of
       Just fvs -> return $ KApp (liftName x) (fvs++ys)
 
   _ -> return e
-
-unsafeLookup :: (Show a, Ord a) => a -> Map a b -> b
-unsafeLookup key dic = fromMaybe (error $ "unsafeLookup: " ++ show key) (M.lookup key dic)
 
 liftFun :: KFunDef -> [Id] -> [Type] -> KFunDef
 liftFun (KFunDef (x,t) yts _) fvs ts =

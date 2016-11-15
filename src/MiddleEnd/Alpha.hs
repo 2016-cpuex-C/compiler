@@ -20,6 +20,7 @@ g :: Map Id Id -> KExpr -> Caml KExpr
 g env e = case e of
   KUnit    -> return e
   KInt{}   -> return e
+  KBool{}  -> return e
   KFloat{} -> return e
 
   KVar  x     -> return $ KVar  $ find x env
@@ -44,7 +45,8 @@ g env e = case e of
     x' <- genId x
     e1' <- g env e1
     e2' <- g (M.insert x x' env) e2
-    globalHeap %= M.mapKeys (\y -> if x==y then x' else y)
+    --globalHeap %= M.mapKeys (\y -> if x==y then x' else y)
+    --うわあ
     return $ KLet (x',t) e1' e2'
 
   KLetRec (KFunDef (x,t) yts e1) e2 -> do
@@ -52,7 +54,7 @@ g env e = case e of
     let (ys,ts) = unzip yts
     ys' <- mapM genId ys
     let env'  = M.insert x x' env
-        env'' = M.union (M.fromList (zip ys ys')) env'
+        env'' = insertList (zip ys ys') env'
     e1' <- g env'' e1
     e2' <- g env'  e2
     return $ KLetRec (KFunDef (x',t) (zip ys' ts) e1') e2'
@@ -60,11 +62,11 @@ g env e = case e of
   KLetTuple xts y e' -> do
     let (xs,ts) = unzip xts
     xs' <- mapM genId xs
-    let env' = M.union (M.fromList (zip xs xs')) env
+    let env' = insertList (zip xs xs') env
     KLetTuple (zip xs' ts) (find y env) <$> g env' e'
 
   KArray x y -> return $ KArray (find x env) (find y env)
-  KFArray x y -> return $ KFArray (find x env) (find y env)
+  KArrayInit (Label x) y -> return $ KArrayInit (Label $ find x env) (find y env)
 
   KApp x ys -> return $ KApp (find x env) (map (`find` env) ys)
   KExtArray x -> return $ KExtArray x

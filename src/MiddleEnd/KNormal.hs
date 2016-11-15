@@ -21,6 +21,7 @@ import qualified Data.Map as M
 -----------------------
 data KExpr = KUnit
            | KInt Integer
+           | KBool Bool
            | KFloat Float
            | KNeg  Id
            | KAdd  Id Id
@@ -43,7 +44,7 @@ data KExpr = KUnit
            | KGet Id Id
            | KPut Id Id Id
            | KArray Id Id
-           | KFArray Id Id
+           | KArrayInit Label Id
            | KExtArray Id
            | KExtFunApp Id [Id]
            deriving (Show, Eq, Ord)
@@ -56,7 +57,8 @@ data KFunDef = KFunDef { kname ::  (Id,Type)
 fv :: KExpr -> Set Id
 fv = \case
   KUnit -> S.empty
-  KInt _ ->  S.empty
+  KInt _ -> S.empty
+  KBool _ -> S.empty
   KFloat _ -> S.empty
   KExtArray _ -> S.empty
 
@@ -73,7 +75,7 @@ fv = \case
   KFDiv   x y -> S.fromList [x,y]
   KGet    x y -> S.fromList [x,y]
   KArray  x y -> S.fromList [x,y]
-  KFArray x y -> S.fromList [x,y]
+  KArrayInit _ x -> S.singleton x
 
   KIfEq x y e1 e2 -> S.insert x (S.insert y (S.union (fv e1) (fv e2)))
   KIfLe x y e1 e2 -> S.insert x (S.insert y (S.union (fv e1) (fv e2)))
@@ -114,10 +116,9 @@ insertLetWithTy m k = m >>= \case
 
 g :: Map Id Type -> Expr -> Caml (KExpr, Type)
 g env e = case e of
-  EUnit -> return (KUnit, TUnit)
-  EBool True  -> return (KInt 1,TInt)
-  EBool False -> return (KInt 0,TInt)
-  EInt i -> return (KInt i, TInt)
+  EUnit    -> return (KUnit, TUnit)
+  EBool b  -> return (KBool b,TBool)
+  EInt i   -> return (KInt i, TInt)
   EFloat d -> return (KFloat d, TFloat)
 
   ENot e' ->
@@ -197,20 +198,21 @@ g env e = case e of
   EVar x ->
     case M.lookup x env of
       Just t  -> return (KVar x, t)
-      Nothing -> uses extTyEnv (M.lookup x) >>= \case
-        Just t@(TArray _) -> return (KExtArray x, t)
-        _ -> throw $ Failure ("external variable " ++ x ++" does not have an array type")
+      Nothing -> throw $ Failure ("unknown variable " ++ x ++ " found")
+      --Nothing -> uses extTyEnv (M.lookup x) >>= \case
+      --  Just t@(TArray _) -> return (KExtArray x, t)
+      --  _ -> throw $ Failure ("external variable " ++ x ++" does not have an array type")
 
   ELetRec (EFunDef (x,t) yts e1) e2 -> do
     let env' = M.insert x t env
     (e2', t2) <- g env' e2
-    (e1',_t1) <- g (M.union (M.fromList yts) env') e1
+    (e1',_t1) <- g (insertList yts env') e1
     return (KLetRec (KFunDef (x,t) yts e1') e2', t2)
 
   EApp (EVar f) e2s
     | M.notMember f env -> uses extTyEnv (M.lookup f) >>= \case
         Just (TFun _ t) ->
-          let bind xs []       = return (KExtFunApp f xs, t)
+          let bind xs []        = return (KExtFunApp f xs, t)
               bind xs (e2:e2s') = insertLet (g env e2) $ \x -> bind (xs++[x]) e2s'
           in  bind [] e2s
         _ -> error "KNormal:Aiee!!"
@@ -228,14 +230,15 @@ g env e = case e of
 
   ELetTuple xts e1 e2 ->
     insertLet (g env e1) $ \y -> do
-      (e2',t2) <- g (M.union (M.fromList xts) env) e2
+      (e2',t2) <- g (insertList xts env) e2
       return (KLetTuple xts y e2', t2)
 
   EArray e1 e2 ->
     insertLet       (g env e1) $ \x    ->
     insertLetWithTy (g env e2) $ \y t2 ->
-    let mkArray = case t2 of TFloat -> KFArray; _ -> KArray
-    in  return (mkArray x y, TArray t2)
+    return (KArray x y, TPtr t2)
+    --let mkArray = case t2 of TFloat -> KFArray; _ -> KArray
+    --in  return (mkArray x y, TArray t2)
 
   --EArray e1 e2 ->
   --  insertLet       (g env e1) $ \x    ->
@@ -246,7 +249,7 @@ g env e = case e of
   --    in  return (KExtFunApp l [x,y], TArray t2)
 
   EGet e1 e2 ->
-    insertLetWithTy (g env e1) $ \x (TArray t) ->
+    insertLetWithTy (g env e1) $ \x (TPtr t) ->
     insertLet       (g env e2) $ \y -> return (KGet x y, t)
 
   EPut e1 e2 e3 ->

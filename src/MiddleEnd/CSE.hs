@@ -4,7 +4,7 @@
 module MiddleEnd.CSE where
 {- Common Subexpression Elimination -}
 
-import           Base
+import           Base hiding (unsafeLookup)
 import           MiddleEnd.KNormal
 import           MiddleEnd.Elim    (hasSubEffect)
 
@@ -50,5 +50,5 @@ cElim e = do
           _ -> return e
 
 unsafeLookup :: Ord a => a -> Map a b -> b
-unsafeLookup key dic = fromJust $ M.lookup key dic
+unsafeLookup key dic = fromMaybe (error "CSE: unsafeLookup") $ M.lookup key dic
 

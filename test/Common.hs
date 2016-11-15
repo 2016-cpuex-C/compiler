@@ -33,15 +33,14 @@ compile ml = do
   devnull <- openFile "/dev/null" WriteMode
   withFile (mlToS ml) WriteMode $ \out ->
     (`runCaml` (initialState&logfile.~devnull
-                            &threshold.~100
                )
     )   $ lex (libmincamlML ++ s)
       >>= parse
       >>= typing
       >>= kNormalize
       >>= alpha
-      >>= lambdaLift
       >>= optimise
+      >>= lambdaLift
       >>= closureConvert
       >>= virtualCode
       >>= simm

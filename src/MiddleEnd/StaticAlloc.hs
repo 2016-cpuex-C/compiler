@@ -36,48 +36,26 @@ f mname env e = case e of
   KLet (x,TInt) (KInt i) e2 -> KLet (x,TInt) (KInt i) <$> f mname (M.insert x i env) e2
     -- ConstFoldが進むに連れてenvが充実するのでKIntに制限して良い
 
-  KLet (x,t@(TArray _)) e1 e2 -> KLet (x,t) <$> f (Just (x,t)) env e1 <*> f mname env e2
+  KLet (x,t@(TPtr _)) e1 e2 -> KLet (x,t) <$> f (Just (x,t)) env e1 <*> f mname env e2
 
   KLet (x,t) e1 e2 -> KLet (x,t) <$> f mname env e1 <*> f mname env e2
 
   KArray y z -> case (mname, M.lookup y env) of
-    (Just (name,t), Just size) -> do
+    (Just (name,TPtr elemty), Just size) -> do
       addr <- use startGP
       startGP += size
-      globalHeap %= M.insert name (addr,t)
+      globalHeap %= M.insert name (addr,size,TArray size elemty)
       log $ "Global: " ++ name ++ " is allocated at " ++
             show addr ++ " ~ " ++ show (addr+size-1)
-      initializeArray "array_init" (addr,size) z
-    _ -> return e
-  KFArray y z -> case (mname, M.lookup y env) of
-    (Just (name,t), Just size) -> do
-      addr <- use startGP
-      startGP += size
-      globalHeap %= M.insert name (addr,t)
-      log $ "Global: " ++ name ++ " is allocated at " ++
-            show addr ++ " ~ " ++ show (addr+size-1)
-      initializeArray "float_array_init" (addr,size) z
+      return $ KArrayInit (Label name) z
     _ -> return e
 
   KVar x -> do
     heap <- use globalHeap
     case (mname, M.lookup x heap) of
-      (Just (name,t), Just (addr,t'))
-        | t==t' -> globalHeap %= M.insert name (addr,t)
-              -- let arr = let x = createArray 0 0 in x みたいな場合
-              -- この時点でxとarrに同じ場所を割り当てて良い.
-        | otherwise -> error "Global.hs: Impossible"
+      (Just (name,_), Just info) -> globalHeap %= M.insert name info
       _ -> return ()
     return e
 
   _ -> return e
-
-initializeArray :: Id -> (Integer,Integer) -> Id -> Caml KExpr
-initializeArray initArray (addr,size) x = do
-  vaddr <- genId "addr"
-  vsize <- genId "size"
-  return $
-    KLet (vaddr,TInt) (KInt addr) $
-      KLet (vsize,TInt) (KInt size) $
-        KExtFunApp initArray [vaddr,vsize,x]
 

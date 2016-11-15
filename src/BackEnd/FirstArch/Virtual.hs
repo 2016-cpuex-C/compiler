@@ -20,7 +20,8 @@ virtualCode :: CProg -> Caml AProg
 virtualCode (CProg fundefs e) = do
   constFloats .= []
   fundefs' <- mapM h fundefs
-  e' <- g M.empty e
+  glblArrayEnv <- globalArrayEnv
+  e' <- g glblArrayEnv e
   fdata <- use constFloats
   return $ AProg fdata fundefs' e'
 
@@ -97,6 +98,7 @@ g :: Map Id Type -> CExpr -> Caml Asm
 g env = \case
   CUnit -> return $ AsmAns ANop
   CInt i -> return $ AsmAns $ ASet i
+  CBool b -> return $ AsmAns $ ASet (if b then 1 else 0)
   CFloat d -> do
     fdata <- use constFloats
     l <- case lookupRev d fdata of
@@ -169,6 +171,22 @@ g env = \case
         in expandM (zip xs ts) (0,AsmAns (AMov y)) addf addi
     return $ AsmLet (y,TTuple ts) (AMov regHp)
               (AsmLet (regHp,TInt) (AAdd regHp (C $ align offset)) store)
+  CArray x y -> do
+    case unsafeLookup y env of
+      TFloat -> g env (CAppDir (Label "min_caml_create_float_array") [x,y])
+      _      -> g env (CAppDir (Label "min_caml_create_array") [x,y])
+
+  CArrayInit (Label x) y -> do
+    vaddr <- genId "addr"
+    vsize <- genId "size"
+    ~(addr,size,TArray _ te) <- uses globalHeap (unsafeLookup x)
+    let array_init = case te of TFloat -> "min_caml_float_array_init"
+                                _      -> "min_caml_array_init"
+    g env $
+      CLet (vaddr,TInt) (CInt addr) $
+        CLet (vsize,TInt) (CInt size) $
+          CAppDir (Label array_init) [vaddr,vsize,y]
+
 
   CLetTuple xts y e2 -> do
     s <- fv e2
@@ -186,33 +204,30 @@ g env = \case
   CGet x y -> do
     heap <- use globalHeap
     case M.lookup x heap of
-      Just (addr, TArray TFloat) -> return $ AsmAns (ALdDF y (C addr))
-      Just (addr, _)             -> return $ AsmAns (ALd   y (C addr))
+      Just (addr, _, TArray _ TFloat) -> return $ AsmAns (ALdDF y (C addr))
+      Just (addr, _, _)               -> return $ AsmAns (ALd   y (C addr))
       Nothing -> case M.lookup x env of
-        Just (TArray TUnit)  -> return $ AsmAns ANop
-        Just (TArray TFloat) -> return $ AsmAns (ALdDF x (V y))
-        Just (TArray _)      -> return $ AsmAns (ALd x (V y))
+        Just (TPtr TUnit)  -> return $ AsmAns ANop
+        Just (TPtr TFloat) -> return $ AsmAns (ALdDF x (V y))
+        Just (TPtr _)      -> return $ AsmAns (ALd x (V y))
         e -> error $ "Virtual.g CGet: " ++ x ++ ": " ++ show e
 
   CPut x y z -> do
     heap <- use globalHeap
     case M.lookup x heap of
-      Just (addr, TArray TFloat) -> return $ AsmAns (AStDF z y (C addr))
-      Just (addr, _)             -> return $ AsmAns (ASt   z y (C addr))
+      Just (addr, _, TArray _ TFloat) -> return $ AsmAns (AStDF z y (C addr))
+      Just (addr, _, _)               -> return $ AsmAns (ASt   z y (C addr))
       Nothing -> case M.lookup x env of
-        Just (TArray TUnit)  -> return $ AsmAns ANop
-        Just (TArray TFloat) -> return $ AsmAns (AStDF z x (V y))
-        Just (TArray _)      -> return $ AsmAns (ASt z x (V y))
+        Just (TPtr TUnit)  -> return $ AsmAns ANop
+        Just (TPtr TFloat) -> return $ AsmAns (AStDF z x (V y))
+        Just (TPtr _)      -> return $ AsmAns (ASt z x (V y))
         e -> error $ "Virtual.g CPut: " ++ x ++ ": " ++ show e
 
-  CExtArray (Label x) -> return $ AsmAns $ ASetL $ Label $ "min_caml_" ++ x
+  CExtArray (Label _x) -> error "no ext array" --return $ AsmAns $ ASetL $ Label $ "min_caml_" ++ x
 
 ----------
 -- Util --
 ----------
-
-insertList :: Ord key => [(key,a)] -> Map key a -> Map key a
-insertList xts = M.union (M.fromList xts)
 
 -- Prelude.lookupと比べて a,b が逆
 lookupRev :: (Eq a) => a -> [(b,a)] -> Maybe b

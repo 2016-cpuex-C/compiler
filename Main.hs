@@ -1,86 +1,113 @@
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE BangPatterns #-}
 
 module Main where
 
 import Base
-import FrontEnd.Lexer             (lex)
-import FrontEnd.Parser            (parse)
-import FrontEnd.Typing            (typing)
-import MiddleEnd.KNormal          (kNormalize)
-import MiddleEnd.Alpha            (alpha)
-import MiddleEnd.Optimise         (optimise)
-import MiddleEnd.Closure          (closureConvert)
-import MiddleEnd.LambdaLifting    (lambdaLift)
-import BackEnd.FirstArch.Virtual  (virtualCode)
-import BackEnd.FirstArch.RegAlloc (regAlloc)
-import BackEnd.FirstArch.Simm     (simm)
-import BackEnd.FirstArch.Emit     (emit)
+import FrontEnd.Lexer               (lex)
+import FrontEnd.Parser              (parse)
+import FrontEnd.Typing              (typing)
+import MiddleEnd.KNormal            (kNormalize)
+import MiddleEnd.Alpha              (alpha)
+import MiddleEnd.Optimise           (optimise)
+import MiddleEnd.Closure            (closureConvert)
+import MiddleEnd.LambdaLifting      (lambdaLift)
+import MiddleEnd.LLVM.FrontEnd.Prog
+import MiddleEnd.LLVM.MiddleEnd
+import BackEnd.FirstArch.Virtual    (virtualCode)
+import BackEnd.FirstArch.RegAlloc   (regAlloc)
+import BackEnd.FirstArch.Simm       (simm)
+import BackEnd.FirstArch.Emit       (emit)
 
-import           Prelude hiding        (lex, log)
+import           Prelude hiding        (lex, log, mod)
 import           System.IO             (stdout, withFile, IOMode(..))
-import qualified Data.Map as M
 import           Data.FileEmbed
 import qualified Data.ByteString.Char8 as BC
 import           Control.Lens          (use)
+import           Control.Lens.Operators
 import           Options.Applicative
 import           System.FilePath.Posix ((-<.>))
 
+-------------------------------------------------------------------------------
+-- main
+-------------------------------------------------------------------------------
+
 main :: IO ()
 main = execParser (info (helper <*> parseOpt) fullDesc) >>= \opts ->
-    let s = initialState { _threshold     = inline opts
-                         , _optimiseLimit = iter opts
-                         , _extTyEnv      = minrtExtTyEnv
-                         }
+    let s = initialState & threshold     .~ inline opts
+                         & optimiseLimit .~ iter opts
         lg = case logf opts of
           Nothing -> ($ stdout)
           Just f  -> withFile f WriteMode
-    in lg $ \h -> mapM_ (compile s{_logfile=h}) (args opts)
+    in lg $ \h -> mapM_ (toLLVM s{_logfile=h}) (args opts)
+
+-------------------------------------------------------------------------------
+-- compile method
+-------------------------------------------------------------------------------
+
+toLLVM :: S -> FilePath -> IO ()
+toLLVM s f = do
+  input <- readFile f
+  m <- flip runCaml s $ lex (libmincamlML ++ input)
+        >>= parse
+        >>= typing
+        >>= kNormalize
+        >>= alpha
+        >>= optimise
+        >>= \e -> use globalHeap >>= log.show >> return e
+        >>= lambdaLift
+        >>= closureConvert
+        -- >>= \e -> do {
+        --               use globalHeap >>= log.show;
+        --               use extTyEnv >>= log.show;
+        --               log (show e);
+        --               return e
+        --               }
+        >>= llvm
+        -- >>= \ast -> log (show ast) >> return ast
+        >>= optimiseLLVM
+  case m of
+    Right _mod -> return ()
+    Left e -> error $ f ++ ": " ++ show e
 
 compile :: S -> FilePath -> IO ()
 compile s f = do
   input <- readFile f
   withFile (f -<.> "s") WriteMode $ \h -> do
     m <- (`runCaml` s) $ lex (libmincamlML ++ input)
-          >>= parse
-          >>= typing
-          >>= kNormalize
-          >>= alpha
-          >>= optimise
-          >>= lambdaLift
-          >>= \e -> do { log . show =<< use globalHeap
-                       ; return e}
-          >>= closureConvert
-          >>= virtualCode
-          >>= simm
-          >>= regAlloc
-          >>= emit h
+      >>= parse
+      >>= typing
+      >>= kNormalize
+      >>= alpha
+      >>= optimise
+      >>= lambdaLift
+      >>= \e -> (use globalHeap >>= log.show) >> return e
+      >>= closureConvert
+      >>= virtualCode
+      -- >>= \e -> do {
+      --              {-use globalHeap >>= log.show;-}
+      --              {-use extTyEnv >>= log.show;-}
+      --              log (show e);
+      --              return e
+      --              }
+      >>= simm
+      >>= regAlloc
+      >>= emit h
     case m of
-      Right () -> return ()
+      Right _ -> return ()
       Left e -> error $ f ++ ": " ++ show e
 
-minrtExtTyEnv :: TyEnv
-minrtExtTyEnv = M.fromList
-  [ ("fiszero"      , TFun [TFloat         ] TBool  )
-  , ("fispos"       , TFun [TFloat         ] TBool  )
-  , ("fisneg"       , TFun [TFloat         ] TBool  )
-  , ("xor"          , TFun [TBool,  TBool  ] TBool  )
-  , ("fless"        , TFun [TFloat, TFloat ] TBool  )
-  , ("fneg"         , TFun [TFloat         ] TFloat )
-  , ("fabs"         , TFun [TFloat         ] TFloat )
-  , ("fsqr"         , TFun [TFloat         ] TFloat )
-  , ("sqrt"         , TFun [TFloat         ] TFloat )
-  , ("fhalf"        , TFun [TFloat         ] TFloat )
-  , ("floor"        , TFun [TFloat         ] TFloat )
-  , ("cos"          , TFun [TFloat         ] TFloat )
-  , ("sin"          , TFun [TFloat         ] TFloat )
-  , ("atan"         , TFun [TFloat         ] TFloat )
-  , ("read_int"     , TFun [TUnit          ] TInt   )
-  , ("read_float"   , TFun [TUnit          ] TFloat )
-  , ("print_int"    , TFun [TInt           ] TUnit  )
-  , ("print_char"   , TFun [TInt           ] TUnit  )
-  , ("int_of_float" , TFun [TFloat         ] TInt   )
-  , ("float_of_int" , TFun [TInt           ] TFloat )
-  ]
+-------------------------------------------------------------------------------
+-- library
+-------------------------------------------------------------------------------
+
+libmincamlML :: String
+libmincamlML = BC.unpack $(embedFile "src/libmincaml.ml")
+
+-------------------------------------------------------------------------------
+-- command line options parser
+-------------------------------------------------------------------------------
 
 data MinCamlOptions = MinCamlOptions
                     { inline  :: Int
@@ -117,7 +144,4 @@ parseOpt = pure MinCamlOptions
     ($$) = ($)
     (<=>) :: Monoid m => m -> m -> m
     (<=>) = (<>)
-
-libmincamlML :: String
-libmincamlML = BC.unpack $(embedFile "src/libmincaml.ml")
 

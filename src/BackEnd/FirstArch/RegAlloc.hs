@@ -7,7 +7,7 @@ module BackEnd.FirstArch.RegAlloc where
 
 import Prelude hiding (exp,log)
 
-import Base
+import Base hiding (unsafeLookup)
 import BackEnd.FirstArch.Asm
 
 import           Data.Map (Map)
@@ -327,9 +327,10 @@ regAlloc (AProg fdata fundefs e) = do
 ----------
 -- Util --
 ----------
-unsafeLookup :: Ord k => k -> Map k a -> a
-unsafeLookup x env = fromJust $ M.lookup x env
-
 fromJust :: Maybe a -> a
 fromJust = fromMaybe (error "RegAlloc.hs")
+
+unsafeLookup :: Id -> Map Id b -> b
+unsafeLookup key dic = fromMaybe (error key) $ M.lookup key dic
+
 

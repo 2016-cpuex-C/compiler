@@ -22,6 +22,7 @@ g :: Map Id Id -> KExpr -> Caml KExpr
 g env e = case e of
   KUnit    -> return e
   KInt{}   -> return e
+  KBool{}  -> return e
   KFloat{} -> return e
 
   KVar  x -> return $ KVar  $ find x env
@@ -66,6 +67,7 @@ g env e = case e of
 
   KTuple xs   -> return $ KTuple (map (`find` env) xs)
   KArray x y  -> return $ KArray (find x env) (find y env)
-  KFArray x y -> return $ KFArray (find x env) (find y env)
+  KArrayInit l x -> return $ KArrayInit l (find x env)
+
   KExtArray x -> return $ KExtArray x
 

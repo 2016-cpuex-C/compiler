@@ -8,7 +8,7 @@ import Prelude hiding (log)
 import Base
 import FrontEnd.Syntax
 
-import           Control.Monad (zipWithM_, join)
+import Control.Monad (join, zipWithM_)
 import qualified Data.Map as M
 import           Control.Lens
 
@@ -27,16 +27,17 @@ derefType :: Type -> Caml Type
 derefType = \case
   TFun t1s t2 -> TFun <$> mapM derefType t1s <*> derefType t2
   TTuple ts -> TTuple <$> mapM derefType ts
-  TArray t -> TArray <$> derefType t
+  TPtr t -> TPtr <$> derefType t
   TVar tv -> readType tv >>= \case
-                Nothing -> do
-                  log "uninstantiated type variable detected; assuming int@."
-                  writeType tv TInt
-                  return TInt
-                Just t -> do
-                  t' <- derefType t
-                  writeType tv t'
-                  return t'
+    Nothing -> do
+      log "uninstantiated type variable detected; assuming int@."
+      writeType tv TInt
+      return TInt
+    Just t -> do
+      t' <- derefType t
+      writeType tv t'
+      return t'
+  TArray{} -> undefined
   t -> return t
 
 derefIdType :: (Id, Type) -> Caml (Id, Type)
@@ -74,12 +75,13 @@ occur :: TV -> Type -> Caml Bool
 occur tv1 = \case
   TFun t2s t2 -> anyM (occur tv1) (t2:t2s)
   TTuple t2s  -> anyM (occur tv1) t2s
-  TArray t2 -> occur tv1 t2
+  TPtr     t2 -> occur tv1 t2
   TVar tv2
     | tv1==tv2  -> return True
     | otherwise -> readType tv2 >>= \case
         Nothing -> return False
         Just t2 -> occur tv1 t2
+  TArray{} -> undefined
   _ -> return False
 
 unify :: Type -> Type -> Caml ()
@@ -95,7 +97,7 @@ unify t1 t2 = case (t1,t2) of
   (TTuple t1s, TTuple t2s)
     | length t1s == length t2s -> zipWithM_ unify t1s t2s
     | otherwise -> throw $ Unify t1 t2
-  (TArray t1', TArray t2') -> unify t1' t2'
+  (TPtr t1', TPtr t2') -> unify t1' t2'
   (TVar ref1, TVar ref2)
     | ref1 == ref2 -> return ()
     | otherwise -> (,) <$> readType ref1 <*> readType ref2 >>= \case
@@ -112,6 +114,8 @@ unify t1 t2 = case (t1,t2) of
                      (throw $ Unify t1 t2)
                      (writeType ref2 t1)
       Just t2' -> unify t1 t2'
+  (TArray{}, _) -> undefined
+  (_, TArray{}) -> undefined
   _ -> throw $ Unify t1 t2
 
 unifyM1 :: Type -> Caml Type -> Caml ()
@@ -210,7 +214,7 @@ infer env e =
     ELetRec (EFunDef (x,t) yts e1) e2 -> do
       let env' = M.insert x t env
       let argtys = map snd yts
-      t' <- infer (M.union (M.fromList yts) env') e1
+      t' <- infer (insertList yts env') e1
       unify t (TFun argtys t')
       infer env' e2
 
@@ -224,21 +228,21 @@ infer env e =
 
     ELetTuple xts e1 e2 -> do
       unifyM1 (TTuple $ map snd xts) (infer env e1)
-      infer (M.union (M.fromList xts) env) e2
+      infer (insertList xts env) e2
 
     EArray e1 e2 -> do -- must be a primitive for "polymorphic" typing #とは
       unifyM1 TInt (infer env e1)
-      TArray <$> infer env e2
+      TPtr <$> infer env e2
 
     EGet e1 e2 -> do
       t <- genType
-      unifyM1 (TArray t) (infer env e1)
+      unifyM1 (TPtr t) (infer env e1)
       unifyM1 TInt       (infer env e2)
       return t
 
     EPut e1 e2 e3 -> do
       t <- infer env e3
-      unifyM1 (TArray t) (infer env e1)
+      unifyM1 (TPtr t) (infer env e1)
       unifyM1 TInt       (infer env e2)
       return TUnit
 
