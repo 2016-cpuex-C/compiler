@@ -6,16 +6,16 @@ module Base where
 
 import                Data.IORef
 import                Control.Lens
-import                Data.Map                       (Map)
+import                Data.Map                        (Map)
 import qualified      Data.Map as M
-import                Data.Maybe (fromMaybe)
+import                Data.Maybe                      (fromMaybe)
+import                Control.Monad.Trans as T        (MonadTrans,lift)
 import                Control.Monad.Trans.Except
 import                Control.Monad.Trans.State.Lazy
 import qualified      Control.Monad.IO.Class as IOC
-import                Control.Monad.Except           (throwError, catchError)
-import                Control.Monad.Error.Class      (MonadError)
-import                System.IO                      (Handle, stdout, hPutStrLn)
-import {-# SOURCE #-} FrontEnd.Syntax                (Expr)
+import                Control.Monad.Except            (throwError, catchError)
+import                Control.Monad.Error.Class       (MonadError)
+import                System.IO                       (Handle, stdout, hPutStrLn)
 
 -------------------------------------------------------------------------------
 -- Types
@@ -35,6 +35,7 @@ data Type = TUnit
           | TPtr   Type
           | TVar   TV
           deriving (Show, Eq, Ord)
+
 type TyEnv = Map Id Type
 
 data TV = TV Int (IORef (Maybe Type))
@@ -62,13 +63,10 @@ makeLenses ''S
 
 type Caml = StateT S (ExceptT Error IO)
 data Error = Failure String
-           | Unify Type Type
-           | Typing Expr Type Type
-           | NoReg Id Type
            deriving Show
 
 -------------------------------------------------------------------------------
--- functions
+-- Functions
 -------------------------------------------------------------------------------
 
 -- Type --
@@ -77,12 +75,6 @@ genType = do
   ref <- liftIO $ newIORef Nothing
   n   <- tvCount <+= 1
   return $ TVar $ TV n ref
-
-readType :: TV -> Caml (Maybe Type)
-readType (TV _ ref) = liftIO $ readIORef ref
-
-writeType :: TV -> Type -> Caml ()
-writeType (TV _ ref) t = liftIO $ writeIORef ref (Just t)
 
 -- Id --
 ppList :: [Id] -> Id
@@ -113,13 +105,14 @@ idOfType = \case
   TPtr _     -> "p"
   TVar _     -> error "idOfType: TVar"
 
+-- env --
 globalArrayEnv :: Caml TyEnv
 globalArrayEnv = uses globalHeap $ M.map (\(_,_,t) -> t)
 
 externalEnv :: Caml TyEnv
 externalEnv = uses extTyEnv $ M.mapKeys ("min_caml_"++)
 
--- Caml
+-- Caml initialState --
 initialState :: S
 initialState = S { _idCount       = 0
                  , _tvCount       = 0
@@ -164,21 +157,13 @@ initialExtTyEnv = M.fromList
   , ("init_float_array"   , TFun [TInt,TFloat] (TPtr TFloat))
   ]
 
-liftIO :: IOC.MonadIO m => IO a -> m a
-liftIO = IOC.liftIO
-
--- NOTE: m中の状態変化はなかったことになる 気をつけて使う
-catch :: MonadError Error m => m a -> (Error -> m a) -> m a
-catch = catchError
-
-throw :: MonadError Error m => Error -> m a
-throw = throwError
-
+-- log --
 log :: String -> Caml ()
 log s = do
   l <- use logfile
   liftIO $ hPutStrLn l s
 
+-- runner --
 runCamlDefault :: Caml a -> IO (Either Error a)
 runCamlDefault c = runExceptT $ evalStateT c initialState
 
@@ -186,8 +171,20 @@ runCaml :: Caml a -> S -> IO (Either Error a)
 runCaml c s = runExceptT $ evalStateT c s
 
 -------------------------------------------------------------------------------
--- Utilities
+-- Util
 -------------------------------------------------------------------------------
+
+lift :: (MonadTrans t, Monad m) => m a -> t m a
+lift = T.lift
+
+liftIO :: IOC.MonadIO m => IO a -> m a
+liftIO = IOC.liftIO
+
+catch :: MonadError e m => m a -> (e -> m a) -> m a
+catch = catchError
+
+throw :: MonadError e m => e -> m a
+throw = throwError
 
 unsafeLookup :: Id -> Map Id b -> b
 unsafeLookup key dic = fromMaybe (error $ "Base: unsafeLookup: "++key) $ M.lookup key dic

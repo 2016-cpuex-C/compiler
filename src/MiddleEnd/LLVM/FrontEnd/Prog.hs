@@ -9,7 +9,6 @@ import MiddleEnd.LLVM.FrontEnd.Base
 import MiddleEnd.LLVM.FrontEnd.Expr
 
 import qualified Data.Map as M
-import           Control.Monad.Trans.Class (lift)
 import           LLVM.General.AST hiding (Type)
 
 -------------------------------------------------------------------------------

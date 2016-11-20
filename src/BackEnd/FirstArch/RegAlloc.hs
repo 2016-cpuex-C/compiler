@@ -17,8 +17,39 @@ import           Data.List (foldl')
 import           Data.Vector (Vector, (!))
 import           Data.Maybe (fromMaybe)
 import           Data.Foldable (foldlM)
+import           Control.Monad.Trans.Except
 import           Control.Exception.Base (assert)
 import qualified Data.Foldable as F
+
+-------------------------------------------------------------------------------
+-- Main Function
+-------------------------------------------------------------------------------
+
+regAlloc :: AProg -> Caml AProg
+regAlloc (AProg fdata fundefs e) = do
+  log $ "register allocation: may take some time " ++
+        "(up to a few minutes, depending on the size of functions)"
+  m <- runExceptT $ do
+    fundefs' <- mapM h fundefs
+    tmp <- lift $ genTmp TUnit
+    (e',_regenv) <- g (tmp,TUnit) (AsmAns ANop) M.empty e
+    return $ AProg fdata fundefs' e'
+  case m of
+    Right prog -> return prog
+    Left  err  -> throw $ Failure $ show err
+
+-------------------------------------------------------------------------------
+-- Types
+-------------------------------------------------------------------------------
+
+data AllocError = NoReg Id Type
+                deriving Show
+
+type CamlRA = ExceptT AllocError Caml
+
+-------------------------------------------------------------------------------
+-- Register Targeting
+-------------------------------------------------------------------------------
 
 target' :: Id -> (Id,Type) -> AExpr -> (Bool, [Id])
 target' src (dest,t) = \case
@@ -64,7 +95,6 @@ target' src (dest,t) = \case
 
   _ -> (False, [])
 
-
 target :: Id -> (Id, Type) -> Asm -> (Bool, [Id])
 target src destt = \case
   AsmAns exp -> target' src destt exp
@@ -81,11 +111,15 @@ targetArgs src regs' n = \case
     | y == src  -> regs'!n : targetArgs src regs' (n+1) ys
     | otherwise -> targetArgs src regs' (n+1) ys
 
+-------------------------------------------------------------------------------
+-- Allocation
+-------------------------------------------------------------------------------
+
 data AllocResult = Alloc Id
                  | Spill Id
 
-alloc' :: (Id,Type) -> Asm -> Map Id Id -> Id -> Type -> Caml AllocResult
-alloc' destt cont regenv x t = assert (M.notMember x regenv) $
+alloc' :: (Id,Type) -> Asm -> Map Id Id -> Id -> Type -> CamlRA AllocResult
+alloc' destt cont regenv x t = --assert (M.notMember x regenv) $
   let allregs = case t of
               TUnit -> []
               TFloat -> allFRegs
@@ -102,31 +136,38 @@ alloc' destt cont regenv x t = assert (M.notMember x regenv) $
             in case F.find (`S.notMember` live) (prefer++allregs) of
                  Just r  -> return $ Alloc r
                  Nothing -> do
-                  log $ "register allocation failed for " ++ x
+                  lift.log $ "register allocation failed for " ++ x
                   let y = fromJust $ F.find p (reverse free)
                             where p y' = case M.lookup y' regenv of
                                           Just r -> not (isReg y') && r`elem`allregs
                                           Nothing -> False
                       msg = "spilling " ++ y ++ " from " ++ show (unsafeLookup y regenv)
-                  log msg >> return (Spill y)
+                  lift (log msg) >> return (Spill y)
 
+-------------------------------------------------------------------------------
+-- RegEnv Operations
+-------------------------------------------------------------------------------
 
 add :: Id -> Id -> Map Id Id -> Map Id Id
 add x r regenv
   | isReg x   = assert (x==r) regenv
   | otherwise = M.insert x r regenv
 
-find :: Id -> Type -> Map Id Id -> Caml Id
+find :: Id -> Type -> Map Id Id -> CamlRA Id
 find x t regenv
   | isReg x           = return x
   | M.member x regenv = return (unsafeLookup x regenv)
   | otherwise         = throw (NoReg x t)
 
-find' :: IdOrImm -> Map Id Id -> Caml IdOrImm
+find' :: IdOrImm -> Map Id Id -> CamlRA IdOrImm
 find' (V x) regenv = V <$> find x TInt regenv
 find' c _ = return c
 
-g :: (Id,Type) -> Asm -> Map Id Id -> Asm -> Caml (Asm, Map Id Id)
+-------------------------------------------------------------------------------
+-- Main Routine
+-------------------------------------------------------------------------------
+
+g :: (Id,Type) -> Asm -> Map Id Id -> Asm -> CamlRA (Asm, Map Id Id)
 g destt cont regenv = \case
   AsmAns exp -> g'_and_restore destt cont regenv exp
   AsmLet xt@(x,t) exp e -> assert (M.notMember x regenv) $ do
@@ -139,13 +180,13 @@ g destt cont regenv = \case
           let save = case M.lookup y regenv of
                        Just r'  -> ASave r' y
                        Nothing -> ANop
-          e' <- seq' (save, concat' e1' (r,t) e2')
+          e' <- lift $ seq' (save, concat' e1' (r,t) e2')
           return (e', regenv2)
       Alloc r -> do
           (e2', regenv2) <- g destt cont (add x r regenv1) e
           return (concat' e1' (r, t) e2', regenv2)
 
-g' :: (Id,Type) -> Asm -> Map Id Id -> AExpr -> Caml (Asm, Map Id Id)
+g' :: (Id,Type) -> Asm -> Map Id Id -> AExpr -> CamlRA (Asm, Map Id Id)
 g' destt cont regenv exp = case exp of
   ANop       -> return (AsmAns exp, regenv)
   ASet{}     -> return (AsmAns exp, regenv)
@@ -247,30 +288,27 @@ g' destt cont regenv exp = case exp of
 
   ACallCls x ys zs -> do
     if | length ys > maxArgs || length zs > length allFRegs - 1 ->
-            throw $ Failure $ "cannot allocate registers for arugments to " ++ x
+            lift.throw $ Failure $ "cannot allocate registers for arugments to " ++ x
        | otherwise -> do
             rx <- find x TInt regenv
             g'_call destt cont regenv exp (ACallCls rx) ys zs
 
   ACallDir l ys zs -> do
     if | length ys > maxArgs || length zs > length allFRegs - 1 ->
-            throw $ Failure $ "cannot allocate registers for arugments to " ++ show l
+            lift.throw $ Failure $ "cannot allocate registers for arugments to " ++ show l
        | otherwise ->
             g'_call destt cont regenv exp (ACallDir l) ys zs
 
   ASave{} -> assert False undefined
 
-g'_and_restore :: (Id,Type) -> Asm -> Map Id Id -> AExpr -> Caml (Asm, Map Id Id)
+g'_and_restore :: (Id,Type) -> Asm -> Map Id Id -> AExpr -> CamlRA (Asm, Map Id Id)
 g'_and_restore destt cont regenv exp =
-  g' destt cont regenv exp `catch` hdr
-  where -- NoReg なら restore
-    hdr (NoReg x t) = do
-      log $ "restoring " ++ x
+  g' destt cont regenv exp `catch` \(NoReg x t) -> do
+      lift.log $ "restoring " ++ x
       g destt cont regenv (AsmLet (x, t) (ARestore x) (AsmAns exp))
-    hdr e = throw e
 
 g'_if :: (Id,Type) -> Asm -> Map Id Id -> AExpr
-      -> (Asm -> Asm -> AExpr) -> Asm -> Asm -> Caml (Asm, Map Id Id)
+      -> (Asm -> Asm -> AExpr) -> Asm -> Asm -> CamlRA (Asm, Map Id Id)
 g'_if destt cont regenv _exp constr e1 e2 = do
   (e1',regenv1) <- g destt cont regenv e1
   (e2',regenv2) <- g destt cont regenv e2
@@ -281,21 +319,21 @@ g'_if destt cont regenv _exp constr e1 e2 = do
                     (Just r1, Just r2) | r1 /= r2  -> env
                     _ -> env
       f e x | x == fst destt || M.notMember x regenv || M.member x regenv' = return e
-            | otherwise = seq' (ASave (unsafeLookup x regenv) x, e)
+            | otherwise = lift $ seq' (ASave (unsafeLookup x regenv) x, e)
   e <- foldlM f (AsmAns $ constr e1' e2') (fv cont)
   return (e, regenv')
 
 g'_call :: (Id,Type) -> Asm -> Map Id Id -> AExpr
-        -> ([Id] -> [Id] -> AExpr) -> [Id] -> [Id] -> Caml (Asm, Map Id Id)
+        -> ([Id] -> [Id] -> AExpr) -> [Id] -> [Id] -> CamlRA (Asm, Map Id Id)
 g'_call destt cont regenv _exp constr ys zs = do
   let f e x | x == fst destt || M.notMember x regenv = return e
-            | otherwise = seq' (ASave (unsafeLookup x regenv) x, e)
+            | otherwise = lift $ seq' (ASave (unsafeLookup x regenv) x, e)
   rys <- mapM (\y -> find y TInt   regenv) ys
   rzs <- mapM (\z -> find z TFloat regenv) zs
   e <- foldlM f (AsmAns $ constr rys rzs) (fv cont)
   return (e, M.empty)
 
-h :: AFunDef -> Caml AFunDef
+h :: AFunDef -> CamlRA AFunDef
 h (AFunDef (Label x) ys zs e t) = do
   let regenv = M.insert x regCl M.empty
       (_i,argRegs,regenv') = foldl' func (0,[],regenv) ys
@@ -308,25 +346,16 @@ h (AFunDef (Label x) ys zs e t) = do
                   let fr = fregs!d
                   in  (d+1, fargRegs_++[fr], M.insert z fr regenv_)
   a <- case t of
-         TUnit -> genTmp TUnit
+         TUnit -> lift $ genTmp TUnit
          TFloat -> return $ fregs!0
          _ -> return $ regs!0
   (e',_regenv''') <- g (a,t) (AsmAns (AMov a)) regenv'' e
   return $ AFunDef (Label x) argRegs fargRegs e' t
 
-regAlloc :: AProg -> Caml AProg
-regAlloc (AProg fdata fundefs e) = do
-  log $
-      "register allocation: may take some time " ++
-      "(up to a few minutes, depending on the size of functions)"
-  fundefs' <- mapM h fundefs
-  tmp <- genTmp TUnit
-  (e',_regenv) <- g (tmp,TUnit) (AsmAns ANop) M.empty e
-  return $ AProg fdata fundefs' e'
-
 ----------
 -- Util --
 ----------
+
 fromJust :: Maybe a -> a
 fromJust = fromMaybe (error "RegAlloc.hs")
 

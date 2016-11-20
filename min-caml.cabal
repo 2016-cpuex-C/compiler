@@ -8,7 +8,7 @@ cabal-version:       >=1.10
 
 library
   hs-source-dirs:      src
-  ghc-options:         -O3 -Wall
+  ghc-options:         -O3
   build-depends:       base
                      , mtl
                      , lens
@@ -43,6 +43,7 @@ library
                      , MiddleEnd.LLVM.FrontEnd.Expr
                      , MiddleEnd.LLVM.FrontEnd.Prog
                      , MiddleEnd.LLVM.MiddleEnd
+                     , MiddleEnd.LLVM.BackEnd.Expr
                      , BackEnd.Decode
                      , BackEnd.FirstArch.Asm
                      , BackEnd.FirstArch.Virtual

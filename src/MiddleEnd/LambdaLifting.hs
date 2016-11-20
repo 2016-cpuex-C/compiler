@@ -16,7 +16,6 @@ import qualified Data.Map as M
 import           Data.Set                       (toList, fromList, singleton, Set, (\\))
 import qualified Data.Set as S
 import           Control.Lens            hiding (lifted)
-import           Control.Monad.Trans.Class      (lift)
 import           Control.Monad.Trans.State.Lazy
 
 data LL = LL { _directlyCallable :: Set Id -- function without any free variables

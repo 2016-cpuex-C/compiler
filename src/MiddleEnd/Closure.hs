@@ -12,7 +12,7 @@ module MiddleEnd.Closure (
 
 import Prelude hiding (log)
 
-import Base              hiding (liftIO)
+import Base
 import MiddleEnd.KNormal hiding (fv)
 
 import           Data.Map       (Map)
@@ -22,7 +22,6 @@ import qualified Data.Set as S
 import qualified Data.List as L
 import           Control.Lens
 import           Control.Monad.Trans.State.Lazy
-import           Control.Monad.Trans.Class (lift)
 
 import           Data.Maybe (fromMaybe)
 

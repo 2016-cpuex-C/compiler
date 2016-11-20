@@ -5,29 +5,30 @@
 module Main where
 
 import Base
-import FrontEnd.Lexer               (lex)
-import FrontEnd.Parser              (parse)
-import FrontEnd.Typing              (typing)
-import MiddleEnd.KNormal            (kNormalize)
-import MiddleEnd.Alpha              (alpha)
-import MiddleEnd.Optimise           (optimise)
-import MiddleEnd.Closure            (closureConvert)
-import MiddleEnd.LambdaLifting      (lambdaLift)
+import FrontEnd.Lexer                   (lex)
+import FrontEnd.Parser                  (parse)
+import FrontEnd.Typing                  (typing)
+import MiddleEnd.KNormal                (kNormalize)
+import MiddleEnd.Alpha                  (alpha)
+import MiddleEnd.Optimise               (optimise)
+import MiddleEnd.Closure                (closureConvert)
+import MiddleEnd.LambdaLifting          (lambdaLift)
 import MiddleEnd.LLVM.FrontEnd.Prog
 import MiddleEnd.LLVM.MiddleEnd
-import BackEnd.FirstArch.Virtual    (virtualCode)
-import BackEnd.FirstArch.RegAlloc   (regAlloc)
-import BackEnd.FirstArch.Simm       (simm)
-import BackEnd.FirstArch.Emit       (emit)
+import MiddleEnd.LLVM.BackEnd.Expr
+import BackEnd.FirstArch.Virtual        (virtualCode)
+import BackEnd.FirstArch.RegAlloc       (regAlloc)
+import BackEnd.FirstArch.Simm           (simm)
+import BackEnd.FirstArch.Emit           (emit)
 
-import           Prelude hiding        (lex, log, mod)
-import           System.IO             (stdout, withFile, IOMode(..))
+import           Prelude hiding         (lex, log, mod)
+import           System.IO              (stdout, withFile, IOMode(..))
 import           Data.FileEmbed
-import qualified Data.ByteString.Char8 as BC
-import           Control.Lens          (use)
+import qualified Data.ByteString.Char8  as BC
+import           Control.Lens           (use)
 import           Control.Lens.Operators
 import           Options.Applicative
-import           System.FilePath.Posix ((-<.>))
+import           System.FilePath.Posix  ((-<.>))
 
 -------------------------------------------------------------------------------
 -- main
@@ -68,7 +69,7 @@ toLLVM s f = do
         -- >>= \ast -> log (show ast) >> return ast
         >>= optimiseLLVM
   case m of
-    Right _mod -> return ()
+    Right mod -> writeFile "result.hs" $ show $ test mod
     Left e -> error $ f ++ ": " ++ show e
 
 compile :: S -> FilePath -> IO ()

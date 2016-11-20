@@ -23,7 +23,6 @@ import           Control.Monad (when, forM_)
 import           System.IO (Handle, hPutStrLn)
 import           Text.Printf
 import           Control.Monad.Trans.State.Lazy
-import           Control.Monad.Trans.Class (lift)
 
 import           Data.FileEmbed
 import qualified Data.ByteString.Char8 as BC

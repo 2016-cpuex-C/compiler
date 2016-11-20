@@ -13,7 +13,6 @@ import MiddleEnd.LLVM.FrontEnd.Base
 import qualified Data.Map as M
 import           Data.Word
 import           Control.Lens
-import           Control.Monad.Trans.Class (lift)
 
 import           LLVM.General.AST hiding (Type)
 import qualified LLVM.General.AST.IntegerPredicate as IP

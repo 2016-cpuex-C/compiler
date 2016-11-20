@@ -14,7 +14,6 @@ import           Data.Map (Map)
 import qualified Data.Map as M
 
 import           Control.Monad.Trans.State
-import           Control.Monad.Trans.Class (lift)
 import           Control.Lens
 
 import           LLVM.General.AST hiding (Type, type')
@@ -37,7 +36,7 @@ type LLVM = StateT LLVMState Caml
 data LLVMState
   = LLVMState {
     _module' :: Module
-  , _globals :: Map Id Type
+  , _globals' :: Map Id Type
   }
 makeLenses ''LLVMState
 
@@ -53,7 +52,7 @@ emptyModule label = defaultModule { moduleName = label }
 
 addDefn :: (Id,Type) -> Definition -> LLVM ()
 addDefn (x,t) d = do
-  globals %= M.insert x t
+  globals' %= M.insert x t
   defs <- moduleDefinitions <$> use module'
   module' %=  \s -> s { moduleDefinitions = defs ++ [d] }
 
@@ -84,7 +83,7 @@ defGlobalArray (label, ~t@(TArray size te)) =
   }
 
 lookUpGlobal :: Id -> LLVM (Maybe Type)
-lookUpGlobal x = uses globals $ M.lookup x
+lookUpGlobal x = uses globals' $ M.lookup x
 
 -------------------------------------------------------------------------------
 -- Names
