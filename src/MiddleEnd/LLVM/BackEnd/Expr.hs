@@ -3,12 +3,11 @@
 {-# LANGUAGE RecordWildCards #-}
 
 module MiddleEnd.LLVM.BackEnd.Expr where
-{- [BasicBlock] -> -}
+-- 作りかけ --
 
 import Prelude hiding (div, EQ)
 
 import Base
---import MiddleEnd.Closure
 import MiddleEnd.LLVM.FrontEnd.Base
 
 import qualified Data.Map (Map)
@@ -27,8 +26,6 @@ import qualified LLVM.General.AST.FloatingPointPredicate as FP
 
 import Control.Monad (forM, forM_, when)
 import Data.Maybe    (catMaybes, mapMaybe)
-
---まずは効率度外視でいってみよう
 
 data LProg = LProg [LFunDef] LInst
            deriving (Show,Eq)
