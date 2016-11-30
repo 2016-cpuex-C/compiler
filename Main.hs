@@ -78,6 +78,7 @@ minrtExtTyEnv = M.fromList
   , ("read_float"   , TFun [TUnit          ] TFloat )
   , ("print_int"    , TFun [TInt           ] TUnit  )
   , ("print_char"   , TFun [TInt           ] TUnit  )
+  , ("print_byte"   , TFun [TInt           ] TUnit  )
   , ("int_of_float" , TFun [TFloat         ] TInt   )
   , ("float_of_int" , TFun [TInt           ] TFloat )
   ]
