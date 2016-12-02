@@ -14,18 +14,15 @@ import LLVM.General.PassManager
 
 optimiseLLVM :: AST.Module -> Caml AST.Module
 optimiseLLVM ast = liftIO $ do
-  void $ return ()
-  m <- withContext $ \ctx -> do
-    print ()
+  m <- withContext $ \ctx ->
     runExceptT $ withModuleFromAST ctx ast $ \m -> do
-      print ()
       writeFile "opt.ll" =<< moduleLLVMAssembly m
       runExceptT (verify m) >>= \case
         Left e -> error $ "LLVM.MiddleEnd.optimise: verify: " ++ e
-        Right _ ->
+        Right _ -> do
           withPassManager passes $ \pm -> do
             void $ runPassManager pm m
-            writeFile "opt.ll" =<< moduleLLVMAssembly m
+            writeFile "result.ll" =<< moduleLLVMAssembly m
             moduleAST m
   case m of
     Left e -> error $ "LLVM.MiddleEnd.optimise: " ++ e

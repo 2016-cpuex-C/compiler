@@ -1,20 +1,8 @@
 resolver: lts-6.1
-
-packages:
-- '.'
-# Dependency packages to be pulled from upstream that are not in the resolver
-# (e.g., acme-missiles-0.3)
 extra-deps:
-- BitSyntax-0.3.2.1
 - llvm-general-3.5.1.2
 - llvm-general-pure-3.5.1.0
-
-# Override default flag values for local packages and extra-deps
+- BitSyntax-0.3.2.1
 flags:
-    llvm-general:
-        shared-llvm: true
-
-
-# Extra package databases containing global packages
-extra-package-dbs: []
-
+  llvm-general:
+    shared-llvm: true

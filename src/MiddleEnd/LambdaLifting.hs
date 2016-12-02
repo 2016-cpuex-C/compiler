@@ -8,7 +8,7 @@ import Prelude hiding (log)
 
 import           Base
 import           MiddleEnd.KNormal       hiding (fv)
-import           MiddleEnd.Alpha                (alpha)
+{-import           MiddleEnd.Alpha                (alpha)-}
 import           MiddleEnd.Elim                 (elim)
 
 import           Data.Map                       (Map)
@@ -104,23 +104,22 @@ f env e = case e of
                    "found in function " ++ x
         let (fvs1,fvs2) = splitAt (maxArgs - length ys) fvs
             ts = map (`unsafeLookup` env) fvs1
-            fundef' = liftFun fundef fvs1 ts
-            insertOrigin = KLetRec fundef{kbody=KApp (liftName x) (fvs1++ys)}
+            insertOrigin = KLetRec fundef{kbody = KApp (liftName x) (fvs1++ys)}
             envE2' = M.insert (liftName x) (liftTy t ts) envE2
-            -- e.g. fundef: f = fun y -> x + y のとき
-            --    fundef': _f = fun x y -> x + y
-            --    origin : f  = fun y -> _f x y
         if null fvs2 then do
           lift.log $ x ++ " is directly callable"
           directlyCallable %= S.insert x
         else lift.log $
           "there are so many free variables in " ++ x ++
-          " that can't lift all of them: " ++ show (length fvs2) ++
-          " variables remains unlifted"
+          " that can't lift it: " ++ show (length fvs2) ++
+          " variables remains"
         liftedMap %= M.insert x fvs1
-        e1' <- f envE1  e1
-        e2' <- f envE2' e2
-        return $ KLetRec fundef'{kbody=insertOrigin e1'} $ insertOrigin e2'
+        e1' <- insertOrigin <$> f envE1  e1
+        e2' <- insertOrigin <$> f envE2' e2
+        return $ KLetRec (liftFun fundef fvs1 ts e1') e2'
+            -- e.g. fundef : f = fun y -> x + y のとき
+            --    lifted : _f = fun x y -> x + y
+            --    origin : f  = fun y -> _f x y
 
   KApp x ys -> do
     lifted <- use liftedMap
@@ -130,11 +129,11 @@ f env e = case e of
 
   _ -> return e
 
-liftFun :: KFunDef -> [Id] -> [Type] -> KFunDef
-liftFun (KFunDef (x,t) yts _) fvs ts =
+liftFun :: KFunDef -> [Id] -> [Type] -> KExpr -> KFunDef
+liftFun (KFunDef (x,t) yts _) fvs ts e =
   let t' = liftTy t ts
       yts' = zip fvs ts ++ yts
-  in  KFunDef (liftName x,t') yts' undefined
+  in  KFunDef (liftName x,t') yts' e
 
 -- "_"で始まる名前は無いのでこれでOK(see FrontEnd.Lexer)
 liftName :: Id -> Id

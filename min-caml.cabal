@@ -8,7 +8,7 @@ cabal-version:       >=1.10
 
 library
   hs-source-dirs:      src
-  ghc-options:         -O3
+  ghc-options:         -O3 -Wall
   build-depends:       base
                      , mtl
                      , lens
@@ -50,6 +50,10 @@ library
                      , BackEnd.FirstArch.RegAlloc
                      , BackEnd.FirstArch.Simm
                      , BackEnd.FirstArch.Emit
+                     , BackEnd.Second.Asm
+                     , BackEnd.Second.FromLProg
+                     , BackEnd.Second.Virtual
+                     , BackEnd.Second.RegAlloc
   build-tools:         happy, alex
   default-language:    Haskell2010
 

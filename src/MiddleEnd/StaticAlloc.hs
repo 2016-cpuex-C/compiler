@@ -31,7 +31,7 @@ f mname env e = case e of
 
   KLetRec (KFunDef (x,t) yts e1) e2 -> KLetRec (KFunDef (x,t) yts e1) <$> f mname env e2
     -- recursiveだとまずいので関数内は走査しない.
-    -- TODO recursiveでなければ同じ所にallocしてよさげ(相互再帰は無いのでチェックは楽)
+    -- TODO recursiveでなければ同じ所にallocしてよさげ
 
   KLet (x,TInt) (KInt i) e2 -> KLet (x,TInt) (KInt i) <$> f mname (M.insert x i env) e2
     -- ConstFoldが進むに連れてenvが充実するのでKIntに制限して良い

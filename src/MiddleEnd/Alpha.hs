@@ -8,7 +8,7 @@ import MiddleEnd.KNormal
 import           Data.Map (Map)
 import qualified Data.Map as M
 import           Data.Maybe (fromMaybe)
-import           Control.Lens
+{-import           Control.Lens-}
 
 alpha :: KExpr -> Caml KExpr
 alpha = g M.empty
