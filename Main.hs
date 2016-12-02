@@ -20,6 +20,8 @@ import BackEnd.FirstArch.Virtual        (virtualCode)
 import BackEnd.FirstArch.RegAlloc       (regAlloc)
 import BackEnd.FirstArch.Simm           (simm)
 import BackEnd.FirstArch.Emit           (emit)
+import BackEnd.Second.FromLProg         (toAProg)
+import BackEnd.Second.Virtual           ()
 
 import           Prelude hiding         (lex, log, mod)
 import           System.IO              (stdout, withFile, IOMode(..))
@@ -66,11 +68,13 @@ toLLVM s f = do
         --               return e
         --               }
         >>= llvm
-        -- >>= \ast -> log (show ast) >> return ast
         >>= optimiseLLVM
+        {->>= \ast -> log (show ast) >> return ast-}
+        >>= return . toLProg
+        >>= toAProg
   case m of
-    Right mod -> writeFile "result.hs" $ show $ test mod
-    Left e -> error $ f ++ ": " ++ show e
+    Right x -> writeFile "result.hs" $ show $ x
+    Left err -> error $ f ++ ": " ++ show err
 
 compile :: S -> FilePath -> IO ()
 compile s f = do

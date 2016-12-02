@@ -26,7 +26,7 @@ typing e = do
     extTyEnv <~ join (uses extTyEnv (mapM derefType))
     derefExpr e
   case m of
-    Right e  -> return e
+    Right e' -> return e'
     Left Top -> throw $ Failure "top level does not have type unit"
     Left err -> throw $ Failure $ show err
 
@@ -54,9 +54,9 @@ writeType (TV _ ref) t = liftIO $ writeIORef ref (Just t)
 
 derefType :: Type -> CamlT Type
 derefType = \case
-  TFun t1s t2 -> TFun <$> mapM derefType t1s <*> derefType t2
-  TTuple ts -> TTuple <$> mapM derefType ts
-  TPtr t -> TPtr <$> derefType t
+  TFun t1s t2 -> TFun   <$> mapM derefType t1s <*> derefType t2
+  TTuple ts   -> TTuple <$> mapM derefType ts
+  TPtr t      -> TPtr   <$> derefType t
   TVar tv -> readType tv >>= \case
     Nothing -> do
       lift.log $ "uninstantiated type variable detected; assuming int@."

@@ -65,6 +65,12 @@ type Caml = StateT S (ExceptT Error IO)
 data Error = Failure String
            deriving Show
 
+data Predicate = EQ | NE | LE | GE | LT | GT
+               deriving (Show,Eq)
+
+data Named a = Id := a | Do a
+    deriving (Show,Eq)
+
 -------------------------------------------------------------------------------
 -- Functions
 -------------------------------------------------------------------------------
@@ -185,6 +191,9 @@ catch = catchError
 
 throw :: MonadError e m => e -> m a
 throw = throwError
+
+lookupRev :: Eq a => a -> [(b,a)] -> Maybe b
+lookupRev i = let f (p,q) = (q,p) in lookup i . map f
 
 unsafeLookup :: Id -> Map Id b -> b
 unsafeLookup key dic = fromMaybe (error $ "Base: unsafeLookup: "++key) $ M.lookup key dic

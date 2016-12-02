@@ -5,7 +5,7 @@
 module MiddleEnd.LLVM.FrontEnd.Base where
 
 import Prelude hiding (mod)
-import Base
+import Base    hiding (Named(..))
 
 import Data.Word ()
 import Data.List
@@ -13,8 +13,8 @@ import Data.Function
 import           Data.Map (Map)
 import qualified Data.Map as M
 
-import           Control.Monad.Trans.State
 import           Control.Lens
+import           Control.Monad.Trans.State
 
 import           LLVM.General.AST hiding (Type, type')
 import qualified LLVM.General.AST as AST
@@ -91,11 +91,11 @@ lookUpGlobal x = uses globals' $ M.lookup x
 
 type Names = M.Map String Int
 
-uniqueName :: String -> Names -> (String, Names)
-uniqueName nm ns =
-  case M.lookup nm ns of
-    Nothing -> (nm,  M.insert nm 1 ns)
-    Just ix'-> (nm ++ show ix', M.insert nm (ix'+1) ns)
+{-uniqueName :: String -> Names -> (String, Names)-}
+{-uniqueName nm ns =-}
+  {-case M.lookup nm ns of-}
+    {-Nothing -> (nm,  M.insert nm 1 ns)-}
+    {-Just ix'-> (nm ++ show ix', M.insert nm (ix'+1) ns)-}
 
 -------------------------------------------------------------------------------
 -- Codegen State
@@ -119,22 +119,22 @@ term  = lens _term  $ \s x -> s { _term  = x }
 
 data CodegenState
   = CodegenState {
-    _currentBlock :: Name                     -- Name of the active block to append to
+    _currentBlock :: Name                   -- Name of the active block to append to
   , _blocks       :: M.Map Name BlockState  -- Blocks for function
-  , _blockCount   :: Int                      -- Count of basic blocks
-  , _names        :: Names                    -- Name Supply
-  , _typeEnv      :: TyEnv                    -- type environment
+  , _blockCount   :: Int                    -- Count of basic blocks
+  , _names        :: Names                  -- Name Supply
+  , _typeEnv      :: TyEnv                  -- type environment
   } deriving Show
 -- lenses
 currentBlock :: Lens' CodegenState Name
 blocks       :: Lens' CodegenState (M.Map Name BlockState)
 blockCount   :: Lens' CodegenState Int
-names        :: Lens' CodegenState Names
+{-names        :: Lens' CodegenState Names-}
 typeEnv      :: Lens' CodegenState TyEnv
 currentBlock = lens _currentBlock $ \s x -> s { _currentBlock = x }
 blocks       = lens _blocks       $ \s x -> s { _blocks       = x }
 blockCount   = lens _blockCount   $ \s x -> s { _blockCount   = x }
-names        = lens _names        $ \s x -> s { _names        = x }
+{-names        = lens _names        $ \s x -> s { _names        = x }-}
 typeEnv      = lens _typeEnv      $ \s x -> s { _typeEnv      = x }
 
 type Codegen = StateT CodegenState LLVM
@@ -183,7 +183,7 @@ current :: Codegen BlockState
 current = M.lookup <$> use currentBlock <*> use blocks >>= \case
     Just x -> return x
     Nothing -> do
-      c <- use currentBlock -- 普通ここには来ないので
+      c <- use currentBlock -- 普通ここには来ないので再計算してもいいかな
       error $ "No such block: " ++ show c
 
 terminator :: Terminator -> Codegen ()
@@ -200,14 +200,20 @@ entry = use currentBlock
 
 addBlock :: String -> Codegen Name
 addBlock bname = do
-  ix' <- use blockCount
-  nms <- use names
-  let new = emptyBlock ix'
-      (qname, supply) = uniqueName bname nms
-  blocks %= M.insert (Name qname) new
+  ix'   <- use blockCount
+  qname <- Name <$> (lift.lift) (genId bname)
+  blocks %= M.insert qname (emptyBlock ix')
   blockCount += 1
-  names .= supply
-  return (Name qname)
+  return qname
+
+  {-ix' <- use blockCount-}
+  {-nms <- use names-}
+  {-let new = emptyBlock ix'-}
+      {-(qname, supply) = uniqueName bname nms-}
+  {-blocks %= M.insert (Name qname) new-}
+  {-blockCount += 1-}
+  {-names .= supply-}
+  {-return (Name qname)-}
 
 setBlock :: Name -> Codegen ()
 setBlock bname = currentBlock .= bname
@@ -219,7 +225,6 @@ modifyBlock :: BlockState -> Codegen ()
 modifyBlock new = do
   active <- use currentBlock
   blocks %= M.insert active new
-
 
 -------------------------------------------------------------------------------
 -- Low Level Conversion
@@ -272,13 +277,13 @@ ty = \case
     TBool      -> AST.IntegerType 1
     TInt       -> AST.IntegerType 32
     TFloat     -> AST.FloatingPointType 32 IEEE
-    TFun ts t  -> AST.FunctionType (ty t) (map ty (notUnit ts)) False
+    TFun ts t  -> AST.FunctionType (ty t) (map ty (rmUnit ts)) False
     TTuple ts  -> AST.StructureType False (map ty ts)
     TPtr t     -> AST.PointerType (ty t) (Addr.AddrSpace 0)
     TArray n t -> AST.ArrayType (fromIntegral n) (ty t)
     TVar _     -> error "LLVM.Virtual.ty"
   where
-    notUnit = filter (/=TUnit)
+    rmUnit = filter (/=TUnit)
 
 -----------------
 -- Instruction --
@@ -356,12 +361,6 @@ globalArrayPtr :: (Id,Type) -> [(Id,(Type))] -> Instruction
 globalArrayPtr ~(arr,t@(TArray _ _)) ix' = GetElementPtr False garr i  []
   where garr = globalRef (arr,t)
         i  = (map localRef ix') ++ [opeI 0]
-
-
-
--------------------------------------------------------------------------------
--- TODO
--------------------------------------------------------------------------------
 
 -------------------------------------------------------------------------------
 -- convert arguments

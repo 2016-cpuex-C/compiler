@@ -6,7 +6,7 @@ module MiddleEnd.LLVM.FrontEnd.Expr where
 
 import Prelude hiding (div, EQ)
 
-import Base
+import Base hiding (Named(..))
 import MiddleEnd.Closure
 import MiddleEnd.LLVM.FrontEnd.Base
 
@@ -28,8 +28,6 @@ exprToBlocks tyenv e = createBlocks <$> execCodegen m
       typeEnv %= insertList tyenv
       addBlock entryBlockName >>= setBlock
       convertExpr e
-
-data Pred = EQ | LE
 
 convertExpr :: CExpr -> Codegen ()
 convertExpr e = case e of
@@ -82,11 +80,11 @@ convertExpr e = case e of
         TUnit -> terminator $ ret Nothing
         _ ->     terminator $ ret $ Just $ localRef (r,t)
 
-convertIf :: Pred -> Id -> Id -> CExpr -> CExpr -> Codegen ()
+convertIf :: Predicate -> Id -> Id -> CExpr -> CExpr -> Codegen ()
 convertIf p x y e1 e2 = do
     cond  <- lift.lift $ genId "cond"
-    thenB <- addBlock "then" -- then branch
-    elseB <- addBlock "else" -- else branch
+    thenB <- addBlock "then"
+    elseB <- addBlock "else"
     t <- typeOf x
     bindCond p t cond x y
     terminator $ cbr (cond, TBool) thenB elseB
@@ -139,7 +137,7 @@ bind (x,tx) e = typeEnv %= M.insert x tx >> case e of
       t <- typeOf y
       let elemt = case t of TPtr te -> te
                             TArray _ te -> te
-                            _ -> error . show $ (t,y,z,w)
+                            _ -> error $ show (t,y,z,w)
       addr <- lift.lift $ genId "addr_"
       lift (lookUpGlobal y) >>= \case
         Nothing -> do
@@ -214,11 +212,11 @@ bind (x,tx) e = typeEnv %= M.insert x tx >> case e of
   where
     errorE = error $ "LLVM.Virtual.bind: " ++ show (x,tx,e)
 
-bindIf :: (Id,Type) -> Pred -> Id -> Id -> CExpr -> CExpr -> Codegen ()
+bindIf :: (Id,Type) -> Predicate -> Id -> Id -> CExpr -> CExpr -> Codegen ()
 bindIf (x,tx) p y z e1 e2 = do
-    thenB <- addBlock "then" -- then block
-    elseB <- addBlock "else" -- else block
-    contB <- addBlock "cont" -- continue block
+    thenB <- addBlock "then"
+    elseB <- addBlock "else"
+    contB <- addBlock "cont"
 
     cond  <- lift.lift $ genId "cond"
     thenX <- lift.lift $ genId $ x ++ "_then"
@@ -252,13 +250,14 @@ bindTuple xts y = do
     forM_ (zip xts [0..]) $ \((x,_),i) ->
       assignInst (Just x) $ ExtractValue src [i] []
 
-bindCond :: Pred -> Type -> Id -> Id -> Id -> Codegen ()
+bindCond :: Predicate -> Type -> Id -> Id -> Id -> Codegen ()
 bindCond p t c x y =
     let inst = case (p,t) of
           (EQ, TFloat) -> fcmp FP.OEQ (x,t) (y,t)
           (LE, TFloat) -> fcmp FP.OLE (x,t) (y,t)
           (EQ, _)      -> icmp IP.EQ  (x,t) (y,t)
           (LE, _)      -> icmp IP.SLE (x,t) (y,t)
+          _ -> error "bindCond"
     in  assignInst (Just c) inst
 
 assignInst :: Maybe Id -> Instruction -> Codegen ()
@@ -276,7 +275,4 @@ assignInst mx inst = do
 zipWith4M_ :: Monad m => (a -> b -> c -> d -> m e) -> [a] -> [b] -> [c] -> [d] -> m ()
 zipWith4M_ f as bs cs ds = mapM_ f' (zip4 as bs cs ds)
   where f' (a,b,c,d) = f a b c d
-
-
-
 

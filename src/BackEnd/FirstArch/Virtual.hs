@@ -166,8 +166,8 @@ g env = \case
     y <- genId "t"
     let ts = [fromJust (M.lookup x env) | x <- xs]
     (offset,store) <-
-        let addf x   offset store = seq' (AStDF x y (C offset), store)
-            addi x _ offset store = seq' (ASt   x y (C offset), store)
+        let addf x   offset k = seq' (AStDF x y (C offset), k)
+            addi x _ offset k = seq' (ASt   x y (C offset), k)
         in expandM (zip xs ts) (0,AsmAns (AMov y)) addf addi
     return $ AsmLet (y,TTuple ts) (AMov regHp)
               (AsmLet (regHp,TInt) (AAdd regHp (C $ align offset)) store)
@@ -224,12 +224,4 @@ g env = \case
         e -> error $ "Virtual.g CPut: " ++ x ++ ": " ++ show e
 
   CExtArray (Label _x) -> error "no ext array" --return $ AsmAns $ ASetL $ Label $ "min_caml_" ++ x
-
-----------
--- Util --
-----------
-
--- Prelude.lookupと比べて a,b が逆
-lookupRev :: (Eq a) => a -> [(b,a)] -> Maybe b
-lookupRev i = let f (p,q) = (q,p) in lookup i . map f
 
