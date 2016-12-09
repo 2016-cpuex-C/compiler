@@ -203,7 +203,7 @@ g env = \case
 
   CGet x y -> do
     heap <- use globalHeap
-    case M.lookup x heap of
+    case M.lookup (toGlobalId x) heap of
       Just (addr, _, TArray _ TFloat) -> return $ AsmAns (ALdDF y (C addr))
       Just (addr, _, _)               -> return $ AsmAns (ALd   y (C addr))
       Nothing -> case M.lookup x env of
@@ -214,7 +214,7 @@ g env = \case
 
   CPut x y z -> do
     heap <- use globalHeap
-    case M.lookup x heap of
+    case M.lookup (toGlobalId x) heap of
       Just (addr, _, TArray _ TFloat) -> return $ AsmAns (AStDF z y (C addr))
       Just (addr, _, _)               -> return $ AsmAns (ASt   z y (C addr))
       Nothing -> case M.lookup x env of

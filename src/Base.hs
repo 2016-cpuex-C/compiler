@@ -57,19 +57,20 @@ data S = S { _idCount       :: Int             -- for Id module
                                                -- (address,size,type)
            , _startGP       :: Integer         -- sum of global array size
            , _logfile       :: Handle          -- file to log to
+           , _instCount    :: Int
            }
-           deriving Show
+           deriving (Show,Eq)
 makeLenses ''S
 
 type Caml = StateT S (ExceptT Error IO)
 data Error = Failure String
-           deriving Show
+           deriving (Show,Eq,Ord)
 
 data Predicate = EQ | NE | LE | GE | LT | GT
-               deriving (Show,Eq)
+               deriving (Show,Eq,Ord)
 
 data Named a = Id := a | Do a
-    deriving (Show,Eq)
+    deriving (Show,Eq,Ord)
 
 -------------------------------------------------------------------------------
 -- Functions
@@ -129,6 +130,7 @@ initialState = S { _idCount       = 0
                  , _startGP       = 10000 -- !! stackの最大値を超えないように
                  , _optimiseLimit = 100
                  , _logfile       = stdout
+                 , _instCount     = 0
                  }
 maxArgs :: Int
 maxArgs = 25
@@ -195,9 +197,12 @@ throw = throwError
 lookupRev :: Eq a => a -> [(b,a)] -> Maybe b
 lookupRev i = let f (p,q) = (q,p) in lookup i . map f
 
-unsafeLookup :: Id -> Map Id b -> b
-unsafeLookup key dic = fromMaybe (error $ "Base: unsafeLookup: "++key) $ M.lookup key dic
+unsafeLookup :: (Show a, Ord a) => a -> Map a b -> b
+unsafeLookup key dic = fromMaybe (error $ "Base: unsafeLookup: "++ show key) $ M.lookup key dic
 
 insertList :: Ord key => [(key,a)] -> Map key a -> Map key a
 insertList xts = M.union (M.fromList xts)
+
+toGlobalId :: Id -> Id
+toGlobalId = ("G"++)
 

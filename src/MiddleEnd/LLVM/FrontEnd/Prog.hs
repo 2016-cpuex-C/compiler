@@ -15,8 +15,8 @@ import           LLVM.General.AST hiding (Type)
 -- main
 -------------------------------------------------------------------------------
 
-llvm :: CProg -> Caml Module
-llvm = runLLVM initialLLVMState . llvmProg
+toLLVM :: CProg -> Caml Module
+toLLVM = runLLVM initialLLVMState . llvmProg
 
 -------------------------------------------------------------------------------
 -- Prog

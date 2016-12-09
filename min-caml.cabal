@@ -54,6 +54,10 @@ library
                      , BackEnd.Second.FromLProg
                      , BackEnd.Second.Virtual
                      , BackEnd.Second.RegAlloc
+                     , BackEnd.Second.RegAlloc.LivenessAnalysis
+                     , BackEnd.Second.RegAlloc.Dominator
+                     , BackEnd.Second.RegAlloc.Dominator.Pure
+                     , BackEnd.Second.RegAlloc.Color
   build-tools:         happy, alex
   default-language:    Haskell2010
 

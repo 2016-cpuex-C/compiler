@@ -97,8 +97,8 @@ g' oc (dest,exp) =
                     write $ printf "\tli\t%s, %d" x hi
                     write $ printf "\tsll\t%s, %s, 16" x x
                     write $ printf "\taddi\t%s, %s, %d" x x lo
-      ASetF (Label l) ->    write $ printf "\tl.sl\t%s, %s" x l
-      ASetL (Label y) ->    write $ printf "\tla\t%s, %s" x y
+      ASetF (Label l) -> write $ printf "\tl.sl\t%s, %s" x l
+      ASetL (Label y) -> write $ printf "\tla\t%s, %s" x y
 
       AMov y ->  when (x /= y) $ write $ printf "\tmove\t%s, %s" x y
       ANeg y ->  write $ printf "\tneg\t%s, %s" x y

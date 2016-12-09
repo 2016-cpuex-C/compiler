@@ -20,8 +20,12 @@ import BackEnd.FirstArch.Virtual        (virtualCode)
 import BackEnd.FirstArch.RegAlloc       (regAlloc)
 import BackEnd.FirstArch.Simm           (simm)
 import BackEnd.FirstArch.Emit           (emit)
+import BackEnd.Second.Asm
 import BackEnd.Second.FromLProg         (toAProg)
-import BackEnd.Second.Virtual           ()
+import BackEnd.Second.Virtual           (virtual)
+{-import BackEnd.Second.RegAlloc.LivenessAnalysis-}
+{-import BackEnd.Second.RegAlloc.Dominator-}
+import BackEnd.Second.RegAlloc.Color    (colorFun)
 
 import           Prelude hiding         (lex, log, mod)
 import           System.IO              (stdout, withFile, IOMode(..))
@@ -31,6 +35,9 @@ import           Control.Lens           (use)
 import           Control.Lens.Operators
 import           Options.Applicative
 import           System.FilePath.Posix  ((-<.>))
+import qualified Data.Map as M
+import qualified Data.Set as S
+import Control.Monad (forM_, unless)
 
 -------------------------------------------------------------------------------
 -- main
@@ -43,14 +50,14 @@ main = execParser (info (helper <*> parseOpt) fullDesc) >>= \opts ->
         lg = case logf opts of
           Nothing -> ($ stdout)
           Just f  -> withFile f WriteMode
-    in lg $ \h -> mapM_ (toLLVM s{_logfile=h}) (args opts)
+    in lg $ \h -> mapM_ (compile' s{_logfile=h}) (args opts)
 
 -------------------------------------------------------------------------------
 -- compile method
 -------------------------------------------------------------------------------
 
-toLLVM :: S -> FilePath -> IO ()
-toLLVM s f = do
+compile' :: S -> FilePath -> IO ()
+compile' s f = do
   input <- readFile f
   m <- flip runCaml s $ lex (libmincamlML ++ input)
         >>= parse
@@ -58,25 +65,24 @@ toLLVM s f = do
         >>= kNormalize
         >>= alpha
         >>= optimise
-        >>= \e -> use globalHeap >>= log.show >> return e
         >>= lambdaLift
         >>= closureConvert
-        -- >>= \e -> do {
-        --               use globalHeap >>= log.show;
-        --               use extTyEnv >>= log.show;
-        --               log (show e);
-        --               return e
-        --               }
-        >>= llvm
+        >>= toLLVM
         >>= optimiseLLVM
-        {->>= \ast -> log (show ast) >> return ast-}
         >>= return . toLProg
         >>= toAProg
+        >>= virtual
+        >>= \(AProg fs) -> forM_ fs (\f@(AFunDef _ _ _ blocks _) -> do
+                unless (null blocks) $ colorFun f >> return ()
+              )
   case m of
-    Right x -> writeFile "result.hs" $ show $ x
+    Right x  -> writeFile "result.hs" $ show $ x
     Left err -> error $ f ++ ": " ++ show err
 
-compile :: S -> FilePath -> IO ()
+chromaticNum :: [M.Map Int (S.Set Id)] -> Int
+chromaticNum = maximum . concatMap (map (S.size.snd) . M.toList)
+
+compile :: S -> FilePath -> IO ()-- {{{
 compile s f = do
   input <- readFile f
   withFile (f -<.> "s") WriteMode $ \h -> do
@@ -102,6 +108,7 @@ compile s f = do
     case m of
       Right _ -> return ()
       Left e -> error $ f ++ ": " ++ show e
+-- }}}
 
 -------------------------------------------------------------------------------
 -- library
@@ -114,12 +121,13 @@ libmincamlML = BC.unpack $(embedFile "src/libmincaml.ml")
 -- command line options parser
 -------------------------------------------------------------------------------
 
-data MinCamlOptions = MinCamlOptions
-                    { inline  :: Int
-                    , iter    :: Int
-                    , logf    :: Maybe String
-                    , args    :: [String]
-                    }
+data MinCamlOptions
+  = MinCamlOptions {
+    inline  :: Int
+  , iter    :: Int
+  , logf    :: Maybe String
+  , args    :: [String]
+  }
 
 parseOpt :: Parser MinCamlOptions
 parseOpt = pure MinCamlOptions

@@ -616,7 +616,6 @@ let rec read_screen_settings _ =
   viewpoint.(0) <- screen.(0) -. screenz_dir.(0);
   viewpoint.(1) <- screen.(1) -. screenz_dir.(1);
   viewpoint.(2) <- screen.(2) -. screenz_dir.(2)
-
 in
 
 (* 光源情報の読み込み *)

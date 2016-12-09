@@ -18,7 +18,7 @@ import           LLVM.General.AST hiding (Type)
 import qualified LLVM.General.AST.IntegerPredicate as IP
 import qualified LLVM.General.AST.CallingConvention as CC
 import qualified LLVM.General.AST.FloatingPointPredicate as FP
-import Control.Monad (forM, forM_, when)
+import Control.Monad (forM, forM_)
 import Data.List (zip4)
 
 exprToBlocks :: [(Id,Type)] -> CExpr -> LLVM [BasicBlock]
@@ -68,9 +68,9 @@ convertExpr e = case e of
       t <- typeOf z
       ret' e (TPtr t)
 
-    CExtArray{} -> error "Not Implemented"
-    CMakeCls{} -> error "Not Implemented"
-    CAppCls{} -> error "Not Implemented"
+    CExtArray{} -> error "ExtArray: Not Implemented"
+    CMakeCls{} -> error "MakeCls: Not Implemented"
+    CAppCls{} -> error "AppCls: Not Implemented"
 
   where
     ret' e' t = do
@@ -119,35 +119,30 @@ bind (x,tx) e = typeEnv %= M.insert x tx >> case e of
         _     -> assignInst (Just x) $ call (f,t) (zip xs ts)
 
     CGet y z -> do
-      t <- typeOf y
-      let elemt = case t of TPtr te -> te
-                            TArray _ te -> te
-                            _ -> error . show $ (t,y,z)
+      let y' = toGlobalId y
       addr <- lift.lift $ genId "addr_"
-      lift (lookUpGlobal y) >>= \case
+      lift (lookUpGlobal y') >>= \case
         Nothing -> do
+          t@TPtr{} <- typeOf y
           assignInst (Just addr) $ gep (y,t) [(z,TInt)]
-        Just t'@(TArray _ te') -> do
-          when (elemt /= te') $ error "Aieee!!!"
-          assignInst (Just addr) $ globalArrayPtr (y,t') [(z,TInt)]
+          assignInst (Just x) $ load (addr,t)
+        Just t'@(TArray _ te) -> do
+          assignInst (Just addr) $ globalArrayPtr (y',t') [(z,TInt)]
+          assignInst (Just x) $ load (addr,TPtr te)
         _ -> error "Aieeeyeah"
-      assignInst (Just x) $ load (addr,t)
 
     CPut y z w -> do
-      t <- typeOf y
-      let elemt = case t of TPtr te -> te
-                            TArray _ te -> te
-                            _ -> error $ show (t,y,z,w)
+      let y' = toGlobalId y
       addr <- lift.lift $ genId "addr_"
-      lift (lookUpGlobal y) >>= \case
+      lift (lookUpGlobal y') >>= \case
         Nothing -> do
+          t@(TPtr te) <- typeOf y
           assignInst (Just addr) $ gep (y,t) [(z,TInt)]
-        Just t'@(TArray _ te') -> do
-          when (elemt /= te') $ error "Aieee!!!"
-          assignInst (Just addr) $ globalArrayPtr (y,t') [(z,TInt)]
+          assignInst Nothing  $ store (addr,t) (w,te)
+        Just t'@(TArray _ te) -> do
+          assignInst (Just addr) $ globalArrayPtr (y',t') [(z,TInt)]
+          assignInst Nothing  $ store (addr,TPtr te) (w,te)
         _ -> error "Aieeeyeah"
-      assignInst (Just x) $ instV (addr,t) -- ad hoc
-      assignInst Nothing  $ store (addr,t) (w,elemt)
 
     CTuple ys -> do
       -- tmp1 = insertvalue null     y1 1

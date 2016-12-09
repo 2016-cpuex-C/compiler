@@ -1,4 +1,5 @@
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE TupleSections #-}
 -- LProg -> AProg
 
@@ -11,9 +12,10 @@ import BackEnd.Second.Asm
 import Control.Lens (use,uses)
 import Control.Lens.Operators
 import Control.Monad.Trans.State
-import Data.List (partition)
+import Data.List (isPrefixOf, partition)
 import Prelude hiding (log)
 import Control.Monad (forM_)
+import qualified Data.Map as M
 
 -------------------------------------------------------------------------------
 -- 大きい
@@ -30,16 +32,16 @@ toAFundef (LFunDef ~(x,TFun _ rett) yts' blks) = do
 
 toABlock :: LBlock -> Caml ABlock
 toABlock (LBlock b nlinsts lterminator) = do
-  (aterminator,s) <- flip runStateT [] $ do
+  (_,s) <- flip runStateT [] $ do
     mapM_ toNamedAInst nlinsts
     toATerminator lterminator
-  return $ ABlock b (reverse s) aterminator
+  return $ ABlock b (reverse s) --aterminator
 
 -------------------------------------------------------------------------------
 -- 中くらい
 -------------------------------------------------------------------------------
 
-type CamlV = StateT [Named AInst] Caml
+type CamlV = StateT [(InstId, Named AInst)] Caml
 
 toNamedAInst :: Named LInst -> CamlV ()
 toNamedAInst (x:=linst) = toAInst linst >>= bind x
@@ -65,28 +67,56 @@ toAInst linst = case linst of
   LICmp p y z -> idii (ACmp  p) y z
   LFCmp p y z -> ff   (AFCmp p) y z
 
-  LPhi yls      -> APhi <$> mapM (\(y,l) -> toId y <&> (,l)) yls
-  LSelect y z w -> ASelect <$> toId y <*> toII z <*> toII w
-  LCall f xs    -> ACallDir (opeLabel f) <$> mapM toId ys <*> mapM toId zs
-                   where (ys,zs) = splitOpes xs
+  LPhi yls      -> return $ APhi $ map (\(y,l) -> (l,opePhiVal y)) yls
+  LSelect y z w -> ASelect (typeOfLOpe z) <$> toId y <*> toII z <*> toII w
+  LCall f xs
+    | "init_array." `isPrefixOf` fname -> do
+          let isfloat = not (null zs)
+              init_array
+                | isfloat   = Label "min_caml_float_array_init"
+                | otherwise = Label "min_caml_array_init"
+          [arr,e] <- mapM toId xs
+          Just (addr,size,_) <- lift $ uses globalHeap (M.lookup arr)
+          addrv <- setInt addr
+          sizev <- setInt size
+          if isfloat
+            then return $ ACallDir rett init_array [addrv,sizev] [e]
+            else return $ ACallDir rett init_array [addrv,sizev,e] []
+
+    | otherwise -> ACallDir rett l <$> mapM toId ys <*> mapM toId zs
+
+    where
+      l@(Label fname) = opeLabel f
+      (ys,zs) = splitOpes xs
+      rett = case typeOfLOpe f of
+         TFun _ t -> t
+         TPtr (TFun _ t) -> t
+         _ -> error $ show (f,xs)
 
   LLoad x
-    | isVar x   -> ALd <$> toId x <*> return (C 0)
-    | isPtr x   -> ALdi <$> opePtrM x
+    | isVar x && tx == TPtr TFloat -> AFLd  <$> toId x <*> return (C 0)
+    | isVar x && otherwise         -> ALd   <$> toId x <*> return (C 0)
+    | isPtr x && tx == TPtr TFloat -> AFLdi <$> opePtrM x
+    | isPtr x && otherwise         -> ALdi  <$> opePtrM x
     | otherwise -> error' "toAInst: " linst
+    where tx = typeOfLOpe x
 
   LStore x y
-    | isVar y   -> ASt <$> toId x <*> toId y <*> return (C 0)
-    | isPtr y   -> ASti <$> toId x <*> opePtrM y
+    | isVar y && tx == TFloat -> AFSt  <$> toId x <*> toId y <*> return (C 0)
+    | isVar y && otherwise    -> ASt   <$> toId x <*> toId y <*> return (C 0)
+    | isPtr y && tx == TFloat -> AFSti <$> toId x <*> opePtrM y
+    | isPtr y && otherwise    -> ASti  <$> toId x <*> opePtrM y
     | otherwise -> error' "toAInst: " linst
+    where tx = typeOfLOpe x
 
-  -- not alocated
-  LGetPtr p [ix] -> APtr <$> toId p <*> toII ix
-  -- alocated
-  LGetPtr p [ix1,ix2]
-    | opeInt ix2 == 0 -> APtrG <$> toId p <*> toII ix1
-  -- error
-  LGetPtr{} -> error' "toAInst: " linst
+  LGetPtr p ixs@(~(ix1:_)) -> do
+    heap <- lift $ use globalHeap
+    pv <- toId p
+    case M.lookup pv heap of
+      Nothing -> APtr <$> toId p <*> mapM toII ixs
+      Just _
+        | opeInt ix1 == 0 -> APtrG <$> (Label <$> toId p) <*> mapM toII (tail ixs)
+        | otherwise -> error' "toAInst: " linst
 
   LSetTupleElem tpl i val ->
     let ~(TTuple ts) = typeOfLOpe tpl in
@@ -115,24 +145,28 @@ toAInst linst = case linst of
     ff :: (Id -> Id -> AInst) -> LOperand -> LOperand -> CamlV AInst
     ff o x y = o <$> toId x <*> toId y
 
-
-toATerminator :: LTerminator -> CamlV ATerminator
-toATerminator lterm = case lterm of
-  LRet x          -> ARet <$> mapM toII x
+toATerminator :: LTerminator -> CamlV ()--(Indexed (Named AInst))
+toATerminator lterm = do' =<< case lterm of
+  LRet Nothing    -> return $ ARet TUnit Nothing
+  LRet (Just x)   -> ARet (typeOfLOpe x) <$> (Just <$> toII x)
   LCBr x lt lf    -> ACBr  <$> toId x <*> return lt <*> return lf
   LBr  l          -> return $ ABr l
   LSwitch x l cls -> ASwitch <$> toId x <*> return l <*>
-                     mapM (\(c,l') -> constToII c <&> (,l')) cls
+                     mapM (\(LInt i,l') -> return (i,l')) cls
 
 -----------------------
 -- Support Functions --
 -----------------------
 
 bind :: Id -> AInst -> CamlV ()
-bind x ainst = modify ((x:=ainst):)
+bind x ainst = do
+  n <- lift $ instCount <+= 1
+  modify ((n, x:=ainst):)
 
 do' :: AInst -> CamlV ()
-do' ainst    = modify (Do ainst:)
+do' ainst    = do
+  n <- lift $ instCount <+= 1
+  modify ((n,Do ainst):)
 
 -------------------------------------------------------------------------------
 -- 小さい
@@ -179,13 +213,13 @@ constToII = \case
 
 setInt :: Integer -> CamlV Id
 setInt n = do
-  x <- lift $ genId "x"
+  x <- lift $ genId "tmpInt"
   bind x $ ASet n
   return x
 
 setFloat :: Float -> CamlV Id
 setFloat f = do
-  x <- lift $ genId "x"
+  x <- lift $ genId "tmpFloat"
   fdata <- lift $ use constFloats
   l <- case lookupRev f fdata of
     Nothing -> do
@@ -196,17 +230,16 @@ setFloat f = do
   bind x $ ASetF l
   return x
 
--- これだけ抽象度が低くて嫌だなあ
 setConstTuple :: [LConst] -> CamlV Id
 setConstTuple cs = do
   x <- lift $ genId "const_tuple"
-  bind x $ AMove regHp
+  bind x AGetHP
   forM_ (zip cs [0..]) $ \(c',i) -> do
     cv <- constToId c'
     if hasFloatType (LConstOpe c')
-      then do' $ AFSt cv regHp (C i)
-      else do' $ ASt  cv regHp (C i)
-  bind regHp $ AAdd regHp (C (fromIntegral $ length cs))
+      then do' $ AFStHP cv (C i)
+      else do' $ AStHP  cv (C i)
+  do' $ AIncHP (C (fromIntegral $ length cs))
   return x
 
 -------------------------------------------------------------------------------
@@ -223,8 +256,7 @@ splitOpes :: [LOperand] -> ([LOperand], [LOperand])
 splitOpes = partition (not . hasFloatType)
 
 hasFloatType :: LOperand -> Bool
-hasFloatType (LVar (_,TFloat)) = True
-hasFloatType x = isFloat x
+hasFloatType x = typeOfLOpe x == TFloat
 
 ----------
 -- Bool --
@@ -267,6 +299,9 @@ opeII = \case
 opeId :: LOperand -> Id
 opeId ~(LVar (x,_)) = x
 
+opeIdTy :: LOperand -> Type
+opeIdTy ~(LVar (_,t)) = t
+
 opeConst :: LOperand -> LConst
 opeConst ~(LConstOpe c) = c
 
@@ -279,10 +314,17 @@ opeInt ~(LConstOpe (LInt n)) = n
 opeFloat :: LOperand -> Float
 opeFloat ~(LConstOpe (LFloat f)) = f
 
+opePhiVal :: LOperand -> PhiVal
+opePhiVal x
+  | isInt x   = PVInt (opeInt x)
+  | isVar x   = PVVar (opeId  x, opeIdTy x)
+  | isFloat x = PVFloat (opeFloat x)
+  | otherwise = error' "opePhiVal" x
+
 opePtrM :: LOperand -> CamlV Integer
 opePtrM ~(LConstOpe (LGetPtrC c cs)) = do
   let ~(LGlobal (arr,_)) = c
-      ~[LInt n, LInt 0] = cs
+      ~[LInt 0, LInt n] = cs
   (addr,_,_) <- lift $ uses globalHeap (unsafeLookup arr)
   return $ addr+n
 

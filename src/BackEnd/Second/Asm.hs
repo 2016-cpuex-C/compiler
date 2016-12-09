@@ -6,13 +6,15 @@ import Base
 
 import           Data.Vector (Vector, (!))
 import qualified Data.Vector as V
+import           Data.Map (Map)
+import qualified Data.Map as M
 
------------------
--- Asm.t = Asm --
------------------
+-------------------------------------------------------------------------------
+-- Types
+-------------------------------------------------------------------------------
 
 data AProg = AProg [AFunDef]
-            deriving (Show,Eq)
+            deriving (Show,Eq,Ord)
 
 data AFunDef = AFunDef {
     aname  :: Label
@@ -20,19 +22,20 @@ data AFunDef = AFunDef {
   , afargs :: [Id]
   , abody  :: [ABlock]
   , aret   :: Type
-  } deriving (Show,Eq)
+  } deriving (Show,Eq,Ord)
 
-data ABlock = ABlock Id [Named AInst] ATerminator
-            deriving (Show,Eq)
+data ABlock
+  = ABlock {
+    ablockName     :: Label
+  , ablockContents :: [(InstId, Named AInst)]
+  } deriving (Show,Eq,Ord)
 
-data AInst
+data AInst -- 多相的な命令には型を加える
   = ANop
   | ASet   Integer
   | ASetF  Label
   | ASetL  Label -- closure
-
   | AMove  Id
-  | ANeg   Id -- いらなそう
   | AAdd   Id IdOrImm
   | ASub   Id IdOrImm
   | AMul   Id IdOrImm
@@ -43,50 +46,92 @@ data AInst
   | ASt    Id Id IdOrImm
   | ALdi   Integer
   | ASti   Id Integer
-
   | AFMov  Id
-  | AFNeg  Id
   | AFAdd  Id Id
   | AFSub  Id Id
   | AFMul  Id Id
   | AFDiv  Id Id
   | AFLd   Id IdOrImm
   | AFSt   Id Id IdOrImm
-
+  | AFLdi  Integer
+  | AFSti  Id Integer
   -- boolean
   | AAnd    Id IdOrImm
   | AOr     Id IdOrImm
   | AXor    Id IdOrImm
-  | ASelect Id IdOrImm IdOrImm
-
   -- compare
   | ACmp  Predicate Id IdOrImm
   | AFCmp Predicate Id Id
-
   -- call
-  | ACallDir Label [Id] [Id]
+  | ACallDir Type Label [Id] [Id]
+
+  -- 分岐
+  | ASelect Type Id IdOrImm IdOrImm
 
   -- 仮想命令
-  | APtr  Id IdOrImm
-  | APtrG Id IdOrImm
-  | APhi [(Id,Label)]
-  deriving (Show, Eq)
+  | APtr  Id    [IdOrImm]
+  | APtrG Label [IdOrImm]
+  | APhi  [(Label,PhiVal)]
+  | APhiV [(Label,[(Id,PhiVal)])] -- ベクトル化
+    -- heap
+  | AGetHP
+  | AStHP  Id IdOrImm
+  | AFStHP Id IdOrImm
+  | AIncHP IdOrImm
 
-data ATerminator
-  = ARet    (Maybe IdOrImm)
-  | ACBr    Id Label Label
-  | ACJ     Predicate Id IdOrImm Label
-  | AFCJ    Predicate Id IdOrImm Label
+  -- terminator
+  | ARet    Type (Maybe IdOrImm)
   | ABr     Label
-  | ASwitch Id Label [(IdOrImm,Label)]
-  deriving (Show, Eq)
+  | ACBr    Id Label Label
+  | ASwitch Id Label [(Integer,Label)]
+  deriving (Show,Eq,Ord)
 
 data IdOrImm
   = V Id
   | C Integer
-  deriving (Show, Eq)
+  deriving (Show,Eq,Ord)
 
 type Register = String
+type InstId = Int
+
+data PhiVal = PVInt   Integer
+            | PVVar   (Id,Type)
+            | PVFloat Float
+            deriving (Show,Eq,Ord)
+
+-------------------------------------------------------------------------------
+-- Util
+-------------------------------------------------------------------------------
+
+-- contentsが空だと死ぬよ♡
+nextBlockNames :: ABlock -> [Label]
+nextBlockNames (ABlock _ contents) = f $ toinst $ last contents
+  where
+    toinst (_,Do i) = i
+    toinst (_,_:=i) = i
+    f = \case
+      ARet{} -> []
+      ABr l  -> [l]
+      ACBr _ l1 l2 -> [l1,l2]
+      ASwitch _ l ils -> l : map snd ils
+      i -> error $ "nextBlockNames: non-terminator: " ++ show i
+
+firstInst :: ABlock -> (Int, Named AInst)
+firstInst = head . ablockContents
+
+isEmptyFun :: AFunDef -> Bool
+isEmptyFun (AFunDef _ _ _ [] _) = True
+isEmptyFun _ = False
+
+entryBlock :: AFunDef -> ABlock
+entryBlock (AFunDef _ _ _ blocks _) = head blocks
+
+entryBlockName :: AFunDef -> Label
+entryBlockName = ablockName . entryBlock
+
+blockMap :: AFunDef -> Map Label ABlock
+blockMap (AFunDef _ _ _ blocks _) =
+  M.fromList [ (l,b) | b@(ABlock l _) <- blocks]
 
 -------------------------------------------------------------------------------
 -- Register

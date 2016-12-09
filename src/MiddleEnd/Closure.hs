@@ -122,10 +122,10 @@ fv e_ = do
       CArrayInit _ x -> return $ S.singleton x
 
       CGet x y
-        | x `elem` ign -> return $ S.singleton y
+        | toGlobalId x `elem` ign -> return $ S.singleton y
         | otherwise    -> return $ S.fromList [x,y]
       CPut x y z
-        | x `elem` ign -> return $ S.fromList [y,z]
+        | toGlobalId x `elem` ign -> return $ S.fromList [y,z]
         | otherwise    -> return $ S.fromList [x,y,z]
 
 

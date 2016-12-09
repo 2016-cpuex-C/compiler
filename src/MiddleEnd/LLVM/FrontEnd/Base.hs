@@ -238,7 +238,9 @@ localRef :: (Id,Type) -> Operand
 localRef (x,t) = LocalReference (ty t) (Name x)
 
 globalRef :: (Id,Type) -> Operand
-globalRef (x,t) = ConstantOperand $ C.GlobalReference (ty t) (Name x)
+globalRef (x,t) 
+  | head x == 'G' = ConstantOperand $ C.GlobalReference (ty t) (Name x)
+  | otherwise = error $ "globalRef" ++ show (x,t)
 
 opeB :: Bool -> Operand
 opeB = ConstantOperand . constB
@@ -360,7 +362,7 @@ ret mx = Ret mx []
 globalArrayPtr :: (Id,Type) -> [(Id,(Type))] -> Instruction
 globalArrayPtr ~(arr,t@(TArray _ _)) ix' = GetElementPtr False garr i  []
   where garr = globalRef (arr,t)
-        i  = (map localRef ix') ++ [opeI 0]
+        i  = opeI 0 : (map localRef ix')
 
 -------------------------------------------------------------------------------
 -- convert arguments

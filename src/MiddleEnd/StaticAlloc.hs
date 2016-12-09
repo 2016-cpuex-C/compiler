@@ -42,12 +42,13 @@ f mname env e = case e of
 
   KArray y z -> case (mname, M.lookup y env) of
     (Just (name,TPtr elemty), Just size) -> do
+      let gname = toGlobalId name
       addr <- use startGP
       startGP += size
-      globalHeap %= M.insert name (addr,size,TArray size elemty)
+      globalHeap %= M.insert gname (addr,size,TArray size elemty)
       log $ "Global: " ++ name ++ " is allocated at " ++
             show addr ++ " ~ " ++ show (addr+size-1)
-      return $ KArrayInit (Label name) z
+      return $ KArrayInit (Label gname) z
     _ -> return e
 
   KVar x -> do

@@ -30,7 +30,8 @@ lambdaLift e = evalStateT (f M.empty e) (LL S.empty M.empty) >>= elim
 
 fv :: KExpr -> CamlLL (Set Id)
 fv e_ = do
-  stArrays <- lift $ uses globalHeap (map fst . M.toList) --何度も呼び出すのもったいない
+  --TODO 何度も呼び出すのもったいない
+  stArrays <- lift $ uses globalHeap (map fst . M.toList)
   fv' stArrays e_
   where
     fv' :: [Id] -> KExpr -> CamlLL (Set Id)
@@ -73,10 +74,10 @@ fv e_ = do
           (False, Nothing ) -> x:ys                -- (recursive function)
           (False, Just fvs) -> liftName x:ys++fvs  -- xはLambdaLiftingしたものの引数いっぱい
       KGet x y
-        | x `elem` ign -> return $ S.singleton y
+        | toGlobalId x `elem` ign -> return $ S.singleton y
         | otherwise    -> return $ S.fromList [x,y]
       KPut x y z
-        | x `elem` ign -> return $ S.fromList [y,z]
+        | toGlobalId x `elem` ign -> return $ S.fromList [y,z]
         | otherwise    -> return $ S.fromList [x,y,z]
 
 f :: Map Id Type -> KExpr -> CamlLL KExpr

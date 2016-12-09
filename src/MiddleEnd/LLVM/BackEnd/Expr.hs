@@ -31,7 +31,7 @@ data LFunDef = LFunDef {
   , lbody :: [LBlock]
   } deriving (Show,Eq)
 
-data LBlock = LBlock Id [Named LInst] LTerminator
+data LBlock = LBlock Label [Named LInst] LTerminator
             deriving (Show,Eq)
 
 data LInst
@@ -110,7 +110,7 @@ globalFunction _ = Nothing
 
 basicBlock :: AST.BasicBlock -> LBlock
 basicBlock ~(AST.BasicBlock n ninsts (AST.Do term)) =
-  LBlock (fromName n) (map (named inst) ninsts) (terminator term)
+  LBlock (nameToLabel n) (map (named inst) ninsts) (terminator term)
 
 -------------------------------------------------------------------------------
 -- 中
@@ -156,7 +156,7 @@ inst e | not (null (metadata e)) = error $ "inst: " ++ show e
 terminator :: Terminator -> LTerminator
 terminator = \case
   Ret x   [] -> LRet (op <$> x)
-  Br dest [] -> LBr (Label (fromName dest))
+  Br dest [] -> LBr (nameToLabel dest)
   CondBr x dest_t dest_f [] ->
     LCBr (op x) (nameToLabel dest_t) (nameToLabel dest_f)
   Switch x dn cds [] ->
@@ -212,8 +212,13 @@ typeOfLConst = \case
   LGlobal(_,t) -> t
   LConstTuple cs -> TTuple $ map typeOfLConst cs
   LUndef t -> t
-  c -> error $ "typeOfConst: " ++ show c
-
+  LGetPtrC c cs -> f (typeOfLConst c) cs
+    where
+      f t [] = TPtr t
+      f t (_:is) = case t of
+        TPtr t'     -> f t' is
+        TArray _ t' -> f t' is
+        _ -> error "223"
 
 const' :: C.Constant -> LConst
 const' c = case c of
