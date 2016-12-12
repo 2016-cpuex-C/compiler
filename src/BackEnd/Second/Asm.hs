@@ -8,6 +8,8 @@ import           Data.Vector (Vector, (!))
 import qualified Data.Vector as V
 import           Data.Map (Map)
 import qualified Data.Map as M
+import           Data.Graph
+import           Data.Maybe (fromJust)
 
 -------------------------------------------------------------------------------
 -- Types
@@ -42,7 +44,7 @@ data AInst -- 多相的な命令には型を加える
   | ADiv   Id IdOrImm
   | ASll   Id IdOrImm
   | ASrl   Id IdOrImm
-  | ALd    Id IdOrImm
+  | ALd    Id IdOrImm -- Idの方は使わなさそう
   | ASt    Id Id IdOrImm
   | ALdi   Integer
   | ASti   Id Integer
@@ -62,6 +64,9 @@ data AInst -- 多相的な命令には型を加える
   -- compare
   | ACmp  Predicate Id IdOrImm
   | AFCmp Predicate Id Id
+  -- swap
+  | ASwap Id Id
+  | AFSwap Id Id
   -- call
   | ACallDir Type Label [Id] [Id]
 
@@ -96,8 +101,10 @@ type InstId = Int
 
 data PhiVal = PVInt   Integer
             | PVVar   (Id,Type)
-            | PVFloat Float
+            | PVFloat Label
             deriving (Show,Eq,Ord)
+
+type CFG = (Graph, Vertex -> (ABlock, Label, [Label]), Label -> Maybe Vertex)
 
 -------------------------------------------------------------------------------
 -- Util
@@ -132,6 +139,23 @@ entryBlockName = ablockName . entryBlock
 blockMap :: AFunDef -> Map Label ABlock
 blockMap (AFunDef _ _ _ blocks _) =
   M.fromList [ (l,b) | b@(ABlock l _) <- blocks]
+
+mkCFG :: AFunDef -> CFG
+mkCFG (AFunDef _ _ _ blocks _) = graphFromEdges $ map f blocks
+  where f b@(ABlock l _) = (b, l, nextBlockNames b)
+
+nextBlockNames' :: CFG -> Label -> [Label]
+nextBlockNames' (_,f1,f2) l =
+  let Just v = f2 l
+      (_,_,ls) = f1 v
+  in  ls
+
+nextBlocks' :: CFG -> Label -> [ABlock]
+nextBlocks' cfg@(_,f1,f2) l =
+  let ls = nextBlockNames' cfg l
+      is = map (fromJust.f2) ls
+      fst' (x,_,_) = x
+  in  map (fst'.f1) is
 
 -------------------------------------------------------------------------------
 -- Register

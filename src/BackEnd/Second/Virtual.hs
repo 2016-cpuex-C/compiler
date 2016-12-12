@@ -7,27 +7,32 @@ module BackEnd.Second.Virtual where
 import Base
 import BackEnd.Second.Asm
 
-import Data.Map (Map)
-import qualified  Data.Map as M
-import Data.List (foldl')
+import           Data.Map (Map)
+import qualified Data.Map as M
+import           Data.List (foldl')
+import           Control.Lens (use)
+import           Control.Monad ((>=>), forM)
 
 virtual :: AProg -> Caml AProg
 virtual (AProg fundefs) = AProg <$> mapM virtualFunDef fundefs
 
 virtualFunDef :: AFunDef -> Caml AFunDef
 virtualFunDef fundef@(AFunDef _ _ _ blocks _) = do
-  blocks' <- mapM mergePhis blocks
+  blocks' <- forM blocks $
+                mergePhis
+                >=> calcPtr
+                >=> return
   return fundef{ abody=blocks' }
 
 -------------------------------------------------------------------------------
--- 命令毎
+--
 -------------------------------------------------------------------------------
 
--- phiのベクトル化
+-- phiのベクトル化 生存解析のために必要
 -- しないと生存解析が辛い
 mergePhis :: ABlock -> Caml ABlock
 mergePhis block@(ABlock _ insts) =
-  return block{ ablockContents = f M.empty insts }
+  return block { ablockContents = f M.empty insts }
     where
       f :: Map Label [(Id,PhiVal)]
         -> [(Int, Named AInst)] -> [(Int, Named AInst)]
@@ -45,9 +50,19 @@ mergePhis block@(ABlock _ insts) =
           | otherwise  -> (id'-1, Do (APhiV (M.toList acc))) : is'
 
 -- Ptr, PtrGをAddとかにつぶす
-{-calcPtr :: ABlock -> Caml ABlock-}
-{-calcPtr block@(ABlock _ insts) =-}
-  {-return block{ ablockContents = f M.empty insts }-}
-    {-where-}
-      {-f = undefined-}
+calcPtr :: ABlock -> Caml ABlock
+calcPtr block@(ABlock _ insts) = do
+  heap <- use globalHeap
+  return block{ ablockContents = concatMap (f heap) insts }
+    where
+      f heap i@(n,ninst)= case ninst of
+        x := APtr p [ix] ->
+          [(n, x := AAdd p ix)]
+        x := APtrG (Label p) [C j] ->
+          let Just (addr,_,_) = M.lookup p heap
+          in  [(n, x := ASet (addr+j))]
+        x := APtrG (Label p) [V y] ->
+          let Just (addr,_,_) = M.lookup p heap
+          in  [(n, x := AAdd y (C addr))]
+        _ -> [i]
 

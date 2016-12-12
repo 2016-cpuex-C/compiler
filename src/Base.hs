@@ -206,3 +206,6 @@ insertList xts = M.union (M.fromList xts)
 toGlobalId :: Id -> Id
 toGlobalId = ("G"++)
 
+both :: (a -> b) -> (a,a) -> (b,b)
+both f = bimap f f
+

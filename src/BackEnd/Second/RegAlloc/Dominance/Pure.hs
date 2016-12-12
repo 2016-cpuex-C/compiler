@@ -3,7 +3,7 @@
 {-# LANGUAGE TemplateHaskell #-}
 -- http://sigma425.hatenablog.com/entry/2015/12/25/224053 の移植
 
-module BackEnd.Second.RegAlloc.Dominator.Pure where
+module BackEnd.Second.RegAlloc.Dominance.Pure where
 
 import           Control.Lens (makeLenses, use, uses, Lens')
 import           Control.Lens.Operators

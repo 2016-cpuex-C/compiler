@@ -3,7 +3,11 @@
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TemplateHaskell #-}
 
-module BackEnd.Second.RegAlloc.LivenessAnalysis where
+module BackEnd.Second.RegAlloc.LivenessAnalysis (
+    livenessAnalysis
+  , useInst
+  , defInst
+  )where
 
 import Base
 import BackEnd.Second.Asm
@@ -17,16 +21,15 @@ import           Control.Monad.Trans.State
 import           Control.Lens (use,uses,view,makeLenses)
 import           Control.Lens.Operators
 import           Control.Monad (unless)
-import           Data.Bifunctor (bimap)
 
 -------------------------------------------------------------------------------
 -- Types
 -------------------------------------------------------------------------------
 
 data LA = LA {
-    _succMap      :: Map InstId [InstId]
-  , _instMap      :: Map InstId (Label, Named AInst)
-  , _liveOut      :: Map InstId (Set Id, Set Id)
+    _succMap :: Map InstId [InstId]
+  , _instMap :: Map InstId (Label, Named AInst)
+  , _liveOut :: Map InstId (Set Id, Set Id)
   } deriving Show
 makeLenses ''LA
 type CamlLA = StateT LA Caml
@@ -61,7 +64,7 @@ next n succs = unions2 <$> mapM f succs
   where f m = union2 <$> use' n m <*> (difference2 <$> out' m <*> def' m)
 
 -------------------------------------------------------------------------------
--- Get Successor Map
+-- Successor Map
 -------------------------------------------------------------------------------
 
 getSuccMap :: AFunDef -> Map InstId [InstId]
@@ -87,7 +90,7 @@ getSuccMap f
 
 
 -------------------------------------------------------------------------------
--- Get Instruction Map
+-- Instruction Map
 -------------------------------------------------------------------------------
 
 -- 名前が良くない
@@ -119,8 +122,8 @@ use' n m = uses instMap (snd.unsafeLookup m) >>= useInst'
     useInst' (Do (APhiV ps)) = do
       b <- blockOfInst n
       let Just xvs = lookup b ps
-      return (S.fromList [ y | (_, PVVar (y, t))      <- xvs, t /= TFloat ]
-             ,S.fromList [ y | (_, PVVar (y, TFloat)) <- xvs])
+      return (S.fromList [ y | (_, PVVar (y, t)) <- xvs, t /= TFloat ]
+             ,S.fromList [ y | (_, PVVar (y, t)) <- xvs, t == TFloat ])
     useInst' inst = return $ useInst inst
 
 defInst :: Named AInst -> (Set Id, Set Id)
@@ -192,6 +195,9 @@ useInst = \case
       ASt   x y z'     -> (x : y : h z', [])
       AFSt  x y z'     -> (y : h z', [x])
 
+      ASwap  x y       -> ([x,y],[])
+      AFSwap x y       -> ([],[x,y])
+
       APtr x y'        -> (x : concatMap h y', [])
       APtrG _ y'       -> (concatMap h y', [])
 
@@ -210,7 +216,7 @@ useInst = \case
 
       APhi{} -> error "Impossible: APhi should have already been removed"
       APhiV ps -> ([ y | (_, PVVar (y, t)) <- concatMap snd ps, t/=TFloat ]
-                  ,[ y | (_, PVVar (y, TFloat)) <- concatMap snd ps])
+                  ,[ y | (_, PVVar (y, t)) <- concatMap snd ps, t==TFloat ])
       --}}}
 
 -------------------------------------------------------------------------------
@@ -218,10 +224,10 @@ useInst = \case
 -------------------------------------------------------------------------------
 
 fromList2 :: ([Id], [Id]) -> (Set Id, Set Id)
-fromList2 = bimap S.fromList S.fromList
+fromList2 = both S.fromList
 
 unions2 :: [(Set Id, Set Id)] -> (Set Id, Set Id)
-unions2 = bimap S.unions S.unions . unzip
+unions2 = both S.unions . unzip
 
 union2 :: (Set Id, Set Id) -> (Set Id, Set Id) -> (Set Id, Set Id)
 union2 = lift2 S.union

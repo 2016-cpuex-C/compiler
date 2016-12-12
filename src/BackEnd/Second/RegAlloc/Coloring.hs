@@ -3,15 +3,17 @@
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TemplateHaskell #-}
 
-module BackEnd.Second.RegAlloc.Color where
+module BackEnd.Second.RegAlloc.Coloring (
+    Color
+  , colorFun
+  ) where
 
 import Prelude hiding (log)
 
 import Base
 import BackEnd.Second.Asm
-import BackEnd.Second.RegAlloc.Dominator        (dominatorTree)
-import BackEnd.Second.RegAlloc.LivenessAnalysis (livenessAnalysis
-                                                ,useInst, defInst)
+import BackEnd.Second.RegAlloc.Dominance
+import BackEnd.Second.RegAlloc.LivenessAnalysis
 
 import           Data.Map (Map)
 import qualified Data.Map as M
@@ -31,13 +33,13 @@ import           Data.Tree
 type Color = Int
 
 data CS = CS {
-    _liveOut :: Map InstId (Set Id, Set Id) -- read only
-  , _colMap  :: Map Id Color                -- write only
-  , _colMapF :: Map Id Color                -- write only
-  , _used    :: Map Id Color
-  , _usedF   :: Map Id Color
-  , _free    :: [Color]
-  , _freeF   :: [Color]
+    _liveOut   :: Map InstId (Set Id, Set Id) -- read only
+  , _colorMap  :: Map Id Color                -- write only
+  , _colorMapF :: Map Id Color                -- write only
+  , _used      :: Map Id Color
+  , _usedF     :: Map Id Color
+  , _free      :: [Color]
+  , _freeF     :: [Color]
   }
 makeLenses ''CS
 
@@ -51,25 +53,23 @@ colorFun :: AFunDef -> Caml (Map Id Color, Map Id Color)
 colorFun f@(AFunDef l xs ys _ _) = do
   liveout <- livenessAnalysis f
   s <- execStateT (colorTree (dominatorTree f)) CS {
-            _liveOut = liveout
-
-          , _colMap  = M.fromList $ zip xs [0..]
-          , _colMapF = M.fromList $ zip ys [0..]
-
-          , _used    = M.fromList $ zip xs [0..]
-          , _usedF   = M.fromList $ zip ys [0..]
-          , _free    = [length xs..length allRegs-1]
-          , _freeF   = [length ys..length allFRegs-1]
+            _liveOut   = liveout
+          , _colorMap  = M.fromList $ zip xs [0..]
+          , _colorMapF = M.fromList $ zip ys [0..]
+          , _used      = M.fromList $ zip xs [0..]
+          , _usedF     = M.fromList $ zip ys [0..]
+          , _free      = [length xs..length allRegs-1]
+          , _freeF     = [length ys..length allFRegs-1]
           }
   let (x,y) = bimap (max (length xs)) (max (length ys)) $ chromaticNums liveout
-      (z,w) = (maxColorN (s^.colMap), maxColorN (s^.colMapF))
+      (z,w) = (maxColorN (s^.colorMap), maxColorN (s^.colorMapF))
   when (x/=z && (x,z)/=(0,1) || y/=w && (y,w)/=(0,1)) $ do
     -- 返り値を捨てる関数があると(0,1)にはなりうるが気にしないで良い
     log $ show l
     log $ show (x,y)
     log $ show (z,w)
     error "RegAlloc: Congratulations! You've found a new bug!"
-  return (s^.colMap, s^.colMapF)
+  return (s^.colorMap, s^.colorMapF)
 
 maxColorN :: Map Id Color -> Color
 maxColorN m = maximum' [ n | (_,n) <- M.toList m ]
@@ -82,23 +82,31 @@ chromaticNums m = join bimap f $ unzip $ map snd (M.toList m)
   where f = maximum . map S.size
 
 -------------------------------------------------------------------------------
--- Block
+-- Main
 -------------------------------------------------------------------------------
 
 colorTree :: Tree ABlock -> CamlCS ()
 colorTree (Node (ABlock l insts) bs) = do
   logDebug $ "block: " ++ show l
+  mapM_ colorInst insts
+  forM_ bs $ localState . colorTree
 
-  forM_ insts $ \(n, inst) -> do
+colorInst :: (InstId, Named AInst) -> CamlCS ()
+colorInst (n,inst) = do
     (liveout, liveoutF) <- uses liveOut (unsafeLookup n)
     (used',   usedF'  ) <- (,) <$> use used <*> use usedF
     (free',   freeF'  ) <- (,) <$> use free <*> use freeF
 
     let (ds,dsF) = defInst inst
-        live  x = x `S.member` liveout
+        live  x = x `S.member`    liveout
         dead  x = x `S.notMember` liveout
-        liveF x = x `S.member` liveoutF
+        liveF x = x `S.member`    liveoutF
         deadF x = x `S.notMember` liveoutF
+
+    mapM_ remove  $ filter dead  (M.keys used' )
+    mapM_ removeF $ filter deadF (M.keys usedF')
+    mapM_ assign  $ S.filter live  ds
+    mapM_ assignF $ S.filter liveF dsF
 
     logDebug.init.unlines $ [ "  instid: " ++ show n
                             , "      us:   " ++ show (useInst inst)
@@ -107,13 +115,6 @@ colorTree (Node (ABlock l insts) bs) = do
                             , "      free: " ++ show (free',freeF')
                             , "      lout: " ++ show (liveout,liveoutF) ]
 
-    mapM_ remove  $ filter dead  $ M.keys used'
-    mapM_ removeF $ filter deadF $ M.keys usedF'
-
-    mapM_ assign  $ S.filter live  ds
-    mapM_ assignF $ S.filter liveF dsF
-
-  forM_ bs $ localState . colorTree
 
 -- usedとfreeの状態を復元する
 localState :: CamlCS a -> CamlCS a
@@ -135,17 +136,17 @@ localState m = do
 
 assign :: Id -> CamlCS ()
 assign x = use free >>= \case
-  c:_ -> do free %= tail
-            used %= M.insert x c
-            colMap %= M.insert x c
+  c:_ -> do free     %= tail
+            used     %= M.insert x c
+            colorMap %= M.insert x c
             logDebug $ "    assign: " ++ show (x,c)
   [] -> error "color tarinai"
 
 assignF :: Id -> CamlCS ()
 assignF x = use freeF >>= \case
-  c:_ -> do freeF   %= tail
-            usedF   %= M.insert x c
-            colMapF %= M.insert x c
+  c:_ -> do freeF     %= tail
+            usedF     %= M.insert x c
+            colorMapF %= M.insert x c
             logDebug $ "    assign: " ++ show (x,c)
   [] -> error "color tarinai"
 

@@ -5,11 +5,11 @@
 
 -- AFunDefからCFGを作ればあとはPureに任せれば良い
 
-module BackEnd.Second.RegAlloc.Dominator where
+module BackEnd.Second.RegAlloc.Dominance where
 
 import Base
 import BackEnd.Second.Asm
-import qualified  BackEnd.Second.RegAlloc.Dominator.Pure as P
+import qualified BackEnd.Second.RegAlloc.Dominance.Pure as P
 import           Prelude hiding (log,succ)
 import           Data.Tree
 

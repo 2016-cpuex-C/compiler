@@ -25,7 +25,8 @@ import BackEnd.Second.FromLProg         (toAProg)
 import BackEnd.Second.Virtual           (virtual)
 {-import BackEnd.Second.RegAlloc.LivenessAnalysis-}
 {-import BackEnd.Second.RegAlloc.Dominator-}
-import BackEnd.Second.RegAlloc.Color    (colorFun)
+import BackEnd.Second.RegAlloc.Coloring (colorFun)
+import BackEnd.Second.RegAlloc.SSA_Deconstruction
 
 import           Prelude hiding         (lex, log, mod)
 import           System.IO              (stdout, withFile, IOMode(..))
@@ -37,7 +38,7 @@ import           Options.Applicative
 import           System.FilePath.Posix  ((-<.>))
 import qualified Data.Map as M
 import qualified Data.Set as S
-import Control.Monad (forM_, unless)
+import Control.Monad (forM, forM_, unless)
 
 -------------------------------------------------------------------------------
 -- main
@@ -72,12 +73,14 @@ compile' s f = do
         >>= return . toLProg
         >>= toAProg
         >>= virtual
-        >>= \(AProg fs) -> forM_ fs (\f@(AFunDef _ _ _ blocks _) -> do
-                unless (null blocks) $ colorFun f >> return ()
+        >>= \(AProg fs) -> forM (filter (not.isEmptyFun) fs) (\f -> do
+                colorFun f
               )
   case m of
     Right x  -> writeFile "result.hs" $ show $ x
     Left err -> error $ f ++ ": " ++ show err
+
+
 
 chromaticNum :: [M.Map Int (S.Set Id)] -> Int
 chromaticNum = maximum . concatMap (map (S.size.snd) . M.toList)

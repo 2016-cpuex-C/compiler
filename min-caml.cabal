@@ -55,9 +55,13 @@ library
                      , BackEnd.Second.Virtual
                      , BackEnd.Second.RegAlloc
                      , BackEnd.Second.RegAlloc.LivenessAnalysis
-                     , BackEnd.Second.RegAlloc.Dominator
-                     , BackEnd.Second.RegAlloc.Dominator.Pure
-                     , BackEnd.Second.RegAlloc.Color
+                     , BackEnd.Second.RegAlloc.Dominance
+                     , BackEnd.Second.RegAlloc.Dominance.Pure
+                     , BackEnd.Second.RegAlloc.Coloring
+                     , BackEnd.Second.RegAlloc.Coalescing
+                     , BackEnd.Second.RegAlloc.SSA_Deconstruction
+                     , BackEnd.Second.RegAlloc.PhiLifting
+                     , BackEnd.Second.Emit
   build-tools:         happy, alex
   default-language:    Haskell2010
 

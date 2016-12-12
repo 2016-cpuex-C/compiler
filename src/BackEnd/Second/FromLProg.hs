@@ -67,7 +67,7 @@ toAInst linst = case linst of
   LICmp p y z -> idii (ACmp  p) y z
   LFCmp p y z -> ff   (AFCmp p) y z
 
-  LPhi yls      -> return $ APhi $ map (\(y,l) -> (l,opePhiVal y)) yls
+  LPhi yls      -> APhi <$> mapM (\(y,l) -> (l,) <$> toPhiVal y) yls
   LSelect y z w -> ASelect (typeOfLOpe z) <$> toId y <*> toII z <*> toII w
   LCall f xs
     | "init_array." `isPrefixOf` fname -> do
@@ -189,6 +189,13 @@ toII x
   | isInt x   = C <$> return (opeInt x)
   | otherwise = V <$> toId x
 
+toPhiVal :: LOperand -> CamlV PhiVal
+toPhiVal x
+  | isInt   x = return $ PVInt (opeInt x)
+  | isVar   x = return $ PVVar (opeId  x, opeIdTy x)
+  | isFloat x = PVFloat <$> floatLabel (opeFloat x)
+  | otherwise = error' "toPhiVal" x
+
 constToId :: LConst -> CamlV Id
 constToId = \case
   LInt n   -> setInt n
@@ -220,15 +227,18 @@ setInt n = do
 setFloat :: Float -> CamlV Id
 setFloat f = do
   x <- lift $ genId "tmpFloat"
-  fdata <- lift $ use constFloats
-  l <- case lookupRev f fdata of
-    Nothing -> do
-      l <- Label <$> lift (genId "l")
-      lift $ constFloats .= (l,f):fdata
-      return l
-    Just l -> return l
+  l <- floatLabel f
   bind x $ ASetF l
   return x
+
+floatLabel :: Float -> CamlV Label
+floatLabel f = do
+  lift (uses constFloats (lookupRev f)) >>= \case
+    Nothing -> do
+      l <- Label <$> lift (genId "l")
+      lift $ constFloats %= ((l,f):)
+      return l
+    Just l -> return l
 
 setConstTuple :: [LConst] -> CamlV Id
 setConstTuple cs = do
@@ -313,13 +323,6 @@ opeInt ~(LConstOpe (LInt n)) = n
 
 opeFloat :: LOperand -> Float
 opeFloat ~(LConstOpe (LFloat f)) = f
-
-opePhiVal :: LOperand -> PhiVal
-opePhiVal x
-  | isInt x   = PVInt (opeInt x)
-  | isVar x   = PVVar (opeId  x, opeIdTy x)
-  | isFloat x = PVFloat (opeFloat x)
-  | otherwise = error' "opePhiVal" x
 
 opePtrM :: LOperand -> CamlV Integer
 opePtrM ~(LConstOpe (LGetPtrC c cs)) = do
