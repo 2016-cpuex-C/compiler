@@ -107,11 +107,6 @@ min_caml_fsqr: # f0 -> f0
 	mul.s	$f0, $f0, $f0
 	jr	$ra
 
-min_caml_fhalf: # f0 -> f0
-	l.sl	$f1, const_f_half
-	mul.s	$f0, $f0, $f1
-	jr	$ra
-
 ###############
 ### sin, cos ##
 ###############

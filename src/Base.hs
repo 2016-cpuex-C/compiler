@@ -4,18 +4,22 @@
 
 module Base where
 
-import                Data.IORef
-import                Control.Lens
-import                Data.Map                        (Map)
-import qualified      Data.Map as M
-import                Data.Maybe                      (fromMaybe)
-import                Control.Monad.Trans as T        (MonadTrans,lift)
-import                Control.Monad.Trans.Except
-import                Control.Monad.Trans.State.Lazy
-import qualified      Control.Monad.IO.Class as IOC
-import                Control.Monad.Except            (throwError, catchError)
-import                Control.Monad.Error.Class       (MonadError)
-import                System.IO                       (Handle, stdout, hPutStrLn)
+import           Data.IORef
+import           Control.Lens                     (makeLenses,use,uses,bimap)
+import           Control.Lens.Operators
+import           Data.Map                         (Map)
+import qualified Data.Map                         as M
+import           Data.Set                         (Set)
+import qualified Data.Set                         as S
+import           Data.Maybe                       (fromMaybe)
+import           Data.Tree
+import           Control.Monad.Trans as T         (MonadTrans,lift)
+import           Control.Monad.Trans.Except
+import           Control.Monad.Trans.State.Lazy
+import qualified Control.Monad.IO.Class           as IOC
+import           Control.Monad.Except             (throwError, catchError)
+import           Control.Monad.Error.Class        (MonadError)
+import           System.IO                        (Handle, stdout, hPutStrLn)
 
 -------------------------------------------------------------------------------
 -- Types
@@ -76,6 +80,10 @@ data Named a = Id := a | Do a
 -- Functions
 -------------------------------------------------------------------------------
 
+-- Label --
+unLabel :: Label -> String
+unLabel (Label x) = x
+
 -- Type --
 genType :: Caml Type
 genType = do
@@ -112,12 +120,31 @@ idOfType = \case
   TPtr _     -> "p"
   TVar _     -> error "idOfType: TVar"
 
+toGlobalId :: Id -> Id
+toGlobalId = ("G"++)
+
 -- env --
 globalArrayEnv :: Caml TyEnv
 globalArrayEnv = uses globalHeap $ M.map (\(_,_,t) -> t)
 
 externalEnv :: Caml TyEnv
 externalEnv = uses extTyEnv $ M.mapKeys ("min_caml_"++)
+
+-- float --
+floatLabel :: Float -> Caml Label
+floatLabel f =
+  uses constFloats (lookupRev f) >>= \case
+    Nothing -> do
+      l <- Label <$> genId "l"
+      constFloats %= ((l,f):)
+      return l
+    Just l -> return l
+
+labelFloat :: Label -> Caml Float
+labelFloat l =
+  uses constFloats (lookup l) >>= \case
+    Nothing -> error "Base: labelFloat: Not Found"
+    Just f  -> return f
 
 -- Caml initialState --
 initialState :: S
@@ -159,9 +186,9 @@ initialExtTyEnv = M.fromList
   , ("print_newline", TFun [TUnit          ] TUnit  )
   , ("int_of_float" , TFun [TFloat         ] TInt   )
   , ("float_of_int" , TFun [TInt           ] TFloat )
-  , ("create_int_array"   , TFun [TInt,TInt] (TPtr TInt))
+  , ("create_array"   , TFun [TInt,TInt] (TPtr TInt))
   , ("create_float_array" , TFun [TInt,TFloat] (TPtr TFloat))
-  , ("init_int_array"     , TFun [TInt,TInt] (TPtr TInt))
+  , ("init_array"     , TFun [TInt,TInt] (TPtr TInt))
   , ("init_float_array"   , TFun [TInt,TFloat] (TPtr TFloat))
   ]
 
@@ -194,8 +221,18 @@ catch = catchError
 throw :: MonadError e m => e -> m a
 throw = throwError
 
+errorShow :: Show a => String -> a -> b
+errorShow s x = error $ s ++ show x
+
 lookupRev :: Eq a => a -> [(b,a)] -> Maybe b
 lookupRev i = let f (p,q) = (q,p) in lookup i . map f
+
+both :: (a -> b) -> (a,a) -> (b,b)
+both f = bimap f f
+
+---------
+-- Map --
+---------
 
 unsafeLookup :: (Show a, Ord a) => a -> Map a b -> b
 unsafeLookup key dic = fromMaybe (error $ "Base: unsafeLookup: "++ show key) $ M.lookup key dic
@@ -203,9 +240,40 @@ unsafeLookup key dic = fromMaybe (error $ "Base: unsafeLookup: "++ show key) $ M
 insertList :: Ord key => [(key,a)] -> Map key a -> Map key a
 insertList xts = M.union (M.fromList xts)
 
-toGlobalId :: Id -> Id
-toGlobalId = ("G"++)
+insertAppend :: Ord a => a -> b -> Map a [b] -> Map a [b]
+insertAppend x y = M.alter f x
+  where f Nothing   = Just [y]
+        f (Just ys) = Just (y:ys)
 
-both :: (a -> b) -> (a,a) -> (b,b)
-both f = bimap f f
+flipMap :: (Ord a, Ord b) => Map a b -> Map b [a]
+flipMap = M.foldlWithKey f M.empty
+  where f m x y = insertAppend y x m
+
+mapToTree :: Ord a => a -> Map a [a] -> Tree a
+mapToTree root m = f root
+  where f n = case M.lookup n m of
+                Just es -> Node n (map f es)
+                Nothing -> Node n []
+
+---------------
+-- (Set,Set) --
+---------------
+
+toList2 :: (Set Id, Set Id) -> ([Id], [Id])
+toList2 = both S.toList
+
+fromList2 :: ([Id], [Id]) -> (Set Id, Set Id)
+fromList2 = both S.fromList
+
+unions2 :: [(Set Id, Set Id)] -> (Set Id, Set Id)
+unions2 = both S.unions . unzip
+
+union2 :: (Set Id, Set Id) -> (Set Id, Set Id) -> (Set Id, Set Id)
+union2 = both2 S.union
+
+difference2 :: (Set Id, Set Id) -> (Set Id, Set Id) -> (Set Id, Set Id)
+difference2 = both2 S.difference
+
+both2 :: (a -> b -> c) -> (a, a) -> (b, b) -> (c, c)
+both2 f (x1,x2) (y1,y2) = (f x1 y1, f x2 y2)
 

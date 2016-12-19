@@ -206,21 +206,13 @@ addBlock bname = do
   blockCount += 1
   return qname
 
-  {-ix' <- use blockCount-}
-  {-nms <- use names-}
-  {-let new = emptyBlock ix'-}
-      {-(qname, supply) = uniqueName bname nms-}
-  {-blocks %= M.insert (Name qname) new-}
-  {-blockCount += 1-}
-  {-names .= supply-}
-  {-return (Name qname)-}
-
 setBlock :: Name -> Codegen ()
 setBlock bname = currentBlock .= bname
 
 getBlock :: Codegen Name
 getBlock = use currentBlock
 
+-- modifyという名前はダメでは
 modifyBlock :: BlockState -> Codegen ()
 modifyBlock new = do
   active <- use currentBlock
@@ -291,7 +283,7 @@ ty = \case
 -- Instruction --
 -----------------
 
--- この辺は最適化が何とかしてくれる
+-- この辺は最適化が何とかしてくれる(LLVMに感謝)
 instV :: (Id,Type) -> Instruction
 instV xt = Select (opeB True) (localRef xt) (localRef xt) []
 
@@ -314,7 +306,7 @@ div x y = SDiv      False (localRef (x,TInt)) (localRef (y,TInt)) []
 
 fneg :: Id -> Instruction
 fadd,fsub,fmul,fdiv :: Id -> Id -> Instruction
-fneg x   = FSub mathFlag (opeF 0) (localRef (x,TFloat)) []
+fneg x   = FSub mathFlag (opeF 0.0) (localRef (x,TFloat)) []
 fadd x y = FAdd mathFlag (localRef (x,TFloat)) (localRef (y,TFloat)) []
 fsub x y = FSub mathFlag (localRef (x,TFloat)) (localRef (y,TFloat)) []
 fmul x y = FMul mathFlag (localRef (x,TFloat)) (localRef (y,TFloat)) []
@@ -358,7 +350,6 @@ cbr cond thenDest elseDest = CondBr (localRef cond) thenDest elseDest []
 ret :: Maybe Operand -> Terminator
 ret mx = Ret mx []
 
--- TODO こいつの型をちゃんと考えよう
 globalArrayPtr :: (Id,Type) -> [(Id,(Type))] -> Instruction
 globalArrayPtr ~(arr,t@(TArray _ _)) ix' = GetElementPtr False garr i  []
   where garr = globalRef (arr,t)

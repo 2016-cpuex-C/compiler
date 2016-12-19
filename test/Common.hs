@@ -4,18 +4,26 @@
 module Common where
 
 import Base
-import FrontEnd.Lexer              (lex)
-import FrontEnd.Parser             (parse)
-import FrontEnd.Typing             (typing)
-import MiddleEnd.KNormal           (kNormalize)
-import MiddleEnd.Alpha             (alpha)
-import MiddleEnd.Optimise          (optimise)
-import MiddleEnd.LambdaLifting     (lambdaLift)
-import MiddleEnd.Closure           (closureConvert)
-import BackEnd.FirstArch.Virtual   (virtualCode)
-import BackEnd.FirstArch.RegAlloc  (regAlloc)
-import BackEnd.FirstArch.Simm      (simm)
-import BackEnd.FirstArch.Emit      (emit)
+import FrontEnd.Lexer          (lex)
+import FrontEnd.Parser         (parse)
+import FrontEnd.Typing         (typing)
+import MiddleEnd.KNormal       (kNormalize)
+import MiddleEnd.Alpha         (alpha)
+import MiddleEnd.Optimise      (optimise)
+import MiddleEnd.LambdaLifting (lambdaLift)
+import MiddleEnd.Closure       (closureConvert)
+--import MiddleEnd.Closure       (closureConvert)
+--import BackEnd.First.Virtual   (virtualCode)
+--import BackEnd.First.RegAlloc  (regAlloc)
+--import BackEnd.First.Simm      (simm)
+--import BackEnd.First.Emit      (emit)
+
+import MiddleEnd.LLVM.FrontEnd.Prog (toLLVM)
+import MiddleEnd.LLVM.MiddleEnd     (optimiseLLVM)
+import MiddleEnd.LLVM.BackEnd       (toLProg)
+import BackEnd.Second.FromLProg     (toAProg)
+import BackEnd.Second.Virtual       (virtual)
+import BackEnd.Second.Emit          (emitProg)
 
 import Prelude              hiding (lex)
 import System.IO                   (openFile, withFile, IOMode(..))
@@ -42,10 +50,33 @@ compile ml = do
       >>= optimise
       >>= lambdaLift
       >>= closureConvert
-      >>= virtualCode
-      >>= simm
-      >>= regAlloc
-      >>= emit out
+      >>= toLLVM
+      >>= optimiseLLVM
+      >>= return . toLProg
+      >>= toAProg
+      >>= virtual
+      >>= emitProg out
+
+-- first
+--compile :: FilePath -> IO (Either Error ())-- {{{
+--compile ml = do
+--  s <- readFile ml
+--  devnull <- openFile "/dev/null" WriteMode
+--  withFile (mlToS ml) WriteMode $ \out ->
+--    (`runCaml` (initialState&logfile.~devnull
+--               )
+--    )   $ lex (libmincamlML ++ s)
+--      >>= parse
+--      >>= typing
+--      >>= kNormalize
+--      >>= alpha
+--      >>= optimise
+--      >>= lambdaLift
+--      >>= closureConvert
+--      >>= virtualCode
+--      >>= simm
+--      >>= regAlloc
+--      >>= emit out-- }}}
 
 runML :: FilePath -> IO String
 runML ml = compile ml >>= \case
@@ -66,3 +97,4 @@ mlToS ml = take (length ml - 3) ml <.> "s"
 
 libmincamlML :: String
 libmincamlML = BC.unpack $(embedFile "src/libmincaml.ml")
+

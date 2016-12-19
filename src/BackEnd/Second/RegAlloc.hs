@@ -3,7 +3,8 @@
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TemplateHaskell #-}
 
+-- LivenessAnalysis, Spilling, Coloring, Coalescing を統合する予定
+
 module BackEnd.Second.RegAlloc where
 
-import Prelude hiding (log)
 

@@ -7,13 +7,19 @@
 
 module BackEnd.Second.RegAlloc.Dominance where
 
-import Base
+import Base hiding (unsafeLookup)
 import BackEnd.Second.Asm
 import qualified BackEnd.Second.RegAlloc.Dominance.Pure as P
-import           Prelude hiding (log,succ)
-import           Data.Tree
 
--- Labelを経由したほうが速そう(ABlockの比較は時間がかかりそうなので)
+import           Prelude hiding (log,succ)
+import           Data.Map (Map)
+import qualified Data.Map as M
+import           Data.Tree
+import Data.Maybe (fromMaybe)
+
+-- Labelを経由したほうが速い(ABlockの比較は重いので)
+-- ただ, dominatorTree自身が軽いアルゴリズムなので
+-- コンパイル速度には影響なさそう
 dominatorTree :: AFunDef -> Tree ABlock
 dominatorTree f = g (P.dominatorTree r vs es)
   where
@@ -27,11 +33,14 @@ root :: AFunDef -> Label
 root = entryBlockName
 
 vertexes :: AFunDef -> [Label]
-vertexes (AFunDef _ _ _ blocks _) = map ablockName blocks
+vertexes (AFunDef _ _ _ blocks _) = map aBlockName blocks
 
 edges :: AFunDef -> [(Label,Label)]
 edges (AFunDef _ _ _ blocks _) = concatMap edge blocks
 
 edge :: ABlock -> [(Label,Label)]
 edge b@(ABlock u _) = map (u,) (nextBlockNames b)
+
+unsafeLookup :: (Show a, Ord a) => a -> Map a b -> b
+unsafeLookup key dic = fromMaybe (error $ "Dominance: unsafeLookup: "++ show key) $ M.lookup key dic
 

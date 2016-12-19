@@ -18,7 +18,7 @@ import           LLVM.General.AST hiding (Type)
 import qualified LLVM.General.AST.IntegerPredicate as IP
 import qualified LLVM.General.AST.CallingConvention as CC
 import qualified LLVM.General.AST.FloatingPointPredicate as FP
-import Control.Monad (forM, forM_)
+import Control.Monad (forM_, replicateM)
 import Data.List (zip4)
 
 exprToBlocks :: [(Id,Type)] -> CExpr -> LLVM [BasicBlock]
@@ -149,7 +149,7 @@ bind (x,tx) e = typeEnv %= M.insert x tx >> case e of
       -- tmp2 = insertvalue tmp1     y2 2
       --      :
       -- x    = insertvalue tmp(n-1) yn n
-      tmps <- forM (init ys) $ const $ lift.lift $ genId "tmp"
+      tmps <- replicateM (length ys - 1) $ lift.lift $ genId "tmp"
       let TTuple ts = tx
           nullOpe = opeNullTuple tx
           tmpOpes = map localRef $ zip tmps (repeat tx)
@@ -165,7 +165,7 @@ bind (x,tx) e = typeEnv %= M.insert x tx >> case e of
     CArray y z -> do
       let TPtr t = tx
       create_array <- case t of
-        TInt -> return "min_caml_create_int_array"
+        TInt -> return "min_caml_create_array"
         TFloat -> return "min_caml_create_float_array"
         _ -> do
           -- 型の合うcreate_array関数を作る
@@ -261,7 +261,6 @@ assignInst mx inst = do
                            Nothing -> Do inst
     blk <- current
     modifyBlock (blk & stack%~(++[ninst]))
-
 
 -------------------------------------------------------------------------------
 -- Util

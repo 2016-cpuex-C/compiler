@@ -6,49 +6,51 @@
 module BackEnd.Second.FromLProg where
 
 import Base
-import MiddleEnd.LLVM.BackEnd.Expr
+import MiddleEnd.LLVM.BackEnd
 import BackEnd.Second.Asm
 
-import Control.Lens (use,uses)
-import Control.Lens.Operators
-import Control.Monad.Trans.State
-import Data.List (isPrefixOf, partition)
-import Prelude hiding (log)
-import Control.Monad (forM_)
+import           Prelude             hiding (log)
+import           Control.Lens               (use,uses)
+import           Control.Lens.Operators
+import           Control.Monad.Trans.State
+import           Data.List                  (isPrefixOf, partition)
+import           Control.Monad              (forM_)
 import qualified Data.Map as M
 
 -------------------------------------------------------------------------------
 -- 大きい
 -------------------------------------------------------------------------------
 
+-- LLVMを通すために作った create_array.*** などの関数は
+-- 不要なので filter (not.isEmptyFun) で除去する
 toAProg :: LProg -> Caml AProg
-toAProg = fmap AProg . mapM toAFundef
+toAProg = fmap (AProg . filter (not.isEmptyFun)) . mapM toAFundef
 
 toAFundef :: LFunDef -> Caml AFunDef
-toAFundef (LFunDef ~(x,TFun _ rett) yts' blks) = do
+toAFundef (LFunDef ~(x,TFun _ rett) yts' blocks) = do
   let (yts,zts) = splitIdTys yts'
-  blks' <- mapM toABlock blks
-  return $ AFunDef x (map fst yts) (map fst zts) blks' rett
+  blocks' <- mapM toABlock blocks
+  return $ AFunDef x (map fst yts) (map fst zts) blocks' rett
 
 toABlock :: LBlock -> Caml ABlock
 toABlock (LBlock b nlinsts lterminator) = do
   (_,s) <- flip runStateT [] $ do
-    mapM_ toNamedAInst nlinsts
+    mapM_ toStatements nlinsts
     toATerminator lterminator
-  return $ ABlock b (reverse s) --aterminator
+  return $ ABlock b (reverse s)
 
 -------------------------------------------------------------------------------
 -- 中くらい
 -------------------------------------------------------------------------------
 
-type CamlV = StateT [(InstId, Named AInst)] Caml
+type CamlV = StateT [Statement] Caml
 
-toNamedAInst :: Named LInst -> CamlV ()
-toNamedAInst (x:=linst) = toAInst linst >>= bind x
-toNamedAInst (Do linst) = toAInst linst >>= do'
+toStatements :: Named LInst -> CamlV ()
+toStatements (x:=linst) = toAExpr linst >>= bind x
+toStatements (Do linst) = toAExpr linst >>= do'
 
-toAInst :: LInst -> CamlV AInst
-toAInst linst = case linst of
+toAExpr :: LInst -> CamlV AExpr
+toAExpr linst = case linst of
   LAdd  y z -> idii' AAdd y z
   LSub  y z -> idii  ASub y z
   LMul  y z -> idii' AMul y z
@@ -68,26 +70,33 @@ toAInst linst = case linst of
   LFCmp p y z -> ff   (AFCmp p) y z
 
   LPhi yls      -> APhi <$> mapM (\(y,l) -> (l,) <$> toPhiVal y) yls
-  LSelect y z w -> ASelect (typeOfLOpe z) <$> toId y <*> toII z <*> toII w
+  -- TODO
+  {-LSelect y z w -> ASelect (typeOfLOpe z) <$> toId y <*> toII z <*> toII w-}
+  LSelect y z w -> ASelect (typeOfLOpe z) <$> toId y <*> (V <$> toId z) <*> (V <$> toId w)
   LCall f xs
     | "init_array." `isPrefixOf` fname -> do
-          let isfloat = not (null zs)
-              init_array
-                | isfloat   = Label "min_caml_float_array_init"
-                | otherwise = Label "min_caml_array_init"
+          let init_array
+                | hasFloatArg = Label "min_caml_float_array_init"
+                | otherwise   = Label "min_caml_array_init"
           [arr,e] <- mapM toId xs
           Just (addr,size,_) <- lift $ uses globalHeap (M.lookup arr)
           addrv <- setInt addr
           sizev <- setInt size
-          if isfloat
+          if hasFloatArg
             then return $ ACallDir rett init_array [addrv,sizev] [e]
             else return $ ACallDir rett init_array [addrv,sizev,e] []
+    | "create_array." `isPrefixOf` fname -> do
+          let create_array
+                | hasFloatArg = Label "min_caml_create_float_array"
+                | otherwise   = Label "min_caml_create_array"
+          ACallDir rett create_array <$> mapM toId ys <*> mapM toId zs
 
     | otherwise -> ACallDir rett l <$> mapM toId ys <*> mapM toId zs
 
     where
       l@(Label fname) = opeLabel f
       (ys,zs) = splitOpes xs
+      hasFloatArg = not (null zs)
       rett = case typeOfLOpe f of
          TFun _ t -> t
          TPtr (TFun _ t) -> t
@@ -98,7 +107,7 @@ toAInst linst = case linst of
     | isVar x && otherwise         -> ALd   <$> toId x <*> return (C 0)
     | isPtr x && tx == TPtr TFloat -> AFLdi <$> opePtrM x
     | isPtr x && otherwise         -> ALdi  <$> opePtrM x
-    | otherwise -> error' "toAInst: " linst
+    | otherwise -> error' linst
     where tx = typeOfLOpe x
 
   LStore x y
@@ -106,7 +115,7 @@ toAInst linst = case linst of
     | isVar y && otherwise    -> ASt   <$> toId x <*> toId y <*> return (C 0)
     | isPtr y && tx == TFloat -> AFSti <$> toId x <*> opePtrM y
     | isPtr y && otherwise    -> ASti  <$> toId x <*> opePtrM y
-    | otherwise -> error' "toAInst: " linst
+    | otherwise -> error' linst
     where tx = typeOfLOpe x
 
   LGetPtr p ixs@(~(ix1:_)) -> do
@@ -116,54 +125,60 @@ toAInst linst = case linst of
       Nothing -> APtr <$> toId p <*> mapM toII ixs
       Just _
         | opeInt ix1 == 0 -> APtrG <$> (Label <$> toId p) <*> mapM toII (tail ixs)
-        | otherwise -> error' "toAInst: " linst
+        | otherwise -> error' linst
 
-  LSetTupleElem tpl i val ->
-    let ~(TTuple ts) = typeOfLOpe tpl in
+  -- TODO
+  LSetTupleElem tpl i val -> do
+    lift.log $ "here:" ++ show linst
+    let TTuple ts = typeOfLOpe tpl
+    tplv <- toId tpl
     case ts !! fromIntegral i of
-      TFloat -> AFSt <$> toId val <*> toId tpl <*> return (C i)
-      _      -> ASt  <$> toId val <*> toId tpl <*> return (C i)
+      TFloat -> do' =<< AFSt <$> toId val <*> return tplv <*> return (C i)
+      _      -> do' =<< ASt  <$> toId val <*> return tplv <*> return (C i)
+    return $ AMove tplv
 
   LGetTupleElem tpl i ->
-    let ~(TTuple ts) = typeOfLOpe tpl in
+    let TTuple ts = typeOfLOpe tpl in
     case ts !! fromIntegral i of
       TFloat -> AFLd <$> toId tpl <*> return (C i)
       _      -> ALd  <$> toId tpl <*> return (C i)
+
   where
-    -- assert x,y :: Int (this function doesn't check it)
-    idii :: (Id -> IdOrImm -> AInst) -> LOperand -> LOperand -> CamlV AInst
+    idii :: (Id -> IdOrImm -> AExpr) -> LOperand -> LOperand -> CamlV AExpr
     idii o x y = o <$> toId x <*> toII y
 
-    -- assert x,y :: Int: 可換な場合((+)や(*))
-    idii':: (Id -> IdOrImm -> AInst) -> LOperand -> LOperand -> CamlV AInst
+    -- 可換な場合(add,mul)
+    idii':: (Id -> IdOrImm -> AExpr) -> LOperand -> LOperand -> CamlV AExpr
     idii' o x y
       | isVar x   = return $ o (opeId x) (opeII y)
       | isVar y   = return $ o (opeId y) (opeII x)
-      | otherwise = error' "idii'" (x,y)
+      | otherwise = idii o x y -- TODO
+      | otherwise = errorShow "idii'" (x,y)
 
-    -- assert x,y :: Float
-    ff :: (Id -> Id -> AInst) -> LOperand -> LOperand -> CamlV AInst
+    ff :: (Id -> Id -> AExpr) -> LOperand -> LOperand -> CamlV AExpr
     ff o x y = o <$> toId x <*> toId y
 
-toATerminator :: LTerminator -> CamlV ()--(Indexed (Named AInst))
+    error' = errorShow "toAExpr: "
+
+toATerminator :: LTerminator -> CamlV ()
 toATerminator lterm = do' =<< case lterm of
   LRet Nothing    -> return $ ARet TUnit Nothing
   LRet (Just x)   -> ARet (typeOfLOpe x) <$> (Just <$> toII x)
   LCBr x lt lf    -> ACBr  <$> toId x <*> return lt <*> return lf
   LBr  l          -> return $ ABr l
   LSwitch x l cls -> ASwitch <$> toId x <*> return l <*>
-                     mapM (\(LInt i,l') -> return (i,l')) cls
+                       mapM (\(LInt i,l') -> return (i,l')) cls
 
 -----------------------
 -- Support Functions --
 -----------------------
 
-bind :: Id -> AInst -> CamlV ()
+bind :: Id -> AExpr -> CamlV ()
 bind x ainst = do
   n <- lift $ instCount <+= 1
   modify ((n, x:=ainst):)
 
-do' :: AInst -> CamlV ()
+do' :: AExpr -> CamlV ()
 do' ainst    = do
   n <- lift $ instCount <+= 1
   modify ((n,Do ainst):)
@@ -182,7 +197,7 @@ toId x
   | isInt x   = setInt   (opeInt x)
   | isFloat x = setFloat (opeFloat x)
   | isConst x = constToId (opeConst x)
-  | otherwise = error' "toId: " x
+  | otherwise = errorShow "toId: " x
 
 toII :: LOperand -> CamlV IdOrImm
 toII x
@@ -192,9 +207,9 @@ toII x
 toPhiVal :: LOperand -> CamlV PhiVal
 toPhiVal x
   | isInt   x = return $ PVInt (opeInt x)
-  | isVar   x = return $ PVVar (opeId  x, opeIdTy x)
-  | isFloat x = PVFloat <$> floatLabel (opeFloat x)
-  | otherwise = error' "toPhiVal" x
+  | isVar   x = return $ PVVar (opeId  x, typeOfLOpe x)
+  | isFloat x = PVFloat <$> lift (floatLabel (opeFloat x))
+  | otherwise = errorShow "toPhiVal" x
 
 constToId :: LConst -> CamlV Id
 constToId = \case
@@ -203,10 +218,14 @@ constToId = \case
   LGlobal (x,_) -> return x
   LConstTuple cs-> setConstTuple cs
 
-  -- TODO どうするのがいいんだろう
   LUndef t -> case t of
-    TFloat -> setFloat 0.001
-    _      -> setInt 114514
+    TTuple ts -> do x <- lift $ genId "tuple"
+                    bind x AGetHP
+                    do' $ AIncHP (C $ fromIntegral $ length ts)
+                    lift.log $ "where:" ++ show ts
+                    return x
+    TFloat    -> setFloat 0.00001
+    _         -> setInt   32767
   c@LGetPtrC{} -> setInt =<< opePtrM (LConstOpe c)
 
 constToII :: LConst -> CamlV IdOrImm
@@ -214,9 +233,9 @@ constToII = \case
   LInt n -> C <$> return n
   c      -> V <$> constToId c
 
------------------------
+----------------------------
 -- Set and Return Id --
------------------------
+----------------------------
 
 setInt :: Integer -> CamlV Id
 setInt n = do
@@ -227,18 +246,9 @@ setInt n = do
 setFloat :: Float -> CamlV Id
 setFloat f = do
   x <- lift $ genId "tmpFloat"
-  l <- floatLabel f
+  l <- lift (floatLabel f)
   bind x $ ASetF l
   return x
-
-floatLabel :: Float -> CamlV Label
-floatLabel f = do
-  lift (uses constFloats (lookupRev f)) >>= \case
-    Nothing -> do
-      l <- Label <$> lift (genId "l")
-      lift $ constFloats %= ((l,f):)
-      return l
-    Just l -> return l
 
 setConstTuple :: [LConst] -> CamlV Id
 setConstTuple cs = do
@@ -253,7 +263,7 @@ setConstTuple cs = do
   return x
 
 -------------------------------------------------------------------------------
--- もっと小さい
+-- Other Functions
 -------------------------------------------------------------------------------
 
 splitIdTys :: [(Id,Type)] -> ([(Id,Type)],[(Id,Type)])
@@ -296,9 +306,9 @@ isPtr :: LOperand -> Bool
 isPtr (LConstOpe LGetPtrC{}) = True
 isPtr _ = False
 
-------------
--- Coerce --
-------------
+---------------------
+-- Coerce (unsafe) --
+---------------------
 
 opeII :: LOperand -> IdOrImm
 opeII = \case
@@ -308,9 +318,6 @@ opeII = \case
 
 opeId :: LOperand -> Id
 opeId ~(LVar (x,_)) = x
-
-opeIdTy :: LOperand -> Type
-opeIdTy ~(LVar (_,t)) = t
 
 opeConst :: LOperand -> LConst
 opeConst ~(LConstOpe c) = c
@@ -330,11 +337,4 @@ opePtrM ~(LConstOpe (LGetPtrC c cs)) = do
       ~[LInt 0, LInt n] = cs
   (addr,_,_) <- lift $ uses globalHeap (unsafeLookup arr)
   return $ addr+n
-
--------------------------------------------------------------------------------
--- Util
--------------------------------------------------------------------------------
-
-error' :: Show a => String -> a -> b
-error' s x = error $ s ++ show x
 

@@ -5,11 +5,9 @@
 
 module BackEnd.Second.RegAlloc.LivenessAnalysis (
     livenessAnalysis
-  , useInst
-  , defInst
-  )where
+  ) where
 
-import Base
+import Base hiding (unsafeLookup)
 import BackEnd.Second.Asm
 
 import           Prelude hiding (log,succ)
@@ -21,6 +19,7 @@ import           Control.Monad.Trans.State
 import           Control.Lens (use,uses,view,makeLenses)
 import           Control.Lens.Operators
 import           Control.Monad (unless)
+import Data.Maybe (fromMaybe)
 
 -------------------------------------------------------------------------------
 -- Types
@@ -28,10 +27,11 @@ import           Control.Monad (unless)
 
 data LA = LA {
     _succMap :: Map InstId [InstId]
-  , _instMap :: Map InstId (Label, Named AInst)
+  , _instMap :: Map InstId (Label, Inst)
   , _liveOut :: Map InstId (Set Id, Set Id)
   } deriving Show
 makeLenses ''LA
+
 type CamlLA = StateT LA Caml
 
 -------------------------------------------------------------------------------
@@ -67,37 +67,38 @@ next n succs = unions2 <$> mapM f succs
 -- Successor Map
 -------------------------------------------------------------------------------
 
+-- TODO 名前変更 (getだとStateっぽい)
 getSuccMap :: AFunDef -> Map InstId [InstId]
 getSuccMap f
   | isEmptyFun f = M.empty
   | otherwise    = execState (getSuccMapSub (entryBlock f)) M.empty
   where
     bmap = blockMap f
-    getSuccMapSub b@(ABlock _ insts) = go insts
+    getSuccMapSub b@(ABlock _ stmts) = go stmts
       where
         go ~((n,_):rest) = gets (M.member n) >>= \case
           False
             | null rest -> do
-                let succBlocks = map (`unsafeLookup` bmap) (nextBlockNames b)
-                modify $ M.insert n (map firstInstId succBlocks)
+                let succBlocks  = map (`unsafeLookup` bmap) (nextBlockNames b)
+                    succInstIds = map firstInstId succBlocks
+                modify $ M.insert n succInstIds
                 mapM_ getSuccMapSub succBlocks
             | otherwise -> do
                 modify $ M.insert n [fst $ head rest]
                 go rest
           True  -> return ()
 
-        firstInstId = fst.head.ablockContents
-
+        firstInstId = fst.firstStmt
 
 -------------------------------------------------------------------------------
 -- Instruction Map
 -------------------------------------------------------------------------------
 
--- 名前が良くない
-getInstMap :: AFunDef -> Map InstId (Label, Named AInst)
+-- TODO 名前変更 (getだとStateっぽい)
+getInstMap :: AFunDef -> Map InstId (Label, Inst)
 getInstMap (AFunDef _ _ _ blocks _) = M.unions $ map instMapSub blocks
   where
-    instMapSub :: ABlock -> Map InstId (Label, Named AInst)
+    instMapSub :: ABlock -> Map InstId (Label, Inst)
     instMapSub (ABlock b insts) = M.fromList [ (n, (b,i)) | (n,i) <- insts ]
 
 -------------------------------------------------------------------------------
@@ -113,12 +114,13 @@ out' n = uses liveOut (M.findWithDefault (S.empty,S.empty) n)
 def' :: InstId -> CamlLA (Set Id, Set Id)
 def' n = defInst <$> uses instMap (snd.unsafeLookup n)
 
--- Variables used in instruction m after the execution of n
+-- Variables used in instruction `m` after the execution of `n`
 -- (phi function uses different variables dependent on its predecessor)
+-- (nande kokodake eigo yanen)
 use' :: InstId -> InstId -> CamlLA (Set Id, Set Id)
 use' n m = uses instMap (snd.unsafeLookup m) >>= useInst'
   where
-    useInst' :: Named AInst -> CamlLA (Set Id, Set Id)
+    useInst' :: Inst -> CamlLA (Set Id, Set Id)
     useInst' (Do (APhiV ps)) = do
       b <- blockOfInst n
       let Just xvs = lookup b ps
@@ -126,115 +128,10 @@ use' n m = uses instMap (snd.unsafeLookup m) >>= useInst'
              ,S.fromList [ y | (_, PVVar (y, t)) <- xvs, t == TFloat ])
     useInst' inst = return $ useInst inst
 
-defInst :: Named AInst -> (Set Id, Set Id)
-defInst (Do (APhiV ps)) =
-    (S.fromList [ x | (x,v) <- concatMap snd ps, not (isFloat v)]
-    ,S.fromList [ x | (x,v) <- concatMap snd ps, isFloat v])
-  where
-    isFloat PVFloat{}          = True
-    isFloat (PVVar (_,TFloat)) = True
-    isFloat _                  = False
-defInst Do{} = (S.empty, S.empty)
-defInst (x:=i) | float i   = (S.empty, S.singleton x)
-               | otherwise = (S.singleton x, S.empty)
-  where
-    float = \case-- {{{
-      ASetF {} -> True
-      AFMov {} -> True
-      AFAdd {} -> True
-      AFSub {} -> True
-      AFMul {} -> True
-      AFDiv {} -> True
-      AFLd  {} -> True
-      AFLdi {} -> True
-      ACallDir TFloat _ _ _ -> True
-      ASelect  TFloat _ _ _ -> True
-      _ -> False
--- }}}
-
-useInst :: Named AInst -> (Set Id, Set Id)
-useInst = \case
-    (Do i) -> fromList2 $ g i
-    (_:=i) -> fromList2 $ g i
-  where
-    h C{} = [] -- {{{
-    h (V x) = [x]
-    g :: AInst -> ([Id],[Id])
-    g i = case i of
-      ANop             -> ([],[])
-      ASet{}           -> ([],[])
-      ASetF{}          -> ([],[])
-      ASetL{}          -> ([],[])
-      ALdi{}           -> ([],[])
-      AFLdi{}          -> ([],[])
-      ABr{}            -> ([],[])
-      ASti x _         -> ([x],[])
-      AFSti x _        -> ([],[x])
-      AMove x          -> ([x],[])
-      ACBr x _ _       -> ([x],[])
-      ASwitch x _ _    -> ([x],[])
-      AFMov x          -> ([],[x])
-      AFAdd x y        -> ([],[x,y])
-      AFSub x y        -> ([],[x,y])
-      AFMul x y        -> ([],[x,y])
-      AFDiv x y        -> ([],[x,y])
-      AFCmp _ x y      -> ([],[x,y])
-
-      AAdd x y'        -> (x : h y', [])
-      ASub x y'        -> (x : h y', [])
-      AMul x y'        -> (x : h y', [])
-      ADiv x y'        -> (x : h y', [])
-      ACmp  _ x y'     -> (x : h y', [])
-      ASll    x y'     -> (x : h y', [])
-      ASrl    x y'     -> (x : h y', [])
-      AAnd    x y'     -> (x : h y', [])
-      AOr     x y'     -> (x : h y', [])
-      AXor    x y'     -> (x : h y', [])
-      ALd   x y'       -> (x : h y', [])
-      AFLd  x y'       -> (x : h y', [])
-      ASt   x y z'     -> (x : y : h z', [])
-      AFSt  x y z'     -> (y : h z', [x])
-
-      ASwap  x y       -> ([x,y],[])
-      AFSwap x y       -> ([],[x,y])
-
-      APtr x y'        -> (x : concatMap h y', [])
-      APtrG _ y'       -> (concatMap h y', [])
-
-      AGetHP      -> ([],[])
-      AStHP x y'  -> (x : h y',[])
-      AFStHP x y' -> (h y', [x])
-      AIncHP x'   -> (h x',[])
-
-      ACallDir _ _ xs ys -> (xs,ys)
-
-      ASelect TFloat x y' z' -> ([x], h y' ++ h z')
-      ASelect _      x y' z' -> (x : h y' ++ h z', [])
-      ARet _ Nothing         -> ([],[])
-      ARet TFloat (Just x')  -> ([],h x')
-      ARet _      (Just x')  -> (h x',[])
-
-      APhi{} -> error "Impossible: APhi should have already been removed"
-      APhiV ps -> ([ y | (_, PVVar (y, t)) <- concatMap snd ps, t/=TFloat ]
-                  ,[ y | (_, PVVar (y, t)) <- concatMap snd ps, t==TFloat ])
-      --}}}
-
 -------------------------------------------------------------------------------
 -- Util
 -------------------------------------------------------------------------------
 
-fromList2 :: ([Id], [Id]) -> (Set Id, Set Id)
-fromList2 = both S.fromList
-
-unions2 :: [(Set Id, Set Id)] -> (Set Id, Set Id)
-unions2 = both S.unions . unzip
-
-union2 :: (Set Id, Set Id) -> (Set Id, Set Id) -> (Set Id, Set Id)
-union2 = lift2 S.union
-
-difference2 :: (Set Id, Set Id) -> (Set Id, Set Id) -> (Set Id, Set Id)
-difference2 = lift2 S.difference
-
-lift2 :: (a -> b -> c) -> (a, a) -> (b, b) -> (c, c)
-lift2 f (x1,x2) (y1,y2) = (f x1 y1, f x2 y2)
+unsafeLookup :: (Show a, Ord a) => a -> Map a b -> b
+unsafeLookup key dic = fromMaybe (error $ "LA: unsafeLookup: "++ show key) $ M.lookup key dic
 

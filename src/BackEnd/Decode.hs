@@ -20,7 +20,8 @@ decodeFloatBE = decodeU32 . BCS.pack . BCL.unpack . toLazyByteString . floatLE
 devideInteger :: Integer -> (Word16, Word16)
 devideInteger n
   |  n < fromIntegral(minBound::Int32) ||
-     fromIntegral (maxBound::Int32) <  n = error "Integer out of range of Int32"
+     fromIntegral (maxBound::Int32) <  n =
+      error $ "Integer " ++ show n ++ " is out of range of Int32"
   | otherwise =
       let (hi,lo) = splitAt 16 $ int32ToBits $ fromIntegral n
       in  (readBits hi, readBits lo)

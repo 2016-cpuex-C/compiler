@@ -10,18 +10,20 @@ library
   hs-source-dirs:      src
   ghc-options:         -O3 -Wall
   build-depends:       base
+                     , llvm-general
+                     , llvm-general-pure
                      , mtl
                      , lens
                      , text
                      , array
+                     , extra
                      , vector
                      , bytestring
                      , containers
                      , file-embed
                      , transformers
                      , BitSyntax
-                     , llvm-general
-                     , llvm-general-pure
+                     , template-haskell
   exposed-modules:     Base
                      , FrontEnd.Syntax
                      , FrontEnd.Lexer
@@ -43,13 +45,13 @@ library
                      , MiddleEnd.LLVM.FrontEnd.Expr
                      , MiddleEnd.LLVM.FrontEnd.Prog
                      , MiddleEnd.LLVM.MiddleEnd
-                     , MiddleEnd.LLVM.BackEnd.Expr
+                     , MiddleEnd.LLVM.BackEnd
                      , BackEnd.Decode
-                     , BackEnd.FirstArch.Asm
-                     , BackEnd.FirstArch.Virtual
-                     , BackEnd.FirstArch.RegAlloc
-                     , BackEnd.FirstArch.Simm
-                     , BackEnd.FirstArch.Emit
+                     , BackEnd.First.Asm
+                     , BackEnd.First.Virtual
+                     , BackEnd.First.RegAlloc
+                     , BackEnd.First.Simm
+                     , BackEnd.First.Emit
                      , BackEnd.Second.Asm
                      , BackEnd.Second.FromLProg
                      , BackEnd.Second.Virtual
@@ -59,9 +61,10 @@ library
                      , BackEnd.Second.RegAlloc.Dominance.Pure
                      , BackEnd.Second.RegAlloc.Coloring
                      , BackEnd.Second.RegAlloc.Coalescing
-                     , BackEnd.Second.RegAlloc.SSA_Deconstruction
                      , BackEnd.Second.RegAlloc.PhiLifting
+                     , BackEnd.Second.SSA_Deconstruction
                      , BackEnd.Second.Emit
+                     , BackEnd.Second.Optimise.ConstFold
   build-tools:         happy, alex
   default-language:    Haskell2010
 

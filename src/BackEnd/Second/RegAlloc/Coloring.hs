@@ -10,9 +10,9 @@ module BackEnd.Second.RegAlloc.Coloring (
 
 import Prelude hiding (log)
 
-import Base
+import Base hiding (unsafeLookup)
 import BackEnd.Second.Asm
-import BackEnd.Second.RegAlloc.Dominance
+import BackEnd.Second.RegAlloc.Dominance hiding (unsafeLookup)
 import BackEnd.Second.RegAlloc.LivenessAnalysis
 
 import           Data.Map (Map)
@@ -25,6 +25,7 @@ import           Control.Monad.Trans.State
 import           Control.Monad (forM_, join, when)
 import           Data.Bifunctor (bimap)
 import           Data.Tree
+import           Data.Maybe (fromMaybe)
 
 -------------------------------------------------------------------------------
 -- Types
@@ -52,6 +53,7 @@ type CamlCS = StateT CS Caml
 colorFun :: AFunDef -> Caml (Map Id Color, Map Id Color)
 colorFun f@(AFunDef l xs ys _ _) = do
   liveout <- livenessAnalysis f
+  log $ "colorFun: " ++ show l
   s <- execStateT (colorTree (dominatorTree f)) CS {
             _liveOut   = liveout
           , _colorMap  = M.fromList $ zip xs [0..]
@@ -86,27 +88,29 @@ chromaticNums m = join bimap f $ unzip $ map snd (M.toList m)
 -------------------------------------------------------------------------------
 
 colorTree :: Tree ABlock -> CamlCS ()
-colorTree (Node (ABlock l insts) bs) = do
+colorTree (Node (ABlock l stmts) bs) = do
   logDebug $ "block: " ++ show l
-  mapM_ colorInst insts
+  mapM_ colorStmt stmts
   forM_ bs $ localState . colorTree
 
-colorInst :: (InstId, Named AInst) -> CamlCS ()
-colorInst (n,inst) = do
+colorStmt :: Statement -> CamlCS ()
+colorStmt (n,inst) = do
     (liveout, liveoutF) <- uses liveOut (unsafeLookup n)
     (used',   usedF'  ) <- (,) <$> use used <*> use usedF
     (free',   freeF'  ) <- (,) <$> use free <*> use freeF
 
     let (ds,dsF) = defInst inst
-        live  x = x `S.member`    liveout
         dead  x = x `S.notMember` liveout
-        liveF x = x `S.member`    liveoutF
         deadF x = x `S.notMember` liveoutF
 
     mapM_ remove  $ filter dead  (M.keys used' )
     mapM_ removeF $ filter deadF (M.keys usedF')
-    mapM_ assign  $ S.filter live  ds
-    mapM_ assignF $ S.filter liveF dsF
+
+    mapM_ assign  $ ds
+    mapM_ assignF $ dsF
+    mapM_ remove  $ S.filter dead  ds
+    mapM_ removeF $ S.filter deadF dsF
+    -- 不要変数削除したら mapM_ assign (S.filter live ds) とかでよい
 
     logDebug.init.unlines $ [ "  instid: " ++ show n
                             , "      us:   " ++ show (useInst inst)
@@ -134,6 +138,8 @@ localState m = do
 -- Nyaaan
 -------------------------------------------------------------------------------
 
+-- 頭から割り当てるのではなく
+-- あれを考慮する
 assign :: Id -> CamlCS ()
 assign x = use free >>= \case
   c:_ -> do free     %= tail
@@ -167,4 +173,7 @@ removeF x = uses usedF (M.lookup x) >>= \case
 logDebug :: String -> CamlCS ()
 logDebug = const (return ())
 {-logDebug = lift.log-}
+
+unsafeLookup :: (Show a, Ord a) => a -> Map a b -> b
+unsafeLookup key dic = fromMaybe (error $ "Coloring: unsafeLookup: "++ show key) $ M.lookup key dic
 

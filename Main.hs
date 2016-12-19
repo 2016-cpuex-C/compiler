@@ -13,32 +13,26 @@ import MiddleEnd.Alpha                  (alpha)
 import MiddleEnd.Optimise               (optimise)
 import MiddleEnd.Closure                (closureConvert)
 import MiddleEnd.LambdaLifting          (lambdaLift)
-import MiddleEnd.LLVM.FrontEnd.Prog
-import MiddleEnd.LLVM.MiddleEnd
-import MiddleEnd.LLVM.BackEnd.Expr
-import BackEnd.FirstArch.Virtual        (virtualCode)
-import BackEnd.FirstArch.RegAlloc       (regAlloc)
-import BackEnd.FirstArch.Simm           (simm)
-import BackEnd.FirstArch.Emit           (emit)
-import BackEnd.Second.Asm
+import MiddleEnd.LLVM.FrontEnd.Prog     (toLLVM)
+import MiddleEnd.LLVM.MiddleEnd         (optimiseLLVM)
+import MiddleEnd.LLVM.BackEnd           (toLProg)
 import BackEnd.Second.FromLProg         (toAProg)
 import BackEnd.Second.Virtual           (virtual)
-{-import BackEnd.Second.RegAlloc.LivenessAnalysis-}
-{-import BackEnd.Second.RegAlloc.Dominator-}
-import BackEnd.Second.RegAlloc.Coloring (colorFun)
-import BackEnd.Second.RegAlloc.SSA_Deconstruction
+import BackEnd.Second.Emit              (emitProg)
 
-import           Prelude hiding         (lex, log, mod)
+import BackEnd.First.Virtual            (virtualCode)
+import BackEnd.First.RegAlloc           (regAlloc)
+import BackEnd.First.Simm               (simm)
+import BackEnd.First.Emit               (emit)
+
+import           Prelude hiding         (lex, log)
 import           System.IO              (stdout, withFile, IOMode(..))
-import           Data.FileEmbed
+import           Data.FileEmbed         (embedFile)
 import qualified Data.ByteString.Char8  as BC
 import           Control.Lens           (use)
 import           Control.Lens.Operators
 import           Options.Applicative
 import           System.FilePath.Posix  ((-<.>))
-import qualified Data.Map as M
-import qualified Data.Set as S
-import Control.Monad (forM, forM_, unless)
 
 -------------------------------------------------------------------------------
 -- main
@@ -46,45 +40,52 @@ import Control.Monad (forM, forM_, unless)
 
 main :: IO ()
 main = execParser (info (helper <*> parseOpt) fullDesc) >>= \opts ->
-    let s = initialState & threshold     .~ inline opts
-                         & optimiseLimit .~ iter opts
-        lg = case logf opts of
-          Nothing -> ($ stdout)
-          Just f  -> withFile f WriteMode
-    in lg $ \h -> mapM_ (compile' s{_logfile=h}) (args opts)
+  let s = initialState & threshold     .~ inline opts
+                       & optimiseLimit .~ iter opts
+      withLogFile = case logf opts of
+        Nothing -> ($ stdout)
+        Just f  -> withFile f WriteMode
+  in withLogFile $ \h -> mapM_ (compile s{_logfile=h}) (args opts)
 
 -------------------------------------------------------------------------------
 -- compile method
 -------------------------------------------------------------------------------
 
+-- 2nd compiler
 compile' :: S -> FilePath -> IO ()
 compile' s f = do
   input <- readFile f
-  m <- flip runCaml s $ lex (libmincamlML ++ input)
-        >>= parse
-        >>= typing
-        >>= kNormalize
-        >>= alpha
-        >>= optimise
-        >>= lambdaLift
-        >>= closureConvert
-        >>= toLLVM
-        >>= optimiseLLVM
-        >>= return . toLProg
-        >>= toAProg
-        >>= virtual
-        >>= \(AProg fs) -> forM (filter (not.isEmptyFun) fs) (\f -> do
-                colorFun f
-              )
-  case m of
-    Right x  -> writeFile "result.hs" $ show $ x
-    Left err -> error $ f ++ ": " ++ show err
+  withFile (f -<.> "s") WriteMode $ \h -> do
+    m <- flip runCaml s $ lex (libmincamlML ++ input)
+          >>= parse
+          >>= typing
+          >>= kNormalize
+          >>= alpha
+          >>= optimise
+          >>= \e -> do
+                heap <- use globalHeap
+                (log.show) heap
+                return e
+          >>= lambdaLift
+          >>= closureConvert
+          >>= toLLVM
+          >>= optimiseLLVM
+          >>= return . toLProg
+          >>= \e -> do
+                log.show $ e
+                return e
+          >>= toAProg
+          >>= virtual
+          >>= \e -> do
+                floats <- use constFloats
+                (log.show) floats
+                return e
+          >>= emitProg h
+    case m of
+      Right _x  -> return()
+      Left err -> error $ f ++ ": " ++ show err
 
-
-
-chromaticNum :: [M.Map Int (S.Set Id)] -> Int
-chromaticNum = maximum . concatMap (map (S.size.snd) . M.toList)
-
+-- 1st compiler
 compile :: S -> FilePath -> IO ()-- {{{
 compile s f = do
   input <- readFile f
@@ -111,7 +112,7 @@ compile s f = do
     case m of
       Right _ -> return ()
       Left e -> error $ f ++ ": " ++ show e
--- }}}
+---- }}}
 
 -------------------------------------------------------------------------------
 -- library

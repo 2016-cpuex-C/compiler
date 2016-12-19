@@ -2,9 +2,15 @@
 {-# LANGUAGE Rank2Types #-}
 {-# LANGUAGE TemplateHaskell #-}
 -- http://sigma425.hatenablog.com/entry/2015/12/25/224053 の移植
+-- TODO MapではなくArrayを使いたい
+--      * Vertexの条件にIxが必要でStringが使えない
+--      * StringとIntの連想リストを作って前後で変換しようかしら
+--      * どうせボトルネックにはなりえないしMapでいい気がしてきた
+--        * 頂点数高々10^1のオーダーだもの
 
 module BackEnd.Second.RegAlloc.Dominance.Pure where
 
+import           Base (insertAppend,flipMap,mapToTree)
 import           Control.Lens (makeLenses, use, uses, Lens')
 import           Control.Lens.Operators
 import           Control.Monad.Trans.State
@@ -165,11 +171,12 @@ idomMap = do
 -- Util
 -------------------------------------------------------------------------------
 
--- sはデバグ用メッセージ
+-- s : デバグ用メッセージ
 unsafeLookup :: (Ord a, Show a, Show b) => String -> a -> Map a b -> b
-unsafeLookup s key m = fromMaybe
-  (error $ "Dominator.Pure: unsafeLookup: "++s++show (key,m)) $
-  M.lookup key m
+unsafeLookup s key m =
+  fromMaybe
+    (error $ "Dominator.Pure: unsafeLookup: "++s++show (key,m))
+    (M.lookup key m)
 
 unsafeGet :: (Ord a, Show a, Show b)
           => String -> Lens' (S v ) (Map a b) -> a -> Dom v b
@@ -180,20 +187,4 @@ get' f x = uses f (M.lookup x)
 
 set' :: Ord a => Lens' (S v) (Map a b) -> a -> b -> Dom v ()
 set' f x y = f %= M.insert x y
-
-insertAppend :: Ord a => a -> b -> Map a [b] -> Map a [b]
-insertAppend x y = M.alter f x
-  where f Nothing   = Just [y]
-        f (Just ys) = Just (y:ys)
-
-flipMap :: (Ord a, Ord b) => Map a b -> Map b [a]
-flipMap = M.foldlWithKey f M.empty
-  where f m x y = insertAppend y x m
-
-mapToTree :: Ord a => a -> Map a [a] -> Tree a
-mapToTree root m = f root
-  where f n = case M.lookup n m of
-                Just es -> Node n (map f es)
-                Nothing -> Node n []
-
 

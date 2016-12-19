@@ -21,14 +21,14 @@ let rec f a b c d =
   let w = h + i in
   let x = h + j in
   let y = i + j in
-    
+
   let aa = k + l in
   let ab = k + m in
-  let ac = k + n in 
+  let ac = k + n in
   let ad = k + o in
-  let ae = k + p in 
+  let ae = k + p in
   let af = k + q in
-  let ag = k + r in 
+  let ag = k + r in
   let ah = k + s in
   let ai = k + t in
   let aj = k + u in
@@ -43,3 +43,4 @@ let rec f a b c d =
       aa + ab + ac + ad + ae + af + ag + ah + ai + aj + ak + al + am + an in
   -z in
 print_int (f 1 2 3 4)
+
