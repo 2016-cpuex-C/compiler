@@ -10,7 +10,7 @@ import MiddleEnd.LLVM.BackEnd
 import BackEnd.Second.Asm
 
 import           Prelude             hiding (log)
-import           Control.Lens               (use,uses)
+import           Control.Lens               (use,uses,_1,_2)
 import           Control.Lens.Operators
 import           Control.Monad.Trans.State
 import           Data.List                  (isPrefixOf, partition)
@@ -29,21 +29,25 @@ toAProg = fmap (AProg . filter (not.isEmptyFun)) . mapM toAFundef
 toAFundef :: LFunDef -> Caml AFunDef
 toAFundef (LFunDef ~(x,TFun _ rett) yts' blocks) = do
   let (yts,zts) = splitIdTys yts'
-  blocks' <- mapM toABlock blocks
+  fid <- genId ""
+  blocks' <- mapM (toABlock fid) blocks
   return $ AFunDef x (map fst yts) (map fst zts) blocks' rett
 
-toABlock :: LBlock -> Caml ABlock
-toABlock (LBlock b nlinsts lterminator) = do
-  (_,s) <- flip runStateT [] $ do
+toABlock :: FuncId -> LBlock -> Caml ABlock
+toABlock fid (LBlock b nlinsts lterminator) = do
+  s <- flip execStateT ([],fid) $ do
     mapM_ toStatements nlinsts
     toATerminator lterminator
-  return $ ABlock b (reverse s)
+  return $ ABlock (addFID b fid) (reverse (fst s))
 
 -------------------------------------------------------------------------------
 -- 中くらい
 -------------------------------------------------------------------------------
 
-type CamlV = StateT [Statement] Caml
+type CamlV = StateT ([Statement],FuncId) Caml
+type FuncId = String
+    -- LLVMのアルファ変換は関数単位なので，関数間で重複するラベルがありうる
+    -- そこで関数ごとにフレッシュなIDを渡してあれする
 
 toStatements :: Named LInst -> CamlV ()
 toStatements (x:=linst) = toAExpr linst >>= bind x
@@ -69,7 +73,7 @@ toAExpr linst = case linst of
   LICmp p y z -> idii (ACmp  p) y z
   LFCmp p y z -> ff   (AFCmp p) y z
 
-  LPhi yls      -> APhi <$> mapM (\(y,l) -> (l,) <$> toPhiVal y) yls
+  LPhi yls      -> APhi <$> mapM (\(y,l) -> (,) <$> label l <*> toPhiVal y) yls
   -- TODO
   {-LSelect y z w -> ASelect (typeOfLOpe z) <$> toId y <*> toII z <*> toII w-}
   LSelect y z w -> ASelect (typeOfLOpe z) <$> toId y <*> (V <$> toId z) <*> (V <$> toId w)
@@ -164,10 +168,10 @@ toATerminator :: LTerminator -> CamlV ()
 toATerminator lterm = do' =<< case lterm of
   LRet Nothing    -> return $ ARet TUnit Nothing
   LRet (Just x)   -> ARet (typeOfLOpe x) <$> (Just <$> toII x)
-  LCBr x lt lf    -> ACBr  <$> toId x <*> return lt <*> return lf
-  LBr  l          -> return $ ABr l
-  LSwitch x l cls -> ASwitch <$> toId x <*> return l <*>
-                       mapM (\(LInt i,l') -> return (i,l')) cls
+  LCBr x lt lf    -> ACBr  <$> toId x <*> label lt <*> label lf
+  LBr  l          -> ABr <$> label l
+  LSwitch x l cls -> ASwitch <$> toId x <*> label l <*>
+                       mapM (\(LInt i,l') -> (i,) <$> label l') cls
 
 -----------------------
 -- Support Functions --
@@ -176,12 +180,22 @@ toATerminator lterm = do' =<< case lterm of
 bind :: Id -> AExpr -> CamlV ()
 bind x ainst = do
   n <- lift $ instCount <+= 1
-  modify ((n, x:=ainst):)
+  {-modify ((n, x:=ainst):)-}
+  _1 %= ((n, x:=ainst):)
 
 do' :: AExpr -> CamlV ()
 do' ainst    = do
   n <- lift $ instCount <+= 1
-  modify ((n,Do ainst):)
+  {-modify ((n,Do ainst):)-}
+  _1 %= ((n,Do ainst):)
+
+label :: Label -> CamlV Label
+label l = do
+  fid <- use _2
+  return $ addFID l fid
+
+addFID :: Label -> FuncId -> Label
+addFID (Label x) fid = Label (x++fid)
 
 -------------------------------------------------------------------------------
 -- 小さい

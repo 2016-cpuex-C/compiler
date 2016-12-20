@@ -1,5 +1,4 @@
 {-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE MultiWayIf #-}
 
 module MiddleEnd.LLVM.MiddleEnd where
 
@@ -19,7 +18,7 @@ optimiseLLVM ast = liftIO $ do
       writeFile "opt.ll" =<< moduleLLVMAssembly m
       runExceptT (verify m) >>= \case
         Left e -> error $ "LLVM.MiddleEnd.optimise: verify: " ++ e
-        Right _ -> do
+        Right _ ->
           withPassManager passes $ \pm -> do
             void $ runPassManager pm m
             writeFile "result.ll" =<< moduleLLVMAssembly m
@@ -30,5 +29,4 @@ optimiseLLVM ast = liftIO $ do
 
 passes :: PassSetSpec
 passes = defaultCuratedPassSetSpec { optLevel = Just 3 }
-
 

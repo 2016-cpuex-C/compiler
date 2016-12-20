@@ -83,8 +83,8 @@ data LConst
 -- Main
 -------------------------------------------------------------------------------
 
-toLProg :: AST.Module -> LProg
-toLProg = mapMaybe globalFunction . globals
+toLProg :: AST.Module -> Caml LProg
+toLProg = return . mapMaybe globalFunction . globals
 
 -------------------------------------------------------------------------------
 -- 大

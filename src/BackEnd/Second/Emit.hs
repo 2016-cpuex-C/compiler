@@ -110,7 +110,7 @@ emitMain h f = do
   colMaps <- colorFun f
   f'@(AFunDef (Label x) _ _ _ _) <- ssaDeconstruct colMaps f
   {-log $ show colMaps-}
-  log $ show f'
+  {-log $ show f'-}
   liftIO $ hPutStrLn h $ x ++ ":"
   sgp <- use startGP
   write' $ printf "\tli\t$gp, %d" sgp
@@ -132,7 +132,7 @@ emitFun h f = do
   colMaps <- colorFun f
   {-log $ show f-}
   f'@(AFunDef (Label x) _ _ _ _) <- ssaDeconstruct colMaps f
-  log $ show colMaps
+  {-log $ show colMaps-}
   log $ show f'
   liftIO $ hPutStrLn h $ x ++ ":"
   evalStateT (mapM_ emitBlock (sortBlock f')) ES {
@@ -143,9 +143,9 @@ emitFun h f = do
 
 emitBlock :: ABlock -> CamlE ()
 emitBlock (ABlock (Label l) stmts) = do
-  stack .= M.empty
-  lift.log $ l
-  use stack >>= lift.log.show
+  stack .= M.empty -- TODO
+  {-lift.log $ l-}
+  {-use stack >>= lift.log.show-}
   write $ l++":"
   mapM_ (emitInst.snd) stmts
 
@@ -352,7 +352,7 @@ call t mx (Label f) ys zs = do
   ss <- stackSize
   rri' "sw"   regRa regSp ss
   rri  "addi" regSp regSp (ss+1)
-  write $ "\tjal " ++ f
+  write $ "\tjal " ++ f ++ "\t# " ++ show mx
   rri  "addi" regSp regSp (-ss-1)
   rri' "lwr"  regRa regSp ss
   case mx of
@@ -384,7 +384,7 @@ save x = uses stack (M.member x) >>= \case
   False -> do push x
               n <- offset x
               rri' "sw" x regSp n
-              write $ "\t# save: " ++ x
+              write $ "\t\t# save: " ++ x
 
 saveF :: Id -> CamlE ()
 saveF x = uses stack (M.member x) >>= \case
@@ -392,17 +392,19 @@ saveF x = uses stack (M.member x) >>= \case
   False -> do push x
               n <- offset x
               fri' "s.s" x regSp n
-              write $ "\t# save: " ++ x
+              write $ "\t\t# save: " ++ x
 
 restore :: Id -> CamlE ()
 restore x = do
   n <- offset x
   rri' "lwr" x regSp n
+  write $ "\t\t# restore: " ++ x
 
 restoreF :: Id -> CamlE ()
 restoreF x = do
   n <- offset x
   fri' "l.sr" x regSp n
+  write $ "\t\t# restore: " ++ x
 
 -- }}}
 

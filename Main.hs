@@ -45,15 +45,18 @@ main = execParser (info (helper <*> parseOpt) fullDesc) >>= \opts ->
       withLogFile = case logf opts of
         Nothing -> ($ stdout)
         Just f  -> withFile f WriteMode
-  in withLogFile $ \h -> mapM_ (compile s{_logfile=h}) (args opts)
+      compiler
+        | first opts = compile1
+        | otherwise  = compile2
+  in withLogFile $ \h -> mapM_ (compiler s{_logfile=h}) (args opts)
 
 -------------------------------------------------------------------------------
 -- compile method
 -------------------------------------------------------------------------------
 
 -- 2nd compiler
-compile' :: S -> FilePath -> IO ()
-compile' s f = do
+compile2 :: S -> FilePath -> IO ()
+compile2 s f = do
   input <- readFile f
   withFile (f -<.> "s") WriteMode $ \h -> do
     m <- flip runCaml s $ lex (libmincamlML ++ input)
@@ -70,10 +73,10 @@ compile' s f = do
           >>= closureConvert
           >>= toLLVM
           >>= optimiseLLVM
-          >>= return . toLProg
-          >>= \e -> do
-                log.show $ e
-                return e
+          >>= toLProg
+          {->>= \e -> do-}
+                {-log.show $ e-}
+                {-return e-}
           >>= toAProg
           >>= virtual
           >>= \e -> do
@@ -86,8 +89,8 @@ compile' s f = do
       Left err -> error $ f ++ ": " ++ show err
 
 -- 1st compiler
-compile :: S -> FilePath -> IO ()-- {{{
-compile s f = do
+compile1 :: S -> FilePath -> IO ()-- {{{
+compile1 s f = do
   input <- readFile f
   withFile (f -<.> "s") WriteMode $ \h -> do
     m <- (`runCaml` s) $ lex (libmincamlML ++ input)
@@ -130,6 +133,7 @@ data MinCamlOptions
     inline  :: Int
   , iter    :: Int
   , logf    :: Maybe String
+  , first   :: Bool
   , args    :: [String]
   }
 
@@ -153,6 +157,10 @@ parseOpt = pure MinCamlOptions
     <=> help "file to log to"
     <=> value Nothing
     <=> showDefaultWith (const "stdout")
+  <*> switch
+    $$ short '1'
+    <=> long "first"
+    <=> help ("use first compiler")
   <*> some (argument str (metavar "FILES.."))
   where
     infixr 7 $$
