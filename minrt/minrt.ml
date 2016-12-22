@@ -1078,7 +1078,6 @@ let rec solver_second_fast2 m dconst sconst b0 b1 b2 =
     else 0
 in
 
-(* 5.8million *)
 (* solverの、dirvec+startテーブル使用高速版 *)
 let rec solver_fast2 index dirvec =
   let m = objects.(index) in
@@ -1090,7 +1089,7 @@ let rec solver_fast2 index dirvec =
   let dconst = dconsts.(index) in
   let m_shape = o_form m in
   if m_shape = 1 then
-    solver_rect_fast m (d_vec dirvec) dconst b0 b1 b2
+    solver_rect_fast m (d_vec dirvec) dconst b0 b1 b2 (*ここで死ぬ*)
   else if m_shape = 2 then
     solver_surface_fast2 m dconst sconst b0 b1 b2
   else

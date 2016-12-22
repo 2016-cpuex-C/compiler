@@ -18,6 +18,7 @@ import MiddleEnd.LLVM.MiddleEnd         (optimiseLLVM)
 import MiddleEnd.LLVM.BackEnd           (toLProg)
 import BackEnd.Second.FromLProg         (toAProg)
 import BackEnd.Second.Virtual           (virtual)
+import BackEnd.Second.Optimise          (optimiseA)
 import BackEnd.Second.Emit              (emitProg)
 
 import BackEnd.First.Virtual            (virtualCode)
@@ -26,6 +27,7 @@ import BackEnd.First.Simm               (simm)
 import BackEnd.First.Emit               (emit)
 
 import           Prelude hiding         (lex, log)
+import           Data.Functor           (($>))
 import           System.IO              (stdout, withFile, IOMode(..))
 import           Data.FileEmbed         (embedFile)
 import qualified Data.ByteString.Char8  as BC
@@ -60,32 +62,24 @@ compile2 s f = do
   input <- readFile f
   withFile (f -<.> "s") WriteMode $ \h -> do
     m <- flip runCaml s $ lex (libmincamlML ++ input)
-          >>= parse
-          >>= typing
-          >>= kNormalize
-          >>= alpha
-          >>= optimise
-          >>= \e -> do
-                heap <- use globalHeap
-                (log.show) heap
-                return e
-          >>= lambdaLift
-          >>= closureConvert
-          >>= toLLVM
-          >>= optimiseLLVM
-          >>= toLProg
-          {->>= \e -> do-}
-                {-log.show $ e-}
-                {-return e-}
-          >>= toAProg
-          >>= virtual
-          >>= \e -> do
-                floats <- use constFloats
-                (log.show) floats
-                return e
-          >>= emitProg h
+      >>= parse
+      >>= typing
+      >>= kNormalize
+      >>= alpha
+      >>= optimise
+      >>= ((use globalHeap >>= log.show) $>)
+      >>= lambdaLift
+      >>= closureConvert
+      >>= toLLVM
+      >>= optimiseLLVM
+      >>= toLProg
+      >>= toAProg
+      >>= virtual
+      >>= optimiseA
+      >>= ((use constFloats >>= log.show) $>)
+      >>= emitProg h
     case m of
-      Right _x  -> return()
+      Right _  -> return()
       Left err -> error $ f ++ ": " ++ show err
 
 -- 1st compiler
@@ -100,15 +94,9 @@ compile1 s f = do
       >>= alpha
       >>= optimise
       >>= lambdaLift
-      >>= \e -> (use globalHeap >>= log.show) >> return e
+      >>= ((use globalHeap >>= log.show) $>)
       >>= closureConvert
       >>= virtualCode
-      -- >>= \e -> do {
-      --              {-use globalHeap >>= log.show;-}
-      --              {-use extTyEnv >>= log.show;-}
-      --              log (show e);
-      --              return e
-      --              }
       >>= simm
       >>= regAlloc
       >>= emit h
@@ -160,7 +148,7 @@ parseOpt = pure MinCamlOptions
   <*> switch
     $$ short '1'
     <=> long "first"
-    <=> help ("use first compiler")
+    <=> help "use first compiler"
   <*> some (argument str (metavar "FILES.."))
   where
     infixr 7 $$

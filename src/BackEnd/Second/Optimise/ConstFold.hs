@@ -7,6 +7,7 @@ module BackEnd.Second.Optimise.ConstFold where
 
 import Base
 import BackEnd.Second.Asm
+import BackEnd.Second.Analysis
 
 import           Prelude hiding (log,Ordering(..))
 import           Data.Map (Map)
@@ -137,7 +138,7 @@ do' = \case
     _       -> return ()
   APhiV phis -> mapM_ processPhi (unVectorize phis)
   ASwitch{} -> error "ConstFold: Switch: Not Implemented"
-  APhi{}    -> error "Impossible" -- VirtualでAPhiVに変換してある(実装済)
+  APhi{}    -> error "Impossible"
   _ -> return ()
   where
     unVectorize :: [(Label,[(Id,PhiVal)])] -> [(Id,[(Label,PhiVal)])]
@@ -261,9 +262,9 @@ constFoldBlock a b = do
   stmts <- catMaybes <$> mapM (constFoldStmt a) (aStatements b)
   return $ b { aStatements = stmts }
 
--- 本来は定数定義を除去したいところだが
--- `ASt Id Id IdOrImm` のように定数をオペランドにとれない命令が存在するため
--- 今回は除去はしない (そこまで解析すべきだったが間に合わず...)
+-- TODO
+-- 本来は定数定義を除去したいところだが `ASt Id Id IdOrImm` のように
+-- 定数をオペランドにとれない命令が存在するため今は除去していない
 constFoldStmt :: (Set Label, Map Id Value) -> Statement -> Caml (Maybe Statement)
 constFoldStmt a@(_,vals) (n,i) = case i of
   Do e -> do

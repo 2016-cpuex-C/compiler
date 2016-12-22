@@ -8,7 +8,7 @@ import Prelude hiding (log)
 
 import Base
 import BackEnd.Second.Asm
-import BackEnd.Second.RegAlloc.LivenessAnalysis
+import BackEnd.Second.Analysis
 
 import           Data.Map (Map)
 import qualified Data.Map as M
@@ -76,10 +76,9 @@ calcPtr block@(ABlock _ insts) = do
         _ -> [i]
 
 -- function call前後のsave/restore
--- 本当はRegAlloc.Spillでやるのがよいが今はとりあえず動かしたいので
 zantei :: AFunDef -> Caml AFunDef
 zantei fundef@(AFunDef _ _ _ blocks _) = do
-  liveout <- livenessAnalysis fundef
+  liveout <- analyzeLifetime fundef
   blocks' <- mapM (zanteiB liveout) blocks
   return fundef { aBody = blocks' }
 
@@ -92,8 +91,8 @@ zanteiB liveout b@(ABlock _ insts) = do
 zanteiI :: Map InstId (Set Id, Set Id)
         -> (InstId, Inst) -> Caml [(InstId, Inst)]
 zanteiI liveout inst@(n,i) = case i of
-  Do (ACallDir _ _ _ _) -> zanteiISub inst Nothing
-  x := ACallDir t _ _ _ -> zanteiISub inst (Just (x,t))
+  Do (ACall _ _ _ _) -> zanteiISub inst Nothing
+  x := ACall t _ _ _ -> zanteiISub inst (Just (x,t))
   _ -> return [inst]
 
   where

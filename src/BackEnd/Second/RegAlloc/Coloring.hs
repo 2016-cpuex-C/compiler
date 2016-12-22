@@ -12,8 +12,8 @@ import Prelude hiding (log)
 
 import Base hiding (unsafeLookup)
 import BackEnd.Second.Asm
+import BackEnd.Second.Analysis
 import BackEnd.Second.RegAlloc.Dominance hiding (unsafeLookup)
-import BackEnd.Second.RegAlloc.LivenessAnalysis
 
 import           Data.Map (Map)
 import qualified Data.Map as M
@@ -52,7 +52,7 @@ type CamlCS = StateT CS Caml
 
 colorFun :: AFunDef -> Caml (Map Id Color, Map Id Color)
 colorFun f@(AFunDef l xs ys _ _) = do
-  liveout <- livenessAnalysis f
+  liveout <- analyzeLifetime f
   log $ "colorFun: " ++ show l
   s <- execStateT (colorTree (dominatorTree f)) CS {
             _liveOut   = liveout

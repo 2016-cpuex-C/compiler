@@ -31,7 +31,7 @@ llvmProg (CProg fundefs e) = do
     let glblEnv = extEnv ++ glblArrayEnv ++ glblFunEnv
     mapM_ (llvmFunDef glblEnv) (main':fundefs)
   where
-    main' = CFunDef (Label "main", TFun [] TUnit) [] [] e
+    main' = CFunDef (Label "__main__", TFun [] TUnit) [] [] e
     glblFunEnv = map (\(CFunDef (Label x,t) _ _ _) -> (x,t)) fundefs
 
 -------------------------------------------------------------------------------

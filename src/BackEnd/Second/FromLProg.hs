@@ -75,8 +75,7 @@ toAExpr linst = case linst of
 
   LPhi yls      -> APhi <$> mapM (\(y,l) -> (,) <$> label l <*> toPhiVal y) yls
   -- TODO
-  {-LSelect y z w -> ASelect (typeOfLOpe z) <$> toId y <*> toII z <*> toII w-}
-  LSelect y z w -> ASelect (typeOfLOpe z) <$> toId y <*> (V <$> toId z) <*> (V <$> toId w)
+  LSelect y z w -> ASelect (typeOfLOpe z) <$> toId y <*> toId z <*> toId w
   LCall f xs
     | "init_array." `isPrefixOf` fname -> do
           let init_array
@@ -87,15 +86,15 @@ toAExpr linst = case linst of
           addrv <- setInt addr
           sizev <- setInt size
           if hasFloatArg
-            then return $ ACallDir rett init_array [addrv,sizev] [e]
-            else return $ ACallDir rett init_array [addrv,sizev,e] []
+            then return $ ACall rett init_array [addrv,sizev] [e]
+            else return $ ACall rett init_array [addrv,sizev,e] []
     | "create_array." `isPrefixOf` fname -> do
           let create_array
                 | hasFloatArg = Label "min_caml_create_float_array"
                 | otherwise   = Label "min_caml_create_array"
-          ACallDir rett create_array <$> mapM toId ys <*> mapM toId zs
+          ACall rett create_array <$> mapM toId ys <*> mapM toId zs
 
-    | otherwise -> ACallDir rett l <$> mapM toId ys <*> mapM toId zs
+    | otherwise -> ACall rett l <$> mapM toId ys <*> mapM toId zs
 
     where
       l@(Label fname) = opeLabel f
@@ -133,7 +132,6 @@ toAExpr linst = case linst of
 
   -- TODO
   LSetTupleElem tpl i val -> do
-    lift.log $ "here:" ++ show linst
     let TTuple ts = typeOfLOpe tpl
     tplv <- toId tpl
     case ts !! fromIntegral i of
@@ -236,7 +234,6 @@ constToId = \case
     TTuple ts -> do x <- lift $ genId "tuple"
                     bind x AGetHP
                     do' $ AIncHP (C $ fromIntegral $ length ts)
-                    lift.log $ "where:" ++ show ts
                     return x
     TFloat    -> setFloat 0.00001
     _         -> setInt   32767

@@ -9,6 +9,7 @@ module BackEnd.Second.RegAlloc.Dominance where
 
 import Base hiding (unsafeLookup)
 import BackEnd.Second.Asm
+import BackEnd.Second.Analysis
 import qualified BackEnd.Second.RegAlloc.Dominance.Pure as P
 
 import           Prelude hiding (log,succ)

@@ -2,6 +2,7 @@
 {-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE BangPatterns #-}
 
 module BackEnd.Second.Emit where
 
@@ -10,19 +11,23 @@ import Prelude hiding (log, Ordering(..))
 import Base hiding (unsafeLookup)
 import BackEnd.Decode
 import BackEnd.Second.Asm
+import BackEnd.Second.Analysis
 import BackEnd.Second.RegAlloc.Coloring
 import BackEnd.Second.SSA_Deconstruction hiding (unsafeLookup)
 
+import           Safe
 import           Data.Int                   (Int16)
 import           Data.Map                   (Map)
 import qualified Data.Map                   as M
-import           Data.Maybe                 (fromJust, fromMaybe)
+import           Data.Set                   (Set)
+import qualified Data.Set                   as S
+import           Data.Tree
 import           Data.Vector                ((!))
 import           Data.FileEmbed             (embedFile)
 import qualified Data.ByteString.Char8      as BC
 import           Control.Lens               (use,uses,makeLenses)
 import           Control.Lens.Operators
-import           Control.Monad              (forM_)
+import Control.Monad              (forM_, unless, when)
 import           Control.Monad.Trans.State
 import           Text.Printf                (printf)
 import           System.IO                  (Handle, hPutStrLn)
@@ -68,10 +73,10 @@ regF x
         Nothing -> error $ "freg: " ++ x
 
 stackSize :: CamlE Integer
-stackSize = fromIntegral <$> uses stack M.size
+stackSize = (1+) <$> uses stack (M.foldl' max 0)
 
 offset :: Id -> CamlE Integer
-offset x = fromJust <$> uses stack (M.lookup x)
+offset x = fromJustNote ("offset: "++x) <$> uses stack (M.lookup x)
 
 -------------------------------------------------------------------------------
 -- Code Emit
@@ -81,7 +86,7 @@ emitProg :: Handle -> AProg -> Caml ()
 emitProg h prog = do
   log "generating assembly.."
   let write' = liftIO . hPutStrLn h
-      (main,others) = mainAndOthers prog
+      (main,others) = popMain prog
 
   -- floats
   ----------
@@ -91,62 +96,61 @@ emitProg h prog = do
       write' $ printf "%s:\t# %.6f" x d
       write' $ printf "\t.word\t0x%08lx" (decodeFloatLE d)
 
-  -- main
-  --------
-  emitMain h main
+  -- main header
+  ---------------
+  write' ".text"
+  liftIO $ hPutStrLn h $ "main:"
+  sgp <- use startGP
+  write' $ printf "\tli\t$gp, %d" sgp
+  write' $ printf "\tli\t%s, 0" regZero
 
-  -- other functions
-  -------------------
-  mapM_ (emitFun h) others
+  -- functions
+  -------------
+  mapM_ (emitFun h) $ retToExit main : others
 
   -- libmincaml
   --------------
   write' $ BC.unpack $(embedFile "src/libmincaml.s")
+  log "complete."
 
--- うわあきたないいい
-emitMain :: Handle -> AFunDef -> Caml ()
-emitMain h f = do
-  let write' = liftIO . hPutStrLn h
-  colMaps <- colorFun f
-  f'@(AFunDef (Label x) _ _ _ _) <- ssaDeconstruct colMaps f
-  {-log $ show colMaps-}
-  {-log $ show f'-}
-  liftIO $ hPutStrLn h $ x ++ ":"
-  sgp <- use startGP
-  write' $ printf "\tli\t$gp, %d" sgp
-  write' $ printf "\tli\t%s, 0" regZero
-  evalStateT (mapM_ emitBlock (sortBlock $ retToExit f')) ES {
-      _hout      = h
-    , _colorMaps = colMaps
-    , _stack     = M.empty
-    }
   where
-    retToExit f_ = f_ { aBody = map retToExitB (aBody f_) }
+    retToExit main' = main' { aBody = map retToExitB (aBody main') }
     retToExitB b = b { aStatements = map retToExitS (aStatements b) }
     retToExitS (i,Do ARet{}) = (i, Do AExit)
     retToExitS stmt = stmt
 
--- TODO stack 合流する場合intersectionを取る必要あり．
 emitFun :: Handle -> AFunDef -> Caml ()
 emitFun h f = do
   colMaps <- colorFun f
-  {-log $ show f-}
-  f'@(AFunDef (Label x) _ _ _ _) <- ssaDeconstruct colMaps f
-  {-log $ show colMaps-}
+  f'@(AFunDef l _ _ _ _) <- ssaDeconstruct colMaps f
   log $ show f'
-  liftIO $ hPutStrLn h $ x ++ ":"
-  evalStateT (mapM_ emitBlock (sortBlock f')) ES {
+  liftIO $ hPutStrLn h $ unLabel l ++ ":"
+  let stackMap = stackSets f'
+  evalStateT (emitTree stackMap $ dfsBlock f') ES {
       _hout      = h
     , _colorMaps = colMaps
     , _stack     = M.empty
     }
 
-emitBlock :: ABlock -> CamlE ()
-emitBlock (ABlock (Label l) stmts) = do
-  stack .= M.empty -- TODO
-  {-lift.log $ l-}
-  {-use stack >>= lift.log.show-}
-  write $ l++":"
+emitTree :: Map Label (Set Id) -> Tree ABlock -> CamlE ()
+emitTree stackMap (Node b ts) = do
+  let Just s = M.lookup (aBlockName b) stackMap
+  emitBlock s b
+  stkBak <- use stack
+  forM_ ts $ \t -> do
+    emitTree stackMap t
+    stack .= stkBak
+
+emitBlock :: Set Id -> ABlock -> CamlE ()
+emitBlock s (ABlock l stmts) = do
+  stack %= M.filterWithKey (\k _ -> k `S.member` s)
+  stk <- use stack
+  unless (all (`M.member` stk) s) $ error . unlines . map unwords $
+    [ [ "emitBlock: bug: at ", unLabel l ]
+    , [ show s, "should have been already saved" ]
+    , [ "but only ", show stk, "is actualy saved" ]
+    ]
+  write $ unLabel l++":"
   mapM_ (emitInst.snd) stmts
 
 emitInst :: Inst -> CamlE ()
@@ -169,7 +173,7 @@ emitInst = \case
   x := ASetF (Label l) ->
         write =<< printf "\tl.sl\t%s, %s" <$> regF x <*> return l
 
-  x := AMove y          -> rr  "move"  x y -- TODO 等しい時は不要
+  x := AMove y          -> move x y
   x := AAdd y (V z)     -> rrr "add"   x y z
   x := AAdd y (C i)     -> rri "addi"  x y i
   x := ASub y (V z)     -> rrr "sub"   x y z
@@ -189,7 +193,7 @@ emitInst = \case
   x := ALdi i           -> rri'"lwr" x regZero i
   Do (ASti x i)         -> rri'"sw" x regZero i
 
-  x := AFMov y          -> ff  "mov.s" x y
+  x := AFMov y          -> movs x y
   x := AFAdd y z        -> fff "add.s" x y z
   x := AFSub y z        -> fff "sub.s" x y z
   x := AFMul y z        -> fff "mul.s" x y z
@@ -229,24 +233,23 @@ emitInst = \case
   Do (ASwap  x y)       -> rr "swap" x y
   Do (AFSwap x y)       -> ff "swap.s" x y
 
-  x := ACallDir t f ys zs  -> call t (Just x) f ys zs
-  Do (ACallDir  t f ys zs) -> call t Nothing  f ys zs
+  x := ACall t f ys zs  -> call t (Just x) f ys zs
+  Do (ACall  t f ys zs) -> call t Nothing  f ys zs
+  Do (ATailCall _ f ys zs) -> tailCall f ys zs
 
-  x := ASelect TFloat b (V y) (V z) -> frff "select.s" x b y z
-  x := ASelect _      b (V y) (V z) -> rrrr "select" x b y z
-  {-x := ASelect _      b (C i) (V z) -> rrir "select" x b i z-}
-  {-x := ASelect _      b (V y) (C i) -> rrri "select" x b y i-}
-  {-x := ASelect _      b (C i) (C j) -> rrii "select" x b i j-}
+  x := ASelect TFloat b y z -> frff "select.s" x b y z
+  x := ASelect _      b y z -> rrrr "select" x b y z
 
-  x := AGetHP         -> rr "move" x regHp
+  x := AGetHP         -> move x regHp
   Do (AStHP x (C i))  -> rri'"sw"  x regHp i
   Do (AFStHP x (C i)) -> fri'"s.s" x regHp i
   Do (AIncHP (C i))   -> rri "addi" regHp regHp i
 
   Do (ARet _ Nothing)           -> ret
   Do (ARet _ (Just (C i)))      -> ri "li"    (regs!0)  i >> ret
-  Do (ARet TFloat (Just (V x))) -> ff "mov.s" (fregs!0) x >> ret
-  Do (ARet _      (Just (V x))) -> rr "move"  (regs!0)  x >> ret
+  Do (ARet TFloat (Just (V x))) -> movs (fregs!0) x >> ret
+  Do (ARet _      (Just (V x))) -> move (regs!0)  x >> ret
+
   Do (ABr l)                    -> br l
   Do (ACBr b lt lf)             -> cbr b lt lf
   Do (ASwitch x ldef nls) -> do
@@ -334,6 +337,25 @@ ril s x i (Label l) =
   write =<< printf "\t%s\t%s, %d, %s" s <$> reg x <*> return i <*> return l
 
 
+--rr :: String -> Id -> Id -> CamlE ()
+--rr s x y =
+--  write =<< printf "\t%s\t%s, %s" s <$> reg x <*> reg y
+move :: Id -> Id -> CamlE ()
+move x y = do
+  rx <- reg x
+  ry <- reg y
+  let s | rx == ry  = "#mv"
+        | otherwise = "move"
+  when (rx/=ry) $ write $ printf "\t%s\t%s, %s" s rx ry
+
+movs :: Id -> Id -> CamlE ()
+movs x y = do
+  rx <- regF x
+  ry <- regF y
+  let s | rx == ry  = "#mv"
+        | otherwise = "mov.s"
+  when (rx/=ry) $ write $ printf "\t%s\t%s, %s" s rx ry
+
 br :: Label -> CamlE ()
 br (Label x) =
   write $ printf "\t%s\t%s" "j" x
@@ -357,8 +379,13 @@ call t mx (Label f) ys zs = do
   rri' "lwr"  regRa regSp ss
   case mx of
     Nothing -> return ()
-    Just x | t == TFloat -> ff "mov.s" x (fregs!0)
-           | otherwise   -> rr "move" x (regs!0)
+    Just x | t == TFloat -> movs x (fregs!0)
+           | otherwise   -> move x (regs!0)
+
+tailCall :: Label -> [Id] -> [Id] -> CamlE ()
+tailCall (Label f) ys zs = do
+  setArgs ys zs
+  write $ "\tj " ++ f
 
 setArgs :: [Id] -> [Id] -> CamlE ()
 setArgs xs ys = do
@@ -375,39 +402,40 @@ setArgs xs ys = do
 
 push :: Id -> CamlE ()
 push x = do
+  -- TODO stackSizeではなく空いてる番号を使う
   ss <- stackSize
   stack %= M.insert x ss
 
 save :: Id -> CamlE ()
 save x = uses stack (M.member x) >>= \case
-  True  -> write $ "\t# already saved: " ++ x
+  True  -> return ()--write $ "\t# already saved: " ++ x
   False -> do push x
               n <- offset x
               rri' "sw" x regSp n
-              write $ "\t\t# save: " ++ x
+              {-write $ "\t\t# save: " ++ x-}
 
 saveF :: Id -> CamlE ()
 saveF x = uses stack (M.member x) >>= \case
-  True  -> write $ "\t# already saved: " ++ x
+  True  -> return()--write $ "\t# already saved: " ++ x
   False -> do push x
               n <- offset x
               fri' "s.s" x regSp n
-              write $ "\t\t# save: " ++ x
+              {-write $ "\t\t# save: " ++ x-}
 
 restore :: Id -> CamlE ()
 restore x = do
   n <- offset x
   rri' "lwr" x regSp n
-  write $ "\t\t# restore: " ++ x
+  {-write $ "\t\t# restore: " ++ x-}
 
 restoreF :: Id -> CamlE ()
 restoreF x = do
   n <- offset x
   fri' "l.sr" x regSp n
-  write $ "\t\t# restore: " ++ x
+  {-write $ "\t\t# restore: " ++ x-}
 
 -- }}}
 
 unsafeLookup :: (Show a, Ord a) => a -> Map a b -> b
-unsafeLookup key dic = fromMaybe (error $ "Emit: unsafeLookup: "++ show key) $ M.lookup key dic
+unsafeLookup key dic = fromJustNote ("Emit: unsafeLookup: "++ show key) $ M.lookup key dic
 

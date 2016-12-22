@@ -249,11 +249,22 @@ flipMap :: (Ord a, Ord b) => Map a b -> Map b [a]
 flipMap = M.foldlWithKey f M.empty
   where f m x y = insertAppend y x m
 
+-- 後退辺があると無限ループする
 mapToTree :: Ord a => a -> Map a [a] -> Tree a
 mapToTree root m = f root
   where f n = case M.lookup n m of
-                Just es -> Node n (map f es)
-                Nothing -> Node n []
+          Just es -> Node n (map f es)
+          Nothing -> Node n []
+
+mapToDFSTree :: Ord a => a -> Map a [a] -> Tree a
+mapToDFSTree root m = f S.empty root
+  where f s n = case M.lookup n m of
+          Just es ->
+            let s'  = S.insert n s
+                es' = filter (`S.notMember` s) es
+            in  Node n (map (f s') es')
+          Nothing -> Node n []
+
 
 ---------------
 -- (Set,Set) --

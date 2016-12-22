@@ -13,6 +13,7 @@ library
                      , llvm-general
                      , llvm-general-pure
                      , mtl
+                     , safe
                      , lens
                      , text
                      , array
@@ -54,17 +55,23 @@ library
                      , BackEnd.First.Emit
                      , BackEnd.Second.Asm
                      , BackEnd.Second.FromLProg
+                     , BackEnd.Second.Analysis
+                     , BackEnd.Second.Analysis.Base
+                     , BackEnd.Second.Analysis.Stack
+                     , BackEnd.Second.Analysis.Lifetime
                      , BackEnd.Second.Virtual
+                     , BackEnd.Second.Optimise
+                     , BackEnd.Second.Optimise.ConstFold
+                     , BackEnd.Second.Optimise.TailCall
                      , BackEnd.Second.RegAlloc
-                     , BackEnd.Second.RegAlloc.LivenessAnalysis
                      , BackEnd.Second.RegAlloc.Dominance
                      , BackEnd.Second.RegAlloc.Dominance.Pure
                      , BackEnd.Second.RegAlloc.Coloring
                      , BackEnd.Second.RegAlloc.Coalescing
                      , BackEnd.Second.RegAlloc.PhiLifting
+                     , BackEnd.Second.RegAlloc.Spilling
                      , BackEnd.Second.SSA_Deconstruction
                      , BackEnd.Second.Emit
-                     , BackEnd.Second.Optimise.ConstFold
   build-tools:         happy, alex
   default-language:    Haskell2010
 
