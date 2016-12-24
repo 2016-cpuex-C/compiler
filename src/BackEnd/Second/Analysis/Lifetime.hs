@@ -4,7 +4,7 @@
 {-# LANGUAGE TemplateHaskell #-}
 
 module BackEnd.Second.Analysis.Lifetime (
-    analyzeLifetime -- TODO lifetimeAnalysis
+    analyzeLifetime
   ) where
 
 import Base hiding (unsafeLookup)
@@ -42,10 +42,10 @@ type CamlLA = StateT LA Caml
 analyzeLifetime :: AFunDef -> Caml (Map InstId (Set Id, Set Id))
 analyzeLifetime f =
   view liveOut <$> execStateT analyzeLifetimeSub LA {
-        _instMap = getInstMap f
-      , _succMap = getSuccMap f
-      , _liveOut = M.empty
-    }
+      _instMap = getInstMap f
+    , _succMap = getSuccMap f
+    , _liveOut = M.empty
+  }
 
 analyzeLifetimeSub :: CamlLA ()
 analyzeLifetimeSub = do
@@ -124,9 +124,13 @@ use' n m = uses instMap (snd.unsafeLookup m) >>= useInst'
     useInst' :: Inst -> CamlLA (Set Id, Set Id)
     useInst' (Do (APhiV ps)) = do
       b <- blockOfInst n
-      let Just xvs = lookup b ps
-      return (S.fromList [ y | (_, PVVar (y, t)) <- xvs, t /= TFloat ]
-             ,S.fromList [ y | (_, PVVar (y, t)) <- xvs, t == TFloat ])
+      let xvs = case lookup b ps of
+                  Just hoge -> hoge
+                  Nothing   -> error $ show (n,b,ps)
+
+      return (S.fromList [ y | (_, PVVar y t _) <- xvs, t /= TFloat ]
+             ,S.fromList [ y | (_, PVVar y t _) <- xvs, t == TFloat ])
+
     useInst' inst = return $ useInst inst
 
 -------------------------------------------------------------------------------

@@ -7,10 +7,11 @@ module BackEnd.Second.SSA_Deconstruction where
 
 import Prelude hiding (log)
 
-import Base hiding (unsafeLookup)
+import Base
 import BackEnd.Second.Asm
 import BackEnd.Second.RegAlloc.Coloring (Color)
 
+import           Safe
 import           Data.Map (Map)
 import qualified Data.Map as M
 import           Data.List (partition)
@@ -18,7 +19,6 @@ import           Control.Lens (view,use,uses,makeLenses)
 import           Control.Lens.Operators
 import           Control.Monad.Trans.State
 import           Data.List.Extra (anySame)
-import           Data.Maybe (fromMaybe)
 import           Control.Arrow (second)
 
 -------------------------------------------------------------------------------
@@ -32,6 +32,9 @@ data SSAD = SSAD {
 makeLenses ''SSAD
 
 type CamlSSA = StateT SSAD Caml
+
+data Dest = Reg Color | Mem
+  deriving (Eq,Ord,Show)
 
 -------------------------------------------------------------------------------
 -- Main
@@ -120,7 +123,7 @@ addBlock :: Label -> [Statement] -> CamlSSA ()
 addBlock l contents = bmap %= M.insert l (ABlock l contents)
 
 block :: Label -> CamlSSA ABlock
-block = uses bmap . unsafeLookup
+block = uses bmap . lookupNote "SSA_Deconstruction: block: Impossible"
 
 -------------------------------------------------------------------------------
 --
@@ -131,11 +134,14 @@ deconstruct :: (Map Id Color, Map Id Color)
 deconstruct (colMap,colMapF) xvs = do
   let int   = [ (x,i) | (x, PVInt i) <- xvs ]
       float = [ (x,l) | (x, PVFloat l) <- xvs ]
-      var   = [ (x,y) | (x, PVVar (y,t)) <- xvs, t /= TFloat ]
-      varF  = [ (x,y) | (x, PVVar (y,t)) <- xvs, t == TFloat ]
+      var   = [ ((x,False), (y,b)) | (x, PVVar y t b) <- xvs, t /= TFloat ]
+      varF  = [ ((x,False), (y,b)) | (x, PVVar y t b) <- xvs, t == TFloat ]
+              -- memory上にあればTrue, registerにあればFalse
 
-      color  x = unsafeLookup x colMap
-      colorF x = unsafeLookup x colMapF
+      color  (x,False) = Reg $ lookupNote "color" x colMap
+      color  _         = Mem
+      colorF (x,False) = Reg $ lookupNote "colorF" x colMapF
+      colorF _         = Mem
 
       insts = concat [
           map actToInst  $ resolveBy color  var
@@ -146,50 +152,53 @@ deconstruct (colMap,colMapF) xvs = do
 
   mapM assignInstId insts
 
-
 -------------------------------------------------------------------------------
 -- are
 -------------------------------------------------------------------------------
 
--- map (color.snd) vars に重複があるとダメ
--- PhiLiftingを先にすること. (12/14時点で未実装)
-resolveBy :: Eq a => (Id -> a)-> [(Id,Id)] -> [Action]
-resolveBy color vars
-  | anySame used = error "SSA_Deconstruction: resolveBy: invalid argument"
+-- TODO + PhiLifting (map (classify.snd) vars に重複があるとダメなので必要)
+--      + safeCopyを求めるところ, classify xがMemにならないため
+--        たまたまうまく行く
+
+resolveBy :: Eq b => (a -> b)-> [(a,a)] -> [Action a]
+resolveBy classify vars
+  | anySame used = error "resolveBy: invalid argument"
   | otherwise = concat [nop, mov, rest]
   where
     nop  = map Nop identical
     mov  = map Move safeCopy
     rest = resolvePerm perm
 
-    used = map (color .snd) vars
-    (identical, others) = partition (\(x,y)-> color x == color  y) vars
-    (safeCopy, perm)    = partition (\(x,_)-> color x `notElem` used) others
+    used = map (classify.snd) vars
+    (identical, tmp ) = partition (\(x,y) -> classify x == classify  y) vars
+    (safeCopy , perm) = partition (\(x,_) -> classify x `notElem` used) tmp
 
     resolvePerm [] = []
     resolvePerm ((x,y):xys) =
-      let f z | color z == color x = y
-              | color z == color y = x
-              | otherwise          = z
+      let f z | classify z == classify x = y
+              | classify z == classify y = x
+              | otherwise                = z
           xys' = map (second f) xys
-      in  Swap (x,y) : resolveBy color xys'
+      in  Swap (x,y) : resolveBy classify xys'
 
-data Action
-  = Nop  (Id, Id)
-  | Move (Id, Id)
-  | Swap (Id, Id)
+data Action a
+  = Nop  (a,a)
+  | Move (a,a)
+  | Swap (a,a)
   deriving (Show,Eq,Ord)
 
-actToInst :: Action -> Inst
+actToInst :: Action (Id,Bool) -> Inst
 actToInst (Nop  (_,_)) = Do ANop
-actToInst (Move (x,y)) = x := AMove y
-actToInst (Swap (x,y)) = Do (ASwap x y)
+actToInst (Move ((x,_), (y,True ))) = x := ARestore y
+actToInst (Move ((x,_), (y,False))) = x := AMove y
+actToInst (Swap ((x,_), (y,_)))     = Do (ASwap x y)
 
-actToInstF :: Action -> Inst
-actToInstF (Nop  (_,_)) = Do ANop
-actToInstF (Move (x,y)) = x := AFMov y
-actToInstF (Swap (x,y)) = Do (AFSwap x y)
+actToInstF :: Action (Id,Bool) -> Inst
+actToInstF (Nop  (_,_))              = Do ANop
+actToInstF (Move ((x,_), (y,True)))  = x := AFRestore y
+actToInstF (Move ((x,_), (y,False))) = x := AFMov y
+actToInstF (Swap ((x,_), (y,_)))     = Do (AFSwap x y)
 
-unsafeLookup :: (Show a, Ord a) => a -> Map a b -> b
-unsafeLookup key dic = fromMaybe (error $ "SSA: unsafeLookup: "++ show key) $ M.lookup key dic
+lookupNote :: Ord k => String -> k -> Map k a -> a
+lookupNote s key dic = fromJustNote s $ M.lookup key dic
 

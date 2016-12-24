@@ -13,7 +13,7 @@ import BackEnd.Decode
 import BackEnd.Second.Asm
 import BackEnd.Second.Analysis
 import BackEnd.Second.RegAlloc.Coloring
-import BackEnd.Second.SSA_Deconstruction hiding (unsafeLookup)
+import BackEnd.Second.SSA_Deconstruction
 
 import           Safe
 import           Data.Int                   (Int16)
@@ -27,7 +27,7 @@ import           Data.FileEmbed             (embedFile)
 import qualified Data.ByteString.Char8      as BC
 import           Control.Lens               (use,uses,makeLenses)
 import           Control.Lens.Operators
-import Control.Monad              (forM_, unless, when)
+import           Control.Monad (forM_, unless, when)
 import           Control.Monad.Trans.State
 import           Text.Printf                (printf)
 import           System.IO                  (Handle, hPutStrLn)
@@ -99,7 +99,7 @@ emitProg h prog = do
   -- main header
   ---------------
   write' ".text"
-  liftIO $ hPutStrLn h $ "main:"
+  liftIO $ hPutStrLn h "main:"
   sgp <- use startGP
   write' $ printf "\tli\t$gp, %d" sgp
   write' $ printf "\tli\t%s, 0" regZero
@@ -121,9 +121,11 @@ emitProg h prog = do
 
 emitFun :: Handle -> AFunDef -> Caml ()
 emitFun h f = do
+  log $ show f
   colMaps <- colorFun f
   f'@(AFunDef l _ _ _ _) <- ssaDeconstruct colMaps f
-  log $ show f'
+  log $ show colMaps
+  {-log $ show f'-}
   liftIO $ hPutStrLn h $ unLabel l ++ ":"
   let stackMap = stackSets f'
   evalStateT (emitTree stackMap $ dfsBlock f') ES {
@@ -146,7 +148,7 @@ emitBlock s (ABlock l stmts) = do
   stack %= M.filterWithKey (\k _ -> k `S.member` s)
   stk <- use stack
   unless (all (`M.member` stk) s) $ error . unlines . map unwords $
-    [ [ "emitBlock: bug: at ", unLabel l ]
+    [ [ "emitBlock: bug: at", unLabel l ]
     , [ show s, "should have been already saved" ]
     , [ "but only ", show stk, "is actualy saved" ]
     ]
@@ -158,7 +160,7 @@ emitInst = \case
   Do ANop -> return ()-- {{{
   x := ASet i
       -- TODO 65535くらいの値を入れると変
-      --      分解するときWord16にしてる？
+      --      分解するときWord16にしてるっぽい
     | fromIntegral (minBound::Int16) <= i &&
       i <= fromIntegral (maxBound::Int16) ->
         write =<< printf "\tli\t%s, %d" <$> reg x <*> return i
@@ -396,9 +398,19 @@ setArgs xs ys = do
       regF' x | isReg x             = x
               | M.member x colMapF  = fregs ! unsafeLookup x colMapF
               | otherwise           = error $ "setArgs: regF': " ++ x
-      inst'  = map actToInst  $ resolveBy reg'  $ zip allRegs  xs
-      instF' = map actToInstF $ resolveBy regF' $ zip allFRegs ys
+
+      actToInst'  (Nop  (_,_)) = Do ANop
+      actToInst'  (Move (x,y)) = x := AMove y
+      actToInst'  (Swap (x,y)) = Do (ASwap x y)
+      actToInstF' (Nop  (_,_)) = Do ANop
+      actToInstF' (Move (x,y)) = x := AFMov y
+      actToInstF' (Swap (x,y)) = Do (AFSwap x y)
+
+      inst'  = map actToInst'  $ resolveBy reg'  $ zip allRegs  xs
+      instF' = map actToInstF' $ resolveBy regF' $ zip allFRegs ys
   mapM_ emitInst $ inst' ++ instF'
+
+{-|| resolveBy :: Eq b => (a -> b) -> [(a, a)] -> [Action a]-}
 
 push :: Id -> CamlE ()
 push x = do

@@ -97,7 +97,7 @@ defInst (Do (APhiV ps)) =
     ,S.fromList [ x | (x,v) <- concatMap snd ps, isFloat v])
   where
     isFloat PVFloat{}          = True
-    isFloat (PVVar (_,TFloat)) = True
+    isFloat (PVVar _ TFloat _) = True
     isFloat _                  = False
 defInst Do{} = (S.empty, S.empty)
 defInst (x:=i) | float i   = (S.empty, S.singleton x)
@@ -180,10 +180,10 @@ useInst = \case
       ARet TFloat (Just x')  -> ([],h x')
       ARet _      (Just x')  -> (h x',[])
 
-      APhi lvs -> ([ y | (_, PVVar (y, t)) <- lvs, t/=TFloat ]
-                  ,[ y | (_, PVVar (y, t)) <- lvs, t==TFloat ])
-      APhiV ps -> ([ y | (_, PVVar (y, t)) <- concatMap snd ps, t/=TFloat ]
-                  ,[ y | (_, PVVar (y, t)) <- concatMap snd ps, t==TFloat ])
+      APhi lvs -> ([ y | (_, PVVar y t _) <- lvs, t/=TFloat ]
+                  ,[ y | (_, PVVar y t _) <- lvs, t==TFloat ])
+      APhiV ps -> ([ y | (_, PVVar y t _) <- concatMap snd ps, t/=TFloat ]
+                  ,[ y | (_, PVVar y t _) <- concatMap snd ps, t==TFloat ])
 
       -- TODO
       ASave x     -> ([x],[])

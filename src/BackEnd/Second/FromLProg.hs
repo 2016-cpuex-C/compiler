@@ -219,7 +219,7 @@ toII x
 toPhiVal :: LOperand -> CamlV PhiVal
 toPhiVal x
   | isInt   x = return $ PVInt (opeInt x)
-  | isVar   x = return $ PVVar (opeId  x, typeOfLOpe x)
+  | isVar   x = return $ PVVar (opeId x) (typeOfLOpe x) False
   | isFloat x = PVFloat <$> lift (floatLabel (opeFloat x))
   | otherwise = errorShow "toPhiVal" x
 

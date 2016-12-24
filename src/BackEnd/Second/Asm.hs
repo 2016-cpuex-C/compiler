@@ -85,14 +85,17 @@ data AExpr -- 多相的な命令には型を加える
   | ASelect Type Id Id Id
 
   -- 仮想命令
-  | APtr  Id    [IdOrImm]         -- Virtual.hsで消す
-  | APtrG Label [IdOrImm]         -- Virtual.hsで消す
-  | APhi  [(Label,PhiVal)]        -- Virtual.hsで消す
-  | APhiV [(Label,[(Id,PhiVal)])] -- Virtual.hsで出現 ベクトル化
-  | ASave     Id                  -- Virtual.hsで出現
-  | AFSave    Id                  -- Virtual.hsで出現
-  | ARestore  Id                  -- Virtual.hsで出現
-  | AFRestore Id                  -- Virtual.hsで出現
+    -- Virtual.hsで消す
+  | APtr  Id    [IdOrImm]
+  | APtrG Label [IdOrImm]
+  | APhi  [(Label,PhiVal)]
+
+    -- Virtual.hsで出現
+  | APhiV [(Label,[(Id,PhiVal)])]
+  | ASave     Id
+  | AFSave    Id
+  | ARestore  Id
+  | AFRestore Id
     -- heap
   | AGetHP
   | AStHP  Id IdOrImm
@@ -115,7 +118,7 @@ data IdOrImm
 
 data PhiVal
   = PVInt   Integer
-  | PVVar   (Id,Type)
+  | PVVar   Id Type Bool -- onMemory :: Bool
   | PVFloat Label
   deriving (Show,Eq,Ord)
 

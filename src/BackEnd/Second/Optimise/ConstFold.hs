@@ -240,7 +240,7 @@ processPhi (x,lps) = do
     | otherwise                           -> setValue x (head vs_e)
   where
     toVal (PVInt n)     = return (CInt n)
-    toVal (PVVar (y,_)) = getValue y
+    toVal (PVVar y _ _) = getValue y
     toVal (PVFloat l)   = CFloat <$> lift (labelFloat l)
 
 -------------------------------------------------------------------------------
