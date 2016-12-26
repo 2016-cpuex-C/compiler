@@ -71,7 +71,7 @@ data Error = Failure String
            deriving (Show,Eq,Ord)
 
 data Predicate = EQ | NE | LE | GE | LT | GT
-               deriving (Show,Eq,Ord)
+               deriving (Show,Eq,Ord,Enum)
 
 data Named a = Id := a | Do a
     deriving (Show,Eq,Ord)

@@ -27,10 +27,11 @@ import           Data.FileEmbed             (embedFile)
 import qualified Data.ByteString.Char8      as BC
 import           Control.Lens               (use,uses,makeLenses)
 import           Control.Lens.Operators
-import           Control.Monad (forM_, unless, when)
+import           Control.Monad              (forM_, unless, when)
 import           Control.Monad.Trans.State
 import           Text.Printf                (printf)
 import           System.IO                  (Handle, hPutStrLn)
+import           Data.Char                  (toLower)
 
 -------------------------------------------------------------------------------
 -- Types
@@ -212,25 +213,27 @@ emitInst = \case
   x := AOr  y (C i)     -> rri "ori"  x y i
   x := AXor y (C i)     -> rri "xori" x y i
 
-  x := ACmp EQ y (V z)  -> rrr "cmp.eq" x y z
-  x := ACmp NE y (V z)  -> rrr "cmp.ne" x y z
-  x := ACmp LE y (V z)  -> rrr "cmp.le" x y z
-  x := ACmp GE y (V z)  -> rrr "cmp.ge" x y z
-  x := ACmp LT y (V z)  -> rrr "cmp.lt" x y z
-  x := ACmp GT y (V z)  -> rrr "cmp.gt" x y z
-  x := ACmp EQ y (C i)  -> rri "cmpi.eq" x y i
-  x := ACmp NE y (C i)  -> rri "cmpi.ne" x y i
-  x := ACmp LE y (C i)  -> rri "cmpi.le" x y i
-  x := ACmp GE y (C i)  -> rri "cmpi.ge" x y i
-  x := ACmp LT y (C i)  -> rri "cmpi.lt" x y i
-  x := ACmp GT y (C i)  -> rri "cmpi.gt" x y i
-
-  x := AFCmp EQ y z     -> rff "cmp.eq.s" x y z
-  x := AFCmp NE y z     -> rff "cmp.ne.s" x y z
-  x := AFCmp LE y z     -> rff "cmp.le.s" x y z
-  x := AFCmp GE y z     -> rff "cmp.ge.s" x y z
-  x := AFCmp LT y z     -> rff "cmp.lt.s" x y z
-  x := AFCmp GT y z     -> rff "cmp.gt.s" x y z
+  x := ACmp  p y (V z)  -> prrr "cmp"   p x y z
+  x := ACmp  p y (C i)  -> prri "cmpi"  p x y i
+  x := AFCmp p y z      -> prff "cmp.s" p x y z
+  --x := ACmp EQ y (V z)  -> rrr "cmp.eq" x y z
+  --x := ACmp NE y (V z)  -> rrr "cmp.ne" x y z
+  --x := ACmp LE y (V z)  -> rrr "cmp.le" x y z
+  --x := ACmp GE y (V z)  -> rrr "cmp.ge" x y z
+  --x := ACmp LT y (V z)  -> rrr "cmp.lt" x y z
+  --x := ACmp GT y (V z)  -> rrr "cmp.gt" x y z
+  --x := ACmp EQ y (C i)  -> rri "cmpi.eq" x y i
+  --x := ACmp NE y (C i)  -> rri "cmpi.ne" x y i
+  --x := ACmp LE y (C i)  -> rri "cmpi.le" x y i
+  --x := ACmp GE y (C i)  -> rri "cmpi.ge" x y i
+  --x := ACmp LT y (C i)  -> rri "cmpi.lt" x y i
+  --x := ACmp GT y (C i)  -> rri "cmpi.gt" x y i
+  --x := AFCmp EQ y z     -> rff "cmp.eq.s" x y z
+  --x := AFCmp NE y z     -> rff "cmp.ne.s" x y z
+  --x := AFCmp LE y z     -> rff "cmp.le.s" x y z
+  --x := AFCmp GE y z     -> rff "cmp.ge.s" x y z
+  --x := AFCmp LT y z     -> rff "cmp.lt.s" x y z
+  --x := AFCmp GT y z     -> rff "cmp.gt.s" x y z
 
   Do (ASwap  x y)       -> rr "swap" x y
   Do (AFSwap x y)       -> ff "swap.s" x y
@@ -275,73 +278,84 @@ emitInst = \case
 
 -- {{{
 rr :: String -> Id -> Id -> CamlE ()
-rr s x y =
-  write =<< printf "\t%s\t%s, %s" s <$> reg x <*> reg y
+rr s x y = write =<<
+  printf "\t%s\t%s, %s" s <$> reg x <*> reg y
 
 rrr :: String -> Id -> Id -> Id -> CamlE ()
-rrr s x y z =
-  write =<< printf "\t%s\t%s, %s, %s" s <$> reg x <*> reg y <*> reg z
+rrr s x y z = write =<< 
+  printf "\t%s\t%s, %s, %s" s <$> reg x <*> reg y <*> reg z
 
 rri :: String -> Id -> Id -> Integer -> CamlE ()
-rri s x y i =
-  write =<< printf "\t%s\t%s, %s, %d" s <$> reg x <*> reg y <*> return i
+rri s x y i = write =<< 
+  printf "\t%s\t%s, %s, %d" s <$> reg x <*> reg y <*> return i
 
 rri' :: String -> Id -> Id -> Integer -> CamlE ()
-rri' s x y i =
-  write =<< printf "\t%s\t%s, %d(%s)" s <$> reg x <*> return i <*> reg y
+rri' s x y i = write =<<
+  printf "\t%s\t%s, %d(%s)" s <$> reg x <*> return i <*> reg y
 
 ri :: String -> Id -> Integer -> CamlE ()
-ri s x i =
-  write =<< printf "\t%s\t%s, %d" s <$> reg x <*> return i
+ri s x i = write =<< 
+  printf "\t%s\t%s, %d" s <$> reg x <*> return i
 
 ff :: String -> Id -> Id -> CamlE ()
-ff s x y =
-  write =<< printf "\t%s\t%s, %s" s <$> regF x <*> regF y
+ff s x y = write =<< 
+  printf "\t%s\t%s, %s" s <$> regF x <*> regF y
 
 fff :: String -> Id -> Id -> Id -> CamlE ()
-fff s x y z =
-  write =<< printf "\t%s\t%s, %s, %s" s <$> regF x <*> regF y <*> regF z
+fff s x y z = write =<< 
+  printf "\t%s\t%s, %s, %s" s <$> regF x <*> regF y <*> regF z
 
 fri' :: String -> Id -> Id -> Integer -> CamlE ()
-fri' s x y i =
-  write =<< printf "\t%s\t%s, %d(%s)" s <$> regF x <*> return i <*> reg y
+fri' s x y i = write =<<  
+  printf "\t%s\t%s, %d(%s)" s <$> regF x <*> return i <*> reg y
 
 fi :: String -> Id -> Integer -> CamlE ()
-fi s x i =
-  write =<< printf "\t%s\t%s, %d" s <$> regF x <*> return i
+fi s x i = write =<< 
+  printf "\t%s\t%s, %d" s <$> regF x <*> return i
 
 rff :: String -> Id -> Id -> Id -> CamlE ()
-rff s x y z =
-  write =<< printf "\t%s\t%s, %s, %s" s <$> reg x <*> regF y <*> regF z
+rff s x y z = write =<< 
+  printf "\t%s\t%s, %s, %s" s <$> reg x <*> regF y <*> regF z
 
 frff :: String -> Id -> Id -> Id -> Id -> CamlE ()
-frff s x y z w =
-  write =<< printf "\t%s\t%s, %s, %s, %s" s <$> regF x <*> reg y <*> regF z <*> regF w
+frff s x y z w = write =<< 
+  printf "\t%s\t%s, %s, %s, %s" s <$> regF x <*> reg y <*> regF z <*> regF w
 
 rrrr :: String -> Id -> Id -> Id -> Id -> CamlE ()
-rrrr s x y z w =
-  write =<< printf "\t%s\t%s, %s, %s, %s" s <$> reg x <*> reg y <*> reg z <*> reg w
+rrrr s x y z w = write =<< 
+  printf "\t%s\t%s, %s, %s, %s" s <$> reg x <*> reg y <*> reg z <*> reg w
 
 rrir :: String -> Id -> Id -> Integer -> Id -> CamlE ()
-rrir s x y i w =
-  write =<< printf "\t%s\t%s, %s, %d, %s" s <$> reg x <*> reg y <*> return i <*> reg w
+rrir s x y i w = write =<< 
+  printf "\t%s\t%s, %s, %d, %s" s <$> reg x <*> reg y <*> return i <*> reg w
 
 rrri :: String -> Id -> Id -> Id -> Integer -> CamlE ()
-rrri s x y z i =
-  write =<< printf "\t%s\t%s, %s, %s, %d" s <$> reg x <*> reg y <*> reg z <*> return i
+rrri s x y z i = write =<<
+  printf "\t%s\t%s, %s, %s, %d" s <$> reg x <*> reg y <*> reg z <*> return i
 
 rrii :: String -> Id -> Id -> Integer -> Integer -> CamlE ()
-rrii s x y i j =
-  write =<< printf "\t%s\t%s, %s, %d, %d" s <$> reg x <*> reg y <*> return i <*> return j
+rrii s x y i j = write =<<
+  printf "\t%s\t%s, %s, %d, %d" s <$> reg x <*> reg y <*> return i <*> return j
 
 ril :: String -> Id -> Integer -> Label -> CamlE ()
-ril s x i (Label l) =
-  write =<< printf "\t%s\t%s, %d, %s" s <$> reg x <*> return i <*> return l
+ril s x i (Label l) = write =<<
+  printf "\t%s\t%s, %d, %s" s <$> reg x <*> return i <*> return l
 
+prrr :: Id -> Predicate -> Id -> Id -> Id -> CamlE ()
+prrr s p x y z = write =<<
+  printf "\t%s\t%s, %s, %s, %s" s <$> return (showPred p) <*> reg x <*> reg y <*> reg z
 
---rr :: String -> Id -> Id -> CamlE ()
---rr s x y =
---  write =<< printf "\t%s\t%s, %s" s <$> reg x <*> reg y
+prri :: Id -> Predicate -> Id -> Id -> Integer -> CamlE ()
+prri s p x y i = write =<<
+  printf "\t%s\t%s, %s, %s, %d" s <$> return (showPred p) <*> reg x <*> reg y <*> return i
+
+prff :: Id -> Predicate -> Id -> Id -> Id -> CamlE ()
+prff s p x y z = write =<<
+  printf "\t%s\t%s, %s, %s, %s" s <$> return (showPred p) <*> reg x <*> regF y <*> regF z
+
+showPred :: Predicate -> String
+showPred = map toLower . show
+
 move :: Id -> Id -> CamlE ()
 move x y = do
   rx <- reg x
@@ -364,7 +378,7 @@ br (Label x) =
 
 cbr :: Id -> Label -> Label -> CamlE ()
 cbr b (Label x) (Label y) = do
-  write =<< printf "\tbeqz\t%s, %s" <$> reg b <*> return y
+  write =<< printf "\tbeqi\t%s, 0, %s" <$> reg b <*> return y
   write =<< printf "\tj\t%s" <$> return x
 
 ret :: CamlE ()
