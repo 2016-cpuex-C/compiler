@@ -58,7 +58,14 @@ defSiteMap :: AFunDef -> Map Id Statement
 defSiteMap (AFunDef _ _ _ blocks _) = M.unions $ map defSiteMapB blocks
 
 useSiteMap :: AFunDef -> Map Id [Statement]
-useSiteMap (AFunDef _ _ _ blocks _) = M.unions $ map useSiteMapB blocks
+useSiteMap (AFunDef _ _ _ blocks _) = go M.empty $ map useSiteMapB blocks
+  where
+    go acc [] = acc
+    go acc (m:ms) = go (M.foldWithKey f acc m) ms
+    f x stmts acc = M.alter g x acc
+      where g Nothing = Just stmts
+            g (Just stmts') = Just (stmts++stmts')
+
 
 -----------
 -- Block --
