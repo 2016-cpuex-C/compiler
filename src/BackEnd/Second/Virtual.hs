@@ -263,37 +263,45 @@ insertRestoreBlock mArgs stackIn (ABlock l stmts) = do
 
 insertRestoreStmt :: Statement -> CamlRS [Statement]
 insertRestoreStmt s = do
- lift.log.(show (fst s)++).(": "++).show =<< use regSet
- case snd s of
-  Do (ASave x) -> uses stackSet (S.member x) >>= \case
-    True  -> return []
-    False -> return [s]
+  lift.log =<< do {
+    regset <- use regSet;
+    stkset <- use stackSet;
+    return $ show (fst s) ++ ": " ++ show regset ++ "\n    " ++ show stkset;
+    }
+  case snd s of
+    Do (ASave x) -> uses stackSet (S.member x) >>= \case
+      True  -> return []
+      False -> stackSet %= S.insert x >> return [s]
 
-  -- phiについてはつつがなく処理が行われると考えて良い
-  -- + 使われる変数はregisterにあると考えて良い
-  --   各ブロックの最後にrestoreしているため
-  -- TODO restoreしないほうが命令数は減る
-  --      registerに無い変数はSSA_Deconstructionでrestoreすべき
-  i@(Do APhiV{}) -> do
-    let added = S.union (uncurry S.union $ useInst i) (uncurry S.union $ defInst i)
-    regSet %= S.union added
-    return [s]
+    Do (AFSave x) -> uses stackSet (S.member x) >>= \case
+      True  -> return []
+      False -> stackSet %= S.insert x >> return [s]
 
-  inst -> do
-    inReg <- use regSet
-    let (used,usedF) = useInst inst
-    restore  <- forM (S.toList $ used S.\\ inReg) $ \x -> do
-      regSet %= S.insert x
-      lift $ assignInstId $ Do (ARestore x)
-    restoreF <- forM (S.toList $ usedF S.\\ inReg) $ \x -> do
-      regSet %= S.insert x
-      lift $ assignInstId $ Do (AFRestore x)
-    case inst of
-      x:=ACall{} -> regSet .= S.singleton x
-      Do ACall{} -> regSet .= S.empty
-      x := _     -> regSet %= S.insert x
-      _          -> return ()
-    return $ restore ++ restoreF ++ [s]
+    -- 使われる変数はregisterにあると考えて良い
+    -- 各ブロックの最後にrestoreしているため
+    -- TODO restoreしないほうが命令数は減る
+    --      registerに無い変数はSSA_Deconstructionでrestoreすべき
+    --      つらそう...
+    i@(Do APhiV{}) -> do
+      let added = S.union (uncurry S.union $ useInst i) (uncurry S.union $ defInst i)
+      regSet %= S.union added
+      return [s]
+
+    inst -> do
+      inReg <- use regSet
+      let (used,usedF) = useInst inst
+      restore  <- forM (S.toList $ used S.\\ inReg) $ \x -> do
+        regSet %= S.insert x
+        lift $ assignInstId $ Do (ARestore x)
+      restoreF <- forM (S.toList $ usedF S.\\ inReg) $ \x -> do
+        regSet %= S.insert x
+        lift $ assignInstId $ Do (AFRestore x)
+      case inst of
+        x:=ACall{} -> regSet .= S.singleton x
+        Do ACall{} -> regSet .= S.empty
+        x := _     -> regSet %= S.insert x
+        _          -> return ()
+      return $ restore ++ restoreF ++ [s]
 
 addBlock :: Label -> [Statement] -> CamlRS ()
 addBlock l contents = bmap %= M.insert l (ABlock l contents)

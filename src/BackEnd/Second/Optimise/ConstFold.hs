@@ -18,15 +18,15 @@ import           Data.Bits
 import           Data.Sequence (Seq,ViewR(..),(<|),viewr)
 import qualified Data.Sequence as Seq
 
+import Safe
 import Control.Lens (makeLenses,uses)
 import Control.Lens.Operators hiding ((<|))
 import Control.Monad.Trans.State
 import Control.Monad.Extra (unlessM)
 import Data.List (foldl')
 import Data.List.Extra (allSame)
-import Control.Monad (filterM)
+import Control.Monad (filterM, when)
 import Data.Maybe (catMaybes)
-
 
 -------------------------------------------------------------------------------
 -- Types (State & Method)
@@ -65,12 +65,17 @@ setLabel l = unlessM (isExecutable l) $ do
   executable %= S.insert l
 
 -- こちらは一つの変数につき高々2回
+-- Bot -> Const, Const -> Topとリフトされる
 setValue :: Id -> Value -> CamlCF ()
-setValue x v = getValue x >>= \case
-  Top -> return ()
-  _   -> do
-    values %= M.insert x v
-    mapM_ addStmt =<< uses useSite (unsafeLookup x)
+setValue x v = do
+  getValue x >>= \case
+    Top -> return ()
+    _   -> do
+      lift.log $ "setValue: " ++ show (x,v)
+      values %= M.insert x v
+      added <- uses useSite (M.findWithDefault [] x)
+      mapM_ addStmt added
+      when (x == "t0p.4284") $ lift.log $ show added
 
 popStmt :: CamlCF (Maybe Statement)
 popStmt = uses stmtQ viewr >>= \case
@@ -86,7 +91,8 @@ addStmt :: Statement -> CamlCF ()
 addStmt s = stmtQ %= (s<|)
 
 getBlock :: Label -> CamlCF ABlock
-getBlock l = uses bmap (unsafeLookup l)
+getBlock l = uses bmap (fromJustNote msg . M.lookup l)
+  where msg = "getBlock: " ++ show l
 
 -------------------------------------------------------------------------------
 -- Analysis
@@ -132,17 +138,22 @@ do' :: AExpr -> CamlCF ()
 do' = \case
   ABr l -> setLabel l
   ACBr x lt lf -> getValue x >>= \case
-    CInt  1 -> setLabel lt
-    CInt ~0 -> setLabel lf
-    Top     -> setLabel lt >> setLabel lf
-    _       -> return ()
-  APhiV phis -> mapM_ processPhi (unVectorize phis)
-  ASwitch{} -> error "ConstFold: Switch: Not Implemented"
-  APhi{}    -> error "Impossible"
+    CInt 1 -> setLabel lt
+    CInt~0 -> setLabel lf
+    Top    -> setLabel lt >> setLabel lf
+    _      -> return ()
+  APhiV phis -> mapM_ processPhi (transpose phis)
+  ASwitch x l ils -> getValue x >>= \case
+    CInt i -> case lookup i ils of
+      Just l' -> setLabel l'
+      Nothing -> setLabel l
+    Top -> setLabel l >> mapM_ (setLabel.snd) ils
+    _   -> return ()
   _ -> return ()
+
   where
-    unVectorize :: [(Label,[(Id,PhiVal)])] -> [(Id,[(Label,PhiVal)])]
-    unVectorize phis = M.toList $ foldl' f M.empty phis
+    transpose :: [(Label,[(Id,PhiVal)])] -> [(Id,[(Label,PhiVal)])]
+    transpose phis = M.toList $ foldl' f M.empty phis
       where
         f acc (l,xvs) = foldl' (g l) acc xvs
         g l acc' (x,p) = insertAppend x (l,p) acc'
@@ -226,7 +237,7 @@ bind' x = \case -- {{{
       GT -> b $ n> m
       where b True = 1
             b False = 0
-      
+
 -- }}}
 
 -- rule 6,8,9
@@ -252,9 +263,10 @@ constFold (AProg fs) = AProg <$> mapM constFoldFun fs
 
 constFoldFun :: AFunDef -> Caml AFunDef
 constFoldFun f = do
+  log $ "constFoldFun: " ++ show (aFunName f)
   a@(executable',_) <- constFoldAnalysis f
-  blocks <- mapM (constFoldBlock a) $
-              filter ((`S.member`executable') . aBlockName) (aBody f)
+  blocks <- mapM (constFoldBlock a)
+              [ b | b <- aBody f, aBlockName b `S.member` executable' ]
   return $ f { aBody = blocks }
 
 constFoldBlock :: (Set Label, Map Id Value) -> ABlock -> Caml ABlock
@@ -279,9 +291,10 @@ constFoldStmt a@(_,vals) (n,i) = case i of
     CFloat f -> do
       l <- floatLabel f
       return $ Just (n,x:=ASetF l)
-    _ -> do
+    Bot -> do
       log $ "constFold: unused variable" ++ show (n,i)
-      return Nothing
+      {-return Nothing-}
+      error $ "にゃん.."
 
 -- 定数畳み込み
 constFoldExpr :: (Set Label, Map Id Value) -> AExpr -> Caml AExpr
