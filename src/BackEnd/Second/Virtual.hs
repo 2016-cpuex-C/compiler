@@ -47,8 +47,8 @@ type CamlRS = StateT RS Caml
 virtual :: AProg -> Caml AProg
 virtual (AProg fundefs) = do
   log "virtual"
-  AProg <$> mapM (virtualFunDef>=>zantei) fundefs
-  {-AProg <$> mapM (virtualFunDef>=>saveAndRestore) fundefs-}
+  {-AProg <$> mapM (virtualFunDef>=>zantei) fundefs-}
+  AProg <$> mapM (virtualFunDef>=>saveAndRestore) fundefs
 
 virtualFunDef :: AFunDef -> Caml AFunDef
 virtualFunDef f@(AFunDef l _ _ blocks _) = do
@@ -125,7 +125,13 @@ calcPtr block@(ABlock _ insts) = do
 -------------------------------------------------------------------------------
 
 saveAndRestore :: AFunDef -> Caml AFunDef
-saveAndRestore = insertSave >=> insertRestore
+saveAndRestore f = do
+  log $ show f
+  fi <- insertSave f
+  log $ show fi
+  fr <- insertRestore fi
+  log $ show fr
+  return fr
 
 ----------
 -- Save --
@@ -166,31 +172,23 @@ insertSaveI liveout inst@(n,i) = case i of
 -- Analysis.Stackを使う
 --
 --  状態
---  + 現在saveされている変数の集合 saved     :: Set Id
+--  + 現在saveされている変数の集合 saved :: Set Id
 --
 --  savedに無い変数はレジスタにある 逆も然り
 --  (ただしsave直後の関数呼び出しを除く callではrestoreしないようにすれば良さそう)
---  + Save x は Save (x ++ cnt x) に書き換える必要あり
---    + already savedの判定どうするの
---      + ~~Save (base name) (current name) のように持っておけば良い
---        + Save x "" -> Save x (x ++ cnt x)
---        + Analysis.Stackは base name だけを見る~~
---      + restoreの前にAnalysis.Stackを呼んで,
---        不要なsaveは除去しておけば良い
+--  + restoreの前にAnalysis.Stackを呼んで, 不要なsaveは除去しておく?
 --  + savedにある変数を見たら直前にrestoreを挿入し,savedから削除
 --  + traverseの順番を間違えると死ぬ
 --    + 多分Emitと同じように単純にdfsでよい
--- ASaveは[Id]を引数に取るのがいいかもしれない
---
+-- ASaveは[Id]を引数に取るのがいいかもしれない?
 -- used inst と saved のintersectionをとる
---
--- とりあえず
 
 insertRestore :: AFunDef -> Caml AFunDef
 insertRestore fun@(AFunDef _ xs ys _ _) = do
   let stackMap  = stackSets fun
       blockTree = dfsBlock fun
   liveout <- analyzeLifetime fun
+  log.show $ toLiveOutB liveout
   blocks <- M.elems . view bmap <$>
     execStateT (insertRestoreTree (S.fromList (xs++ys)) stackMap blockTree) RS {
       _bmap     = blockMap fun
@@ -207,14 +205,15 @@ insertRestore fun@(AFunDef _ xs ys _ _) = do
       | b <- aBody fun
       , let l = aBlockName b
             lastId = fst $ lastStmt b
-            lives = fromJustNote "hoge" $ M.lookup lastId liveout'
+            lives = fromJustNote "そんなバナナ" $ M.lookup lastId liveout'
       ]
 
+-- entry blockではArgsを考慮する必要がある
 insertRestoreTree :: Set Id -> Map Label (Set Id) -> Tree ABlock -> CamlRS ()
-insertRestoreTree rs stackMap (Node b ts) = do
+insertRestoreTree mArgs stackMap (Node b ts) = do
   let l = aBlockName b
       Just s = M.lookup l stackMap
-  insertRestoreBlock rs s b
+  insertRestoreBlock mArgs s b
   mapM_ (insertRestoreTree S.empty stackMap) ts
 
 -- super tanuki
@@ -225,44 +224,60 @@ insertRestoreTree rs stackMap (Node b ts) = do
 --　 しｌ　 x　）J
 -- ___.'､ヽ　 ノ
 --(_((_,ノＵ¯Ｕ
+--
+-- mArgs:   entryブロックの場合は引数がすでにレジスタにある
+-- stackIn: ブロックの先頭でstackにある変数
 insertRestoreBlock :: Set Id -> Set Id -> ABlock -> CamlRS ()
-insertRestoreBlock rs s (ABlock l stmts) = do
+insertRestoreBlock mArgs stackIn (ABlock l stmts) = do
 
   regSetIn <- do
     preds <- uses predMap (M.findWithDefault [] l)
     x <- mapM (\l' -> uses liveOutB (uncurry S.union . unsafeLookup l')) preds
+        -- predsの
     if null x
       then return S.empty
       else return $ foldl1 S.intersection x
   lift.log $ "insertRestoreBlock: " ++ show l
   lift.log $ show regSetIn
 
-  let うわああああんもういやだあああ = True
-  if うわああああんもういやだあああ
-    then error "うわああああんもういやだあああ"
-    else return ()
-
-  stackSet %= S.filter (`S.member` s)
-  regSet   .= regSetIn `S.union` rs
+  {-stackSet %= S.filter (`S.member` stackIn)-}
+  stackSet .= stackIn
+  regSet   .= regSetIn `S.union` mArgs
   Just (stmts_,term) <- unsnoc <$> concatMapM insertRestoreStmt stmts
 
   inReg <- use regSet
   Just (liveout,liveoutF) <- uses liveOutB (M.lookup l)
+
+  lift.log $ show l ++ ": liveout = " ++ show liveout
+  lift.log $ show l ++ ": inReg   = " ++ show inReg
+
   restore  <- forM (S.toList $ liveout S.\\ inReg) $ \x -> do
     regSet %= S.insert x
     lift $ assignInstId $ Do (ARestore x)
+
   restoreF <- forM (S.toList $ liveoutF S.\\ inReg) $ \x -> do
     regSet %= S.insert x
     lift $ assignInstId $ Do (AFRestore x)
+
   addBlock l $ stmts_ ++ restore ++ restoreF ++ [term]
 
 insertRestoreStmt :: Statement -> CamlRS [Statement]
-insertRestoreStmt s = case snd s of
+insertRestoreStmt s = do
+ lift.log.(show (fst s)++).(": "++).show =<< use regSet
+ case snd s of
   Do (ASave x) -> uses stackSet (S.member x) >>= \case
     True  -> return []
     False -> return [s]
 
-  {-Do APhiV{} -> return [s]-}
+  -- phiについてはつつがなく処理が行われると考えて良い
+  -- + 使われる変数はregisterにあると考えて良い
+  --   各ブロックの最後にrestoreしているため
+  -- TODO restoreしないほうが命令数は減る
+  --      registerに無い変数はSSA_Deconstructionでrestoreすべき
+  i@(Do APhiV{}) -> do
+    let added = S.union (uncurry S.union $ useInst i) (uncurry S.union $ defInst i)
+    regSet %= S.union added
+    return [s]
 
   inst -> do
     inReg <- use regSet
