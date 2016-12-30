@@ -344,7 +344,6 @@ opeFloat ~(LConstOpe (LFloat f)) = f
 
 opePtrM :: LOperand -> CamlV Integer
 opePtrM ~(LConstOpe (LGetPtrC c cs)) = do
-  lift.log $ show (c,cs)
   let ~(LGlobal (arr,_)) = c
       n = case cs of
         [LInt 0, LInt m] -> m

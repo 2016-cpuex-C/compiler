@@ -150,7 +150,7 @@ emitTree stackMap (Node b ts) = do
   let Just s = M.lookup (aBlockName b) stackMap
   emitBlock s b
   stkBak <- use stack
-  forM_ ts $ \t@(Node b' _) -> do
+  forM_ ts $ \t -> do
     emitTree stackMap t
     stack .= stkBak
 
