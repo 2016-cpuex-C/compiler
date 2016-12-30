@@ -1,4 +1,5 @@
-{-# LANGUAGE LambdaCase #-} {-# LANGUAGE TupleSections #-}
+{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TemplateHaskell #-}
 -- remove or simplify virtual instructions
 
@@ -53,8 +54,7 @@ virtualFunDef :: AFunDef -> Caml AFunDef
 virtualFunDef f@(AFunDef l _ _ blocks _) = do
   log $ "virtualFunDef: " ++ show l
   blocks' <- forM blocks $
-                mergePhis
-                >=> calcPtr
+                mergePhis >=> calcPtr
   return f{ aBody=blocks' }
 
 -------------------------------------------------------------------------------
@@ -90,24 +90,39 @@ mergePhis block@(ABlock _ stmts) =
 calcPtr :: ABlock -> Caml ABlock
 calcPtr block@(ABlock _ insts) = do
   heap <- use globalHeap
-  return block{ aStatements = concatMap (f heap) insts }
+  inst' <- concatMapM (f heap) insts
+  return block{ aStatements = inst' }
     where
       f heap i@(n,ninst)= case ninst of
         x := APtr p ixs ->
-          let [ix] = ixs
-          in  [(n, x := AAdd p ix)]
-        x := APtrG (Label p) ixs -> case ixs of
-          [C j] -> let Just (addr,_,_) = M.lookup p heap
-                   in  [(n, x := ASet (addr+j))]
-          [V y] -> let Just (addr,_,_) = M.lookup p heap
-                   in  [(n, x := AAdd y (C addr))]
-          _ -> error "BackEnd.Second.Virtual: Not Implemented"
-        _ -> [i]
+          case ixs of
+          [ix] -> return [(n, x := AAdd p ix)]
+          [C k,C j] -> do
+            ptr <- genId "ptr"
+            m   <- freshInstId
+            return [(n,ptr := ALd p (C k)), (m, x := AAdd ptr (C j))]
+          [V y,C j] -> do
+            tmp <- genId "tmp"
+            ptr <- genId "ptr"
+            m   <- freshInstId
+            l   <- freshInstId
+            return [(l, tmp := AAdd p (V y)), (n, ptr := ALd tmp (C 0)), (m, x := AAdd ptr (C j))]
+          _ -> error $ "BackEnd.Second.Virtual: Not Implemented: " ++ show i
+        x := APtrG (Label p) ixs ->
+          let Just (addr,_,_) = M.lookup p heap
+          in  case ixs of
+          [C j]     -> return [(n, x := ASet (addr+j))]
+          [V y]     -> return [(n, x := AAdd y (C addr))]
+          [V y,C j] -> do
+            ptr <- genId "ptr"
+            m   <- freshInstId
+            return [(n, ptr := ALd y (C addr)), (m, x := AAdd ptr (C j))]
+          _ -> error $ "BackEnd.Second.Virtual: Not Implemented: " ++ show i
+        _ -> return [i]
 
 -------------------------------------------------------------------------------
 -- Save/Restore
 -------------------------------------------------------------------------------
-
 
 saveAndRestore :: AFunDef -> Caml AFunDef
 saveAndRestore = insertSave >=> insertRestore
@@ -170,7 +185,6 @@ insertSaveI liveout inst@(n,i) = case i of
 -- used inst と saved のintersectionをとる
 --
 -- とりあえず
-
 
 insertRestore :: AFunDef -> Caml AFunDef
 insertRestore fun@(AFunDef _ xs ys _ _) = do
@@ -292,7 +306,7 @@ zanteiI liveout inst@(n,i) = case i of
   x := ACall t _ _ _ -> zanteiISub inst (Just (x,t))
   _ -> return [inst]
   where
-    (live,liveF)  =
+    (live,liveF) =
       fromJustNote ("zanteiI: live: " ++ show inst) (M.lookup n liveout)
 
     zanteiISub :: (InstId, Inst)

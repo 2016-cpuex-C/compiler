@@ -1,4 +1,5 @@
 #! /usr/bin/env bash
 # 手元でビルドしたい場合, https://github.com/commercialhaskell/stack をインストールして
 # このスクリプトを走らせてください. 初回は結構時間かかると思います.
+# 追記: llvm-3.5が必要です. ubuntuなら `sudo apt-get install llvm-3.5` で入ります
 stack --local-bin-path ./ install && cp ./min-caml ~/.local/bin/min-caml

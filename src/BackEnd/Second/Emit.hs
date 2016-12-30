@@ -40,7 +40,8 @@ import           Data.Char                  (toLower)
 data ES = ES {
     _hout      :: Handle
   , _colorMaps :: (Map Id Color, Map Id Color)
-  , _stack     :: Map Id Integer
+  , _stack     :: Set Id
+  , _offset'   :: Map Id Integer
   }
 makeLenses ''ES
 
@@ -74,10 +75,19 @@ regF x
         Nothing -> error $ "freg: " ++ x
 
 stackSize :: CamlE Integer
-stackSize = (1+) <$> uses stack (M.foldl' max 0)
+stackSize = do
+  offsetMap <- use offset'
+  return $ (+1) . maximumDef 0 $ M.elems offsetMap
 
 offset :: Id -> CamlE Integer
-offset x = fromJustNote ("offset: "++x) <$> uses stack (M.lookup x)
+offset x = do
+  offsetMap <- use offset'
+  case M.lookup x offsetMap of
+    Just n -> return n
+    Nothing -> do
+      let n = fromIntegral $ M.size offsetMap + 1
+      offset' %= M.insert x n
+      return n
 
 -------------------------------------------------------------------------------
 -- Code Emit
@@ -122,17 +132,17 @@ emitProg h prog = do
 
 emitFun :: Handle -> AFunDef -> Caml ()
 emitFun h f = do
-  log $ show f
   colMaps <- colorFun f
   f'@(AFunDef l _ _ _ _) <- ssaDeconstruct colMaps f
-  log $ show colMaps
-  {-log $ show f'-}
+  log $ "Emit: " ++ show l
+  log $ show f'
   liftIO $ hPutStrLn h $ unLabel l ++ ":"
   let stackMap = stackSets f'
   evalStateT (emitTree stackMap $ dfsBlock f') ES {
       _hout      = h
     , _colorMaps = colMaps
-    , _stack     = M.empty
+    , _stack     = S.empty
+    , _offset'   = M.empty
     }
 
 emitTree :: Map Label (Set Id) -> Tree ABlock -> CamlE ()
@@ -140,15 +150,15 @@ emitTree stackMap (Node b ts) = do
   let Just s = M.lookup (aBlockName b) stackMap
   emitBlock s b
   stkBak <- use stack
-  forM_ ts $ \t -> do
+  forM_ ts $ \t@(Node b' _) -> do
     emitTree stackMap t
     stack .= stkBak
 
 emitBlock :: Set Id -> ABlock -> CamlE ()
 emitBlock s (ABlock l stmts) = do
-  stack %= M.filterWithKey (\k _ -> k `S.member` s)
+  stack %= S.filter (`S.member` s)
   stk <- use stack
-  unless (all (`M.member` stk) s) $ error . unlines . map unwords $
+  unless (all (`S.member` stk) s) $ error . unlines . map unwords $
     [ [ "emitBlock: bug: at", unLabel l ]
     , [ show s, "should have been already saved" ]
     , [ "but only ", show stk, "is actualy saved" ]
@@ -202,7 +212,7 @@ emitInst = \case
   x := AFMul y z        -> fff "mul.s" x y z
   x := AFDiv y z        -> fff "div.s" x y z
   x := AFLd  y (C i)    -> fri'"l.sr"  x y i
-  Do (AFSt x y (C i))   -> fri'"s.s"   x y i >> write ("#" ++ show (x,y))
+  Do (AFSt x y (C i))   -> fri'"s.s"   x y i -- >> write ("#" ++ show (x,y))
   x := AFLdi i          -> fri'"l.sr"  x regZero i
   Do (AFSti x i)        -> fri'"s.s"   x regZero i
 
@@ -216,24 +226,6 @@ emitInst = \case
   x := ACmp  p y (V z)  -> prrr "cmp"   p x y z
   x := ACmp  p y (C i)  -> prri "cmpi"  p x y i
   x := AFCmp p y z      -> prff "cmp.s" p x y z
-  --x := ACmp EQ y (V z)  -> rrr "cmp.eq" x y z
-  --x := ACmp NE y (V z)  -> rrr "cmp.ne" x y z
-  --x := ACmp LE y (V z)  -> rrr "cmp.le" x y z
-  --x := ACmp GE y (V z)  -> rrr "cmp.ge" x y z
-  --x := ACmp LT y (V z)  -> rrr "cmp.lt" x y z
-  --x := ACmp GT y (V z)  -> rrr "cmp.gt" x y z
-  --x := ACmp EQ y (C i)  -> rri "cmpi.eq" x y i
-  --x := ACmp NE y (C i)  -> rri "cmpi.ne" x y i
-  --x := ACmp LE y (C i)  -> rri "cmpi.le" x y i
-  --x := ACmp GE y (C i)  -> rri "cmpi.ge" x y i
-  --x := ACmp LT y (C i)  -> rri "cmpi.lt" x y i
-  --x := ACmp GT y (C i)  -> rri "cmpi.gt" x y i
-  --x := AFCmp EQ y z     -> rff "cmp.eq.s" x y z
-  --x := AFCmp NE y z     -> rff "cmp.ne.s" x y z
-  --x := AFCmp LE y z     -> rff "cmp.le.s" x y z
-  --x := AFCmp GE y z     -> rff "cmp.ge.s" x y z
-  --x := AFCmp LT y z     -> rff "cmp.lt.s" x y z
-  --x := AFCmp GT y z     -> rff "cmp.gt.s" x y z
 
   Do (ASwap  x y)       -> rr "swap" x y
   Do (AFSwap x y)       -> ff "swap.s" x y
@@ -279,54 +271,50 @@ emitInst = \case
 -- {{{
 rr :: String -> Id -> Id -> CamlE ()
 rr s x y = write =<<
-  printf "\t%s\t%s, %s" s <$> reg x <*> reg y
+  printf "\t%s\t%s, %s\t# %s" s <$> reg x <*> reg y <*> return (unwords [s,x,y])
 
 rrr :: String -> Id -> Id -> Id -> CamlE ()
-rrr s x y z = write =<< 
-  printf "\t%s\t%s, %s, %s" s <$> reg x <*> reg y <*> reg z
+rrr s x y z = write =<<
+  printf "\t%s\t%s, %s, %s\t# %s" s <$> reg x <*> reg y <*> reg z <*> return (unwords [x,y,z])
 
 rri :: String -> Id -> Id -> Integer -> CamlE ()
-rri s x y i = write =<< 
-  printf "\t%s\t%s, %s, %d" s <$> reg x <*> reg y <*> return i
+rri s x y i = write =<<
+  printf "\t%s\t%s, %s, %d\t# %s" s <$> reg x <*> reg y <*> return i <*> return (unwords [x,y,show i])
 
 rri' :: String -> Id -> Id -> Integer -> CamlE ()
 rri' s x y i = write =<<
-  printf "\t%s\t%s, %d(%s)" s <$> reg x <*> return i <*> reg y
+  printf "\t%s\t%s, %d(%s)# %s" s <$> reg x <*> return i <*> reg y <*> return (unwords [x,y,show i])
 
 ri :: String -> Id -> Integer -> CamlE ()
-ri s x i = write =<< 
+ri s x i = write =<<
   printf "\t%s\t%s, %d" s <$> reg x <*> return i
 
 ff :: String -> Id -> Id -> CamlE ()
-ff s x y = write =<< 
-  printf "\t%s\t%s, %s" s <$> regF x <*> regF y
+ff s x y = write =<<
+  printf "\t%s\t%s, %s# %s" s <$> regF x <*> regF y <*> return (unwords [x,y])
 
 fff :: String -> Id -> Id -> Id -> CamlE ()
-fff s x y z = write =<< 
-  printf "\t%s\t%s, %s, %s" s <$> regF x <*> regF y <*> regF z
+fff s x y z = write =<<
+  printf "\t%s\t%s, %s, %s# %s" s <$> regF x <*> regF y <*> regF z <*> return (unwords [x,y,z])
 
 fri' :: String -> Id -> Id -> Integer -> CamlE ()
-fri' s x y i = write =<<  
-  printf "\t%s\t%s, %d(%s)" s <$> regF x <*> return i <*> reg y
-
-fi :: String -> Id -> Integer -> CamlE ()
-fi s x i = write =<< 
-  printf "\t%s\t%s, %d" s <$> regF x <*> return i
+fri' s x y i = write =<<
+  printf "\t%s\t%s, %d(%s)# %s" s <$> regF x <*> return i <*> reg y <*> return (unwords [x,y])
 
 rff :: String -> Id -> Id -> Id -> CamlE ()
-rff s x y z = write =<< 
+rff s x y z = write =<<
   printf "\t%s\t%s, %s, %s" s <$> reg x <*> regF y <*> regF z
 
 frff :: String -> Id -> Id -> Id -> Id -> CamlE ()
-frff s x y z w = write =<< 
+frff s x y z w = write =<<
   printf "\t%s\t%s, %s, %s, %s" s <$> regF x <*> reg y <*> regF z <*> regF w
 
 rrrr :: String -> Id -> Id -> Id -> Id -> CamlE ()
-rrrr s x y z w = write =<< 
+rrrr s x y z w = write =<<
   printf "\t%s\t%s, %s, %s, %s" s <$> reg x <*> reg y <*> reg z <*> reg w
 
 rrir :: String -> Id -> Id -> Integer -> Id -> CamlE ()
-rrir s x y i w = write =<< 
+rrir s x y i w = write =<<
   printf "\t%s\t%s, %s, %d, %s" s <$> reg x <*> reg y <*> return i <*> reg w
 
 rrri :: String -> Id -> Id -> Id -> Integer -> CamlE ()
@@ -388,11 +376,11 @@ call :: Type -> Maybe Id -> Label -> [Id] -> [Id] -> CamlE ()
 call t mx (Label f) ys zs = do
   setArgs ys zs
   ss <- stackSize
-  rri' "sw"   regRa regSp ss
-  rri  "addi" regSp regSp (ss+1)
+  rri' "sw"   regRa regSp 0
+  rri  "addi" regSp regSp ss
   write $ "\tjal " ++ f ++ "\t# " ++ show mx
-  rri  "addi" regSp regSp (-ss-1)
-  rri' "lwr"  regRa regSp ss
+  rri  "addi" regSp regSp (-ss)
+  rri' "lwr"  regRa regSp 0
   case mx of
     Nothing -> return ()
     Just x | t == TFloat -> movs x (fregs!0)
@@ -424,44 +412,40 @@ setArgs xs ys = do
       instF' = map actToInstF' $ resolveBy regF' $ zip allFRegs ys
   mapM_ emitInst $ inst' ++ instF'
 
-{-|| resolveBy :: Eq b => (a -> b) -> [(a, a)] -> [Action a]-}
-
 push :: Id -> CamlE ()
-push x = do
-  -- TODO stackSizeではなく空いてる番号を使う
-  ss <- stackSize
-  stack %= M.insert x ss
+push x = stack %= S.insert x
 
 save :: Id -> CamlE ()
-save x = uses stack (M.member x) >>= \case
-  True  -> return ()--write $ "\t# already saved: " ++ x
+save x = uses stack (S.member x) >>= \case
+  True  -> write $ "\t# "++ x ++ " is already saved: "
   False -> do push x
               n <- offset x
               rri' "sw" x regSp n
-              {-write $ "\t\t# save: " ++ x-}
+              write $ "\t\t# save: " ++ x
 
 saveF :: Id -> CamlE ()
-saveF x = uses stack (M.member x) >>= \case
-  True  -> return()--write $ "\t# already saved: " ++ x
+saveF x = uses stack (S.member x) >>= \case
+  True  -> write $ "\t# "++ x ++ " is already saved: "
   False -> do push x
               n <- offset x
               fri' "s.s" x regSp n
-              {-write $ "\t\t# save: " ++ x-}
+              write $ "\t\t# save: " ++ x
 
 restore :: Id -> CamlE ()
 restore x = do
   n <- offset x
   rri' "lwr" x regSp n
-  {-write $ "\t\t# restore: " ++ x-}
+  write $ "\t\t# restore: " ++ x
 
 restoreF :: Id -> CamlE ()
 restoreF x = do
   n <- offset x
   fri' "l.sr" x regSp n
-  {-write $ "\t\t# restore: " ++ x-}
+  write $ "\t\t# restore: " ++ x
 
 -- }}}
 
 unsafeLookup :: (Show a, Ord a) => a -> Map a b -> b
 unsafeLookup key dic = fromJustNote ("Emit: unsafeLookup: "++ show key) $ M.lookup key dic
+
 

@@ -344,8 +344,11 @@ opeFloat ~(LConstOpe (LFloat f)) = f
 
 opePtrM :: LOperand -> CamlV Integer
 opePtrM ~(LConstOpe (LGetPtrC c cs)) = do
+  lift.log $ show (c,cs)
   let ~(LGlobal (arr,_)) = c
-      ~[LInt 0, LInt n] = cs
-  (addr,_,_) <- lift $ uses globalHeap (unsafeLookup arr)
+      n = case cs of
+        [LInt 0, LInt m] -> m
+        _ -> error $ "opePtrM: " ++ show (c,cs)
+  Just (addr,_,_) <- lift $ uses globalHeap (M.lookup arr)
   return $ addr+n
 

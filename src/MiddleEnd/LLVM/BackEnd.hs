@@ -212,10 +212,12 @@ typeOfLConst = \case
   LGetPtrC c cs -> f (typeOfLConst c) cs
     where
       f t [] = TPtr t
-      f t (_:is) = case t of
+      f t ~(LInt i:is) = case t of
         TPtr t'     -> f t' is
         TArray _ t' -> f t' is
-        _ -> error "223"
+        TTuple ts'  -> f (ts'!!fromIntegral i) is
+        _ -> error $ "typeOfLConst: " ++ show (t, LGetPtrC c cs)
+
 
 const' :: C.Constant -> LConst
 const' c = case c of

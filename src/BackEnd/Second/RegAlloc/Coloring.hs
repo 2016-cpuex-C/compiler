@@ -53,7 +53,6 @@ type CamlCS = StateT CS Caml
 colorFun :: AFunDef -> Caml (Map Id Color, Map Id Color)
 colorFun f@(AFunDef l xs ys _ _) = do
   liveout <- analyzeLifetime f
-  log $ "colorFun: " ++ show l
   s <- execStateT (colorTree (dominatorTree f)) CS {
             _liveOut   = liveout
           , _colorMap  = M.fromList $ zip xs [0..]

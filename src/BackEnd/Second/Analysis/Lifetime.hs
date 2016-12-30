@@ -7,10 +7,11 @@ module BackEnd.Second.Analysis.Lifetime (
     analyzeLifetime
   ) where
 
-import Base hiding (unsafeLookup)
+import Base
 import BackEnd.Second.Asm
 import BackEnd.Second.Analysis.Base
 
+import           Safe
 import           Prelude hiding (log,succ)
 import           Data.Map (Map)
 import qualified Data.Map as M
@@ -20,7 +21,6 @@ import           Control.Monad.Trans.State
 import           Control.Lens (use,uses,view,makeLenses)
 import           Control.Lens.Operators
 import           Control.Monad (unless)
-import Data.Maybe (fromMaybe)
 
 -------------------------------------------------------------------------------
 -- Types
@@ -56,7 +56,7 @@ analyzeLifetimeSub = do
 
 update :: InstId -> CamlLA ()
 update n = do
-  succs <- uses succMap (unsafeLookup n)
+  Just succs <- uses succMap (M.lookup n)
   new <- next n succs
   liveOut %= M.insert n new
 
@@ -80,7 +80,8 @@ getSuccMap f
         go ~((n,_):rest) = gets (M.member n) >>= \case
           False
             | null rest -> do
-                let succBlocks  = map (`unsafeLookup` bmap) (nextBlockNames b)
+                let succBlocks  = [ b' | ~(Just b') <- map (`M.lookup` bmap) (nextBlockNames b) ]
+                                --map (`unsafeLookup` bmap) (nextBlockNames b)
                     succInstIds = map firstInstId succBlocks
                 modify $ M.insert n succInstIds
                 mapM_ getSuccMapSub succBlocks
@@ -107,36 +108,33 @@ getInstMap (AFunDef _ _ _ blocks _) = M.unions $ map instMapSub blocks
 -------------------------------------------------------------------------------
 
 blockOfInst :: InstId -> CamlLA Label
-blockOfInst n = uses instMap (fst.unsafeLookup n)
+blockOfInst n = uses instMap (fst.fromJustNote msg.M.lookup n)
+  where msg = "Analysis.Lifetime.blockOfInst: " ++ show n
 
 out' :: InstId -> CamlLA (Set Id, Set Id)
 out' n = uses liveOut (M.findWithDefault (S.empty,S.empty) n)
 
 def' :: InstId -> CamlLA (Set Id, Set Id)
-def' n = defInst <$> uses instMap (snd.unsafeLookup n)
+def' n = defInst <$> uses instMap (snd.fromJustNote msg.M.lookup n)
+  where msg = "Analysis.Lifetime.def': " ++ show n
 
 -- Variables used in instruction `m` after the execution of `n`
 -- (phi function uses different variables dependent on its predecessor)
 -- (nande kokodake eigo yanen)
 use' :: InstId -> InstId -> CamlLA (Set Id, Set Id)
-use' n m = uses instMap (snd.unsafeLookup m) >>= useInst'
+use' n m = uses instMap (snd.fromJustNote msg.M.lookup m) >>= useInst'
   where
+    msg = "use'" ++ show (n,m)
+
     useInst' :: Inst -> CamlLA (Set Id, Set Id)
     useInst' (Do (APhiV ps)) = do
       b <- blockOfInst n
       let xvs = case lookup b ps of
                   Just hoge -> hoge
-                  Nothing   -> error $ show (n,b,ps)
+                  Nothing   -> error $ "use': " ++ show (n,b,ps)
 
       return (S.fromList [ y | (_, PVVar y t _) <- xvs, t /= TFloat ]
              ,S.fromList [ y | (_, PVVar y t _) <- xvs, t == TFloat ])
 
     useInst' inst = return $ useInst inst
-
--------------------------------------------------------------------------------
--- Util
--------------------------------------------------------------------------------
-
-unsafeLookup :: (Show a, Ord a) => a -> Map a b -> b
-unsafeLookup key dic = fromMaybe (error $ "LA: unsafeLookup: "++ show key) $ M.lookup key dic
 

@@ -4,15 +4,16 @@
 module MiddleEnd.CSE where
 {- Common Subexpression Elimination -}
 
-import           Base hiding (unsafeLookup)
+import           Base
 import           MiddleEnd.KNormal
 import           MiddleEnd.Elim    (hasSubEffect)
 
+import           Safe
 import           Data.Map (Map)
 import qualified Data.Map as M
 import           Control.Monad.Reader
---import           Data.Maybe
 import           Data.Maybe (fromMaybe)
+
 fromJust :: Maybe a -> a
 fromJust = fromMaybe (error "cse.hs")
 
@@ -31,8 +32,8 @@ cElim e = do
   if | hasSubEffect e -> return e
      | calculated -> case e of
           KUnit -> return e
-          KInt{} -> return e -- そのままでよい
-          _ -> KVar <$> asks (unsafeLookup e)
+          KInt{} -> return e
+          _ -> KVar <$> asks (fromJustNote "cElim".M.lookup e)
      | otherwise -> case e of
           KLet (x,t) e1 e2 -> do
             e2' <- local (M.insert e1 x) (cElim e2)
@@ -48,7 +49,4 @@ cElim e = do
           KLetTuple xts y e1 ->
             KLetTuple xts y <$> cElim e1
           _ -> return e
-
-unsafeLookup :: Ord a => a -> Map a b -> b
-unsafeLookup key dic = fromMaybe (error "CSE: unsafeLookup") $ M.lookup key dic
 

@@ -104,7 +104,8 @@ f env e = case e of
         lift.log $ "LambdaLifting: free variable(s) " ++ ppList fvs ++ " " ++
                    "found in function " ++ x
         let (fvs1,fvs2) = splitAt (maxArgs - length ys) fvs
-            ts = map (`unsafeLookup` env) fvs1
+            ts = [ t' | ~(Just t') <- map (`M.lookup` env) fvs1 ]
+               --map (`unsafeLookup` env) fvs1
             insertOrigin = KLetRec fundef{kbody = KApp (liftName x) (fvs1++ys)}
             envE2' = M.insert (liftName x) (liftTy t ts) envE2
         if null fvs2 then do
