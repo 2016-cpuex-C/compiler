@@ -1,7 +1,6 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE TupleSections #-}
-{-# LANGUAGE TemplateHaskell #-}
 
 module BackEnd.Second.Analysis.Base where
 
@@ -13,8 +12,9 @@ import qualified Data.Map as M
 import           Data.Set (Set)
 import qualified Data.Set as S
 import           Data.Tree
-import           Data.List (isPrefixOf, partition)
+import           Data.List (foldl',isPrefixOf,partition)
 import           Data.List.Extra (groupSort)
+import Data.Maybe (fromMaybe)
 
 ----------
 -- Prog --
@@ -33,21 +33,19 @@ popMain (AProg fs) =
 sortBlock :: AFunDef -> [ABlock]
 sortBlock (AFunDef _ _ _ blocks _) =
   let name = unLabel . aBlockName
-      ([entry],others) = partition (\b -> "entry." `isPrefixOf` (name b)) blocks
+      ([entry],others) = partition (\b -> "entry." `isPrefixOf` name b) blocks
   in entry:others
 
 dfsBlock :: AFunDef -> Tree ABlock
-dfsBlock f = fmap toBlock $ dfsBlockName f
-  where toBlock l = case M.lookup l (blockMap f) of
-                      Just b -> b
-                      Nothing -> error "Impossible"
+dfsBlock f = toBlock <$> dfsBlockName f
+  where toBlock l = fromMaybe (error "Impossible") (M.lookup l (blockMap f))
 
 dfsBlockName :: AFunDef -> Tree Label
 dfsBlockName f = mapToDFSTree (entryBlockName f) (succBlockMap f)
 
 -- TODO 名前がblockMapとかぶってる
 succBlockMap :: AFunDef -> Map Label [Label]
-succBlockMap f = M.fromList $
+succBlockMap f = M.fromList
   [ (aBlockName b,ls) | b <- aBody f, let ls = nextBlockNames b ]
 
 predBlockMap :: AFunDef -> Map Label [Label]
@@ -58,14 +56,8 @@ defSiteMap :: AFunDef -> Map Id Statement
 defSiteMap (AFunDef _ _ _ blocks _) = M.unions $ map defSiteMapB blocks
 
 useSiteMap :: AFunDef -> Map Id [Statement]
-useSiteMap (AFunDef _ _ _ blocks _) = go M.empty $ map useSiteMapB blocks
-  where
-    go acc [] = acc
-    go acc (m:ms) = go (M.foldWithKey f acc m) ms
-    f x stmts acc = M.alter g x acc
-      where g Nothing = Just stmts
-            g (Just stmts') = Just (stmts++stmts')
-
+useSiteMap (AFunDef _ _ _ blocks _) =
+  foldl' (M.foldWithKey insertAppendList) M.empty $ map useSiteMapB blocks
 
 -----------
 -- Block --
@@ -87,7 +79,7 @@ nextBlockNames (ABlock _ contents) = f $ toExpr $ last contents
         "BackEnd.Second.Analysis.Base: nextBlockNames: non-terminator: " ++ show i
 
 defSiteMapB :: ABlock -> Map Id Statement
-defSiteMapB (ABlock _ stmts) = M.fromList $ concat $
+defSiteMapB (ABlock _ stmts) = M.fromList $ concat
   [ zip (xs++ys) (repeat s) | s <- stmts, let (xs,ys) = toList2 $ defInst (snd s) ]
 
 useSiteMapB :: ABlock -> Map Id [Statement]

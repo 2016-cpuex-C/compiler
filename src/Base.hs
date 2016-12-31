@@ -238,12 +238,17 @@ unsafeLookup :: (Show a, Ord a) => a -> Map a b -> b
 unsafeLookup key dic = fromMaybe (error $ "Base: unsafeLookup: "++ show key) $ M.lookup key dic
 
 insertList :: Ord key => [(key,a)] -> Map key a -> Map key a
-insertList xts = M.union (M.fromList xts)
+insertList = M.union . M.fromList
 
 insertAppend :: Ord a => a -> b -> Map a [b] -> Map a [b]
 insertAppend x y = M.alter f x
   where f Nothing   = Just [y]
         f (Just ys) = Just (y:ys)
+
+insertAppendList :: Ord a => a -> [b] -> Map a [b] -> Map a [b]
+insertAppendList x ys = M.alter f x
+  where f Nothing   = Just ys
+        f (Just ys') = Just (ys++ys')
 
 flipMap :: (Ord a, Ord b) => Map a b -> Map b [a]
 flipMap = M.foldlWithKey f M.empty
