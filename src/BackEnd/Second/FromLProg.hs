@@ -14,7 +14,6 @@ import           Control.Lens               (use,uses,_1,_2)
 import           Control.Lens.Operators
 import           Control.Monad.Trans.State
 import           Data.List                  (isPrefixOf, partition)
-import           Control.Monad              (forM_)
 import qualified Data.Map as M
 
 -------------------------------------------------------------------------------

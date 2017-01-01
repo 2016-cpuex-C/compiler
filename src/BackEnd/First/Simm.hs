@@ -10,10 +10,8 @@ import Prelude hiding (exp)
 import Base
 import BackEnd.First.Asm
 
-import           Data.Map (Map)
 import qualified Data.Map as M
 import           Data.Bits (shift)
---import           Data.Maybe (fromJust)
 
 import           Data.Maybe (fromMaybe)
 fromJust :: Maybe a -> a
@@ -34,7 +32,7 @@ g env = \case
   AsmLet xt exp e -> AsmLet xt (g' env exp) (g env e)
 
 g' :: Map Id Integer -> AExpr -> AExpr
-g' env = let geti var = lookupJust var env
+g' env = let geti var = lookupMapJustNote "Simm" var env
              get  var = C (geti var) in \case
   AAdd x (V y)
     | M.member y env -> AAdd x (get y)

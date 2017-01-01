@@ -2,8 +2,84 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE FlexibleContexts #-}
 
-module Base where
+module Base (
 
+  -- Data Types
+  -------------
+    Id
+  , Label(..)
+  , Type(..)
+  , TyEnv
+  , TV(..)
+  , Error(..) -- TODO これ使ってないなあ
+  , Predicate(..)
+  , Named(..)
+  , Caml
+  , S(..) -- TODO 名前変更
+
+  -- Lenses
+  ---------
+  , idCount
+  , tvCount
+  , threshold
+  , optimiseLimit
+  , extTyEnv
+  , constFloats
+  , globalHeap
+  , startGP
+  , logfile
+  , instCount
+
+  --
+  -----------
+  , unLabel
+  , genType
+  , genTmp
+  , genId
+  , ppList
+  , toGlobalId
+  , globalArrayEnv
+  , externalEnv
+  , floatLabel
+  , labelFloat
+  , initialState
+  , maxArgs
+  , log
+  , runCaml
+  , runCamlDefault
+  , lift
+  , liftIO
+  , errorShow
+
+  -- Util
+  -----------
+  , lookupRev
+  , both
+  , lookupMapJustNote
+  , insertList
+  , insertAppend
+  , insertAppendList
+  , flipMap
+  , mapToTree
+  , mapToDFSTree -- TODO rename
+  , toList2
+  , fromList2
+  , union2
+  , unions2
+  , difference2
+  , both2
+
+    -- export
+  , module Safe
+  , module Data.Map
+  , module Data.Set
+  , module Control.Monad
+  , module Control.Monad.Except
+
+) where
+
+import           Prelude                          hiding (log)
+import           Safe
 import           Data.IORef
 import           Control.Lens                     (makeLenses,use,uses,bimap)
 import           Control.Lens.Operators
@@ -11,14 +87,13 @@ import           Data.Map                         (Map)
 import qualified Data.Map                         as M
 import           Data.Set                         (Set)
 import qualified Data.Set                         as S
-import           Data.Maybe                       (fromMaybe)
 import           Data.Tree
-import           Control.Monad.Trans as T         (MonadTrans,lift)
+import           Control.Monad                    (join,when,unless,forM_,forM,(>=>))
+import qualified Control.Monad.Trans as T         (MonadTrans,lift)
 import           Control.Monad.Trans.Except
 import           Control.Monad.Trans.State.Lazy
 import qualified Control.Monad.IO.Class           as IOC
 import           Control.Monad.Except             (throwError, catchError)
-import           Control.Monad.Error.Class        (MonadError)
 import           System.IO                        (Handle, stdout, hPutStrLn)
 
 -------------------------------------------------------------------------------
@@ -209,17 +284,11 @@ runCaml c s = runExceptT $ evalStateT c s
 -- Util
 -------------------------------------------------------------------------------
 
-lift :: (MonadTrans t, Monad m) => m a -> t m a
+lift :: (T.MonadTrans t, Monad m) => m a -> t m a
 lift = T.lift
 
 liftIO :: IOC.MonadIO m => IO a -> m a
 liftIO = IOC.liftIO
-
-catch :: MonadError e m => m a -> (e -> m a) -> m a
-catch = catchError
-
-throw :: MonadError e m => e -> m a
-throw = throwError
 
 errorShow :: Show a => String -> a -> b
 errorShow s x = error $ s ++ show x
@@ -234,8 +303,9 @@ both f = bimap f f
 -- Map --
 ---------
 
-unsafeLookup :: (Show a, Ord a) => a -> Map a b -> b
-unsafeLookup key dic = fromMaybe (error $ "Base: unsafeLookup: "++ show key) $ M.lookup key dic
+lookupMapJustNote :: (Ord k) => String -> k -> Map k a -> a
+lookupMapJustNote s k m = fromJustNote msg $ M.lookup k m
+  where msg = "lookupMapJustNote: " ++ s
 
 insertList :: Ord key => [(key,a)] -> Map key a -> Map key a
 insertList = M.union . M.fromList

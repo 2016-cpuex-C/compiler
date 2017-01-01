@@ -11,8 +11,6 @@ import Base
 import BackEnd.Second.Asm
 import BackEnd.Second.RegAlloc.Coloring (Color)
 
-import           Safe
-import           Data.Map (Map)
 import qualified Data.Map as M
 import           Data.List (partition)
 import           Control.Lens (view,use,uses,makeLenses)
@@ -92,16 +90,39 @@ deconstructBlockSub l (lj,xvs) = do
         let stmts_j' = init stmts_j ++ dePhiStmts ++ [s]
         addBlock lj stmts_j'
 
-    (id', Do (ACBr p lt lf)) -> do
+    (id', Do (ACBr x lt lf)) -> do
         freshId <- lift freshInstId
         let lp = Label $ "phi_" ++ unLabel lj ++ "_" ++ unLabel l
-            newCbr | l == lt   = (id', Do (ACBr p lp lf))
-                   | l == lf   = (id', Do (ACBr p lt lp))
+            newCbr | l == lt   = (id', Do (ACBr x lp lf))
+                   | l == lf   = (id', Do (ACBr x lt lp))
                    | otherwise = error "impossible"
             stmts_p  = dePhiStmts ++ [(freshId, Do (ABr l))]
             stmts_j' = init stmts_j ++ [newCbr]
         addBlock lj stmts_j'
         addBlock lp stmts_p
+
+    (id', Do (ACmpBr p x y lt lf)) -> do
+        freshId <- lift freshInstId
+        let lp = Label $ "phi_" ++ unLabel lj ++ "_" ++ unLabel l
+            newCbr | l == lt   = (id', Do (ACmpBr p x y lp lf))
+                   | l == lf   = (id', Do (ACmpBr p x y lt lp))
+                   | otherwise = error "impossible"
+            stmts_p  = dePhiStmts ++ [(freshId, Do (ABr l))]
+            stmts_j' = init stmts_j ++ [newCbr]
+        addBlock lj stmts_j'
+        addBlock lp stmts_p
+
+    (id', Do (AFCmpBr p x y lt lf)) -> do
+        freshId <- lift freshInstId
+        let lp = Label $ "phi_" ++ unLabel lj ++ "_" ++ unLabel l
+            newCbr | l == lt   = (id', Do (AFCmpBr p x y lp lf))
+                   | l == lf   = (id', Do (AFCmpBr p x y lt lp))
+                   | otherwise = error "impossible"
+            stmts_p  = dePhiStmts ++ [(freshId, Do (ABr l))]
+            stmts_j' = init stmts_j ++ [newCbr]
+        addBlock lj stmts_j'
+        addBlock lp stmts_p
+
 
     (id', Do (ASwitch x ldef ils)) -> do
         freshId <- lift freshInstId

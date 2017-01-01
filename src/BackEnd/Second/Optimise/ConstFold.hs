@@ -10,22 +10,19 @@ import BackEnd.Second.Asm
 import BackEnd.Second.Analysis
 
 import           Prelude hiding (log,Ordering(..))
-import           Data.Map (Map)
 import qualified Data.Map as M
-import           Data.Set (Set)
 import qualified Data.Set as S
 import           Data.Bits
 import           Data.Sequence (Seq,ViewR(..),(<|),viewr)
 import qualified Data.Sequence as Seq
 
-import Safe
 import Control.Lens (makeLenses,uses)
 import Control.Lens.Operators hiding ((<|))
 import Control.Monad.Trans.State
 import Control.Monad.Extra (unlessM)
 import Data.List (foldl')
 import Data.List.Extra (allSame)
-import Control.Monad (filterM, when)
+import Control.Monad (filterM)
 import Data.Maybe (catMaybes)
 
 -------------------------------------------------------------------------------
@@ -60,7 +57,7 @@ getValue x = uses values (M.lookup x) >>= \case
 -- (むしろ停止しなくなるので入れてはいけない)
 setLabel :: Label -> CamlCF ()
 setLabel l = unlessM (isExecutable l) $ do
-  lift.log $ "setLabel:" ++ show l
+  {-lift.log $ "setLabel:" ++ show l-}
   labelQ %= (l<|)
   executable %= S.insert l
 
@@ -71,11 +68,10 @@ setValue x v = do
   getValue x >>= \case
     Top -> return ()
     _   -> do
-      lift.log $ "setValue: " ++ show (x,v)
+      {-lift.log $ "setValue: " ++ show (x,v)-}
       values %= M.insert x v
       added <- uses useSite (M.findWithDefault [] x)
       mapM_ addStmt added
-      when (x == "t0p.4284") $ lift.log $ show added
 
 popStmt :: CamlCF (Maybe Statement)
 popStmt = uses stmtQ viewr >>= \case
@@ -120,7 +116,7 @@ loopBlock = popLabel >>= \case
   Nothing -> return ()
   Just l  -> do
     b <- getBlock l
-    lift.log $ "loopBlock:" ++ show l
+    {-lift.log $ "loopBlock:" ++ show l-}
     mapM_ addStmt (aStatements b)
     loopStmt
 
@@ -149,6 +145,8 @@ do' = \case
       Nothing -> setLabel l
     Top -> setLabel l >> mapM_ (setLabel.snd) ils
     _   -> return ()
+  ACmpBr{}  -> error "ConstFold: Not Implemented"
+  AFCmpBr{} -> error "ConstFold: Not Implemented"
   _ -> return ()
 
   where

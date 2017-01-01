@@ -4,7 +4,6 @@ module MiddleEnd.ConstFold where
 import Base
 import MiddleEnd.KNormal
 
-import           Data.Map    (Map)
 import qualified Data.Map as M
 import           Data.List   (foldl')
 import           Data.Maybe  (fromMaybe)

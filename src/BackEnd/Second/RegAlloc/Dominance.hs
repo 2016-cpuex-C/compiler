@@ -7,13 +7,12 @@
 
 module BackEnd.Second.RegAlloc.Dominance where
 
-import Base hiding (unsafeLookup)
+import Base
 import BackEnd.Second.Asm
 import BackEnd.Second.Analysis
 import qualified BackEnd.Second.RegAlloc.Dominance.Pure as P
 
 import           Prelude hiding (log,succ)
-import           Data.Map (Map)
 import qualified Data.Map as M
 import           Data.Tree
 import Data.Maybe (fromMaybe)

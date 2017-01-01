@@ -8,8 +8,6 @@ import           Base
 import           MiddleEnd.KNormal
 import           MiddleEnd.Elim    (hasSubEffect)
 
-import           Safe
-import           Data.Map (Map)
 import qualified Data.Map as M
 import           Control.Monad.Reader
 import           Data.Maybe (fromMaybe)

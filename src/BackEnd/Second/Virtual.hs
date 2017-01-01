@@ -11,17 +11,13 @@ import Base
 import BackEnd.Second.Asm
 import BackEnd.Second.Analysis
 
-import           Safe
-import           Data.Map (Map)
 import qualified Data.Map as M
-import           Data.Set (Set)
 import qualified Data.Set as S
 import           Data.List ((\\), foldl')
 import           Data.List.Extra (unsnoc)
 import           Data.Tree
 import           Control.Lens (view,use,uses,makeLenses)
 import           Control.Lens.Operators
-import           Control.Monad ((>=>), forM)
 import           Control.Monad.Trans.State
 import           Control.Monad.Extra (concatMapM)
 
@@ -125,13 +121,7 @@ calcPtr block@(ABlock _ insts) = do
 -------------------------------------------------------------------------------
 
 saveAndRestore :: AFunDef -> Caml AFunDef
-saveAndRestore f = do
-  log $ show f
-  fi <- insertSave f
-  log $ show fi
-  fr <- insertRestore fi
-  log $ show fr
-  return fr
+saveAndRestore = insertSave >=> insertRestore
 
 ----------
 -- Save --
@@ -232,13 +222,13 @@ insertRestoreBlock mArgs stackIn (ABlock l stmts) = do
 
   regSetIn <- do
     preds <- uses predMap (M.findWithDefault [] l)
-    x <- mapM (\l' -> uses liveOutB (uncurry S.union . unsafeLookup l')) preds
+    x <- mapM (\l' -> uses liveOutB (uncurry S.union . lookupMapJustNote "" l')) preds
         -- predsの
     if null x
       then return S.empty
       else return $ foldl1 S.intersection x
-  lift.log $ "insertRestoreBlock: " ++ show l
-  lift.log $ show regSetIn
+  --lift.log $ "insertRestoreBlock: " ++ show l
+  --lift.log $ show regSetIn
 
   {-stackSet %= S.filter (`S.member` stackIn)-}
   stackSet .= stackIn
@@ -248,8 +238,8 @@ insertRestoreBlock mArgs stackIn (ABlock l stmts) = do
   inReg <- use regSet
   Just (liveout,liveoutF) <- uses liveOutB (M.lookup l)
 
-  lift.log $ show l ++ ": liveout = " ++ show liveout
-  lift.log $ show l ++ ": inReg   = " ++ show inReg
+  --lift.log $ show l ++ ": liveout = " ++ show liveout
+  --lift.log $ show l ++ ": inReg   = " ++ show inReg
 
   restore  <- forM (S.toList $ liveout S.\\ inReg) $ \x -> do
     regSet %= S.insert x
@@ -263,11 +253,11 @@ insertRestoreBlock mArgs stackIn (ABlock l stmts) = do
 
 insertRestoreStmt :: Statement -> CamlRS [Statement]
 insertRestoreStmt s = do
-  lift.log =<< do {
-    regset <- use regSet;
-    stkset <- use stackSet;
-    return $ show (fst s) ++ ": " ++ show regset ++ "\n    " ++ show stkset;
-    }
+  --lift.log =<< do {
+  --  regset <- use regSet;
+  --  stkset <- use stackSet;
+  --  return $ show (fst s) ++ ": " ++ show regset ++ "\n    " ++ show stkset;
+  --  }
   case snd s of
     Do (ASave x) -> uses stackSet (S.member x) >>= \case
       True  -> return []

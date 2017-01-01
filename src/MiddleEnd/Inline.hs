@@ -9,7 +9,6 @@ import           MiddleEnd.KNormal
 import qualified MiddleEnd.Alpha as Alpha
 
 import qualified Data.Map as M
-import           Data.Map (Map)
 import           Control.Lens
 
 inline :: KExpr -> Caml KExpr

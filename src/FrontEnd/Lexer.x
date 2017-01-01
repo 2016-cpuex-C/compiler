@@ -112,7 +112,7 @@ data Token = TokenBool Bool
 
 lex :: String -> Caml [Token]
 lex s = case runAlex s scanTokens of
-  Left e -> throw $ Failure e
+  Left e -> throwError $ Failure e
   Right tks -> return tks
 
 scanTokens :: Alex [Token]

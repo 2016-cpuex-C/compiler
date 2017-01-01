@@ -75,7 +75,6 @@ compile2 s f = do
       >>= toLProg
       >>= toAProg
       >>= virtual
-      {->>= \e -> log "virtual" >> log (show e) >> return e-}
       >>= optimiseA
       >>= ((use constFloats >>= log.show) $>)
       >>= emitProg h

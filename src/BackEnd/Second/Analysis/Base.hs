@@ -1,5 +1,4 @@
-{-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE MultiWayIf #-}
+{-# LANGUAGE LambdaCase #-} {-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE TupleSections #-}
 
 module BackEnd.Second.Analysis.Base where
@@ -7,14 +6,12 @@ module BackEnd.Second.Analysis.Base where
 import Base
 import BackEnd.Second.Asm
 
-import           Data.Map (Map)
 import qualified Data.Map as M
-import           Data.Set (Set)
 import qualified Data.Set as S
 import           Data.Tree
 import           Data.List (foldl',isPrefixOf,partition)
 import           Data.List.Extra (groupSort)
-import Data.Maybe (fromMaybe)
+import           Data.Maybe (fromMaybe)
 
 ----------
 -- Prog --
@@ -69,12 +66,14 @@ nextBlockNames (ABlock _ contents) = f $ toExpr $ last contents
     toExpr (_,Do i) = i
     toExpr (_,_:=i) = i
     f = \case
-      ATailCall{}     -> []
-      ARet{}          -> []
-      AExit           -> []
-      ABr l           -> [l]
-      ACBr _ l1 l2    -> [l1,l2]
-      ASwitch _ l ils -> l : map snd ils
+      ATailCall{}         -> []
+      ARet{}              -> []
+      AExit               -> []
+      ABr l               -> [l]
+      ACBr _ l1 l2        -> [l1,l2]
+      ACmpBr  _ _ _ l1 l2 -> [l1,l2]
+      AFCmpBr _ _ _ l1 l2 -> [l1,l2]
+      ASwitch _ l ils     -> l : map snd ils
       i -> error $
         "BackEnd.Second.Analysis.Base: nextBlockNames: non-terminator: " ++ show i
 
@@ -178,6 +177,8 @@ useInst = \case
       ARet _ Nothing         -> ([],[])
       ARet TFloat (Just x')  -> ([],h x')
       ARet _      (Just x')  -> (h x',[])
+      ACmpBr  _ x y' _ _     -> (x : h y',[])
+      AFCmpBr _ x y  _ _     -> ([],[x,y])
 
       APhi lvs -> ([ y | (_, PVVar y t _) <- lvs, t/=TFloat ]
                   ,[ y | (_, PVVar y t _) <- lvs, t==TFloat ])

@@ -11,9 +11,8 @@ import           MiddleEnd.KNormal       hiding (fv)
 {-import           MiddleEnd.Alpha                (alpha)-}
 import           MiddleEnd.Elim                 (elim)
 
-import           Data.Map                       (Map)
 import qualified Data.Map as M
-import           Data.Set                       (toList, fromList, singleton, Set, (\\))
+import           Data.Set                       (toList, fromList, singleton, (\\))
 import qualified Data.Set as S
 import           Control.Lens            hiding (lifted)
 import           Control.Monad.Trans.State.Lazy

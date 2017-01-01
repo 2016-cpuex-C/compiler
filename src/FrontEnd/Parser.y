@@ -141,7 +141,7 @@ Pat :: { [(Id,Type)] }
 {
 
 parseError :: [Token] -> Caml a
-parseError tks = throw $ Failure "Parse Error"
+parseError tks = throwError $ Failure "Parse Error"
 
 addType :: Id -> Caml (Id, Type)
 addType x = do

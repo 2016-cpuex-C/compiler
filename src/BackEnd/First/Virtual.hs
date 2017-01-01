@@ -8,7 +8,6 @@ import Base
 import MiddleEnd.Closure
 import BackEnd.First.Asm hiding (fv)
 
-import           Data.Map (Map)
 import qualified Data.Map as M
 import qualified Data.Set as S
 import           Control.Lens
@@ -124,12 +123,12 @@ g env = \case
     Just TBool ->  AsmAns <$> (AIfEq  x (V y) <$> g env e1 <*> g env e2)
     Just TInt  ->  AsmAns <$> (AIfEq  x (V y) <$> g env e1 <*> g env e2)
     Just TFloat -> AsmAns <$> (AIfFEq x    y  <$> g env e1 <*> g env e2)
-    _ -> throw $ Failure "equality supported only for int, and float"
+    _ -> throwError $ Failure "equality supported only for int, and float"
   CIfLe x y e1 e2 -> case M.lookup x env of
     Just TBool ->  AsmAns <$> (AIfEq  x (V y) <$> g env e1 <*> g env e2)
     Just TInt  ->  AsmAns <$> (AIfLe  x (V y) <$> g env e1 <*> g env e2)
     Just TFloat -> AsmAns <$> (AIfFLe x    y  <$> g env e1 <*> g env e2)
-    _ -> throw $ Failure "equality supported only for int, and float"
+    _ -> throwError $ Failure "equality supported only for int, and float"
 
   CLet (x,t1) e1 e2 -> do
     e1' <- g env e1
@@ -172,14 +171,14 @@ g env = \case
     return $ AsmLet (y,TTuple ts) (AMov regHp)
               (AsmLet (regHp,TInt) (AAdd regHp (C $ align offset)) store)
   CArray x y -> do
-    case unsafeLookup y env of
-      TFloat -> g env (CAppDir (Label "min_caml_create_float_array") [x,y])
-      _      -> g env (CAppDir (Label "min_caml_create_array") [x,y])
+    case M.lookup y env of
+      Just TFloat -> g env (CAppDir (Label "min_caml_create_float_array") [x,y])
+      _           -> g env (CAppDir (Label "min_caml_create_array") [x,y])
 
   CArrayInit (Label x) y -> do
     vaddr <- genId "addr"
     vsize <- genId "size"
-    ~(addr,size,TArray _ te) <- uses globalHeap (unsafeLookup x)
+    Just (addr,size,TArray _ te) <- uses globalHeap (M.lookup x)
     let array_init = case te of TFloat -> "min_caml_float_array_init"
                                 _      -> "min_caml_array_init"
     g env $

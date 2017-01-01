@@ -10,7 +10,6 @@ import Base    hiding (Named(..))
 import Data.Word ()
 import Data.List
 import Data.Function
-import           Data.Map (Map)
 import qualified Data.Map as M
 
 import           Control.Lens

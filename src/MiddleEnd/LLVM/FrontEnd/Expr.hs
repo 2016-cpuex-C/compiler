@@ -18,8 +18,8 @@ import           LLVM.General.AST hiding (Type)
 import qualified LLVM.General.AST.IntegerPredicate as IP
 import qualified LLVM.General.AST.CallingConvention as CC
 import qualified LLVM.General.AST.FloatingPointPredicate as FP
-import Control.Monad (forM_, replicateM)
-import Data.List (zip4)
+import           Control.Monad (replicateM)
+import           Data.List (zip4)
 
 exprToBlocks :: [(Id,Type)] -> CExpr -> LLVM [BasicBlock]
 exprToBlocks tyenv e = createBlocks <$> execCodegen m

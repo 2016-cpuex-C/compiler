@@ -8,18 +8,15 @@ module BackEnd.Second.Emit where
 
 import Prelude hiding (log, Ordering(..))
 
-import Base hiding (unsafeLookup)
+import Base
 import BackEnd.Decode
 import BackEnd.Second.Asm
 import BackEnd.Second.Analysis
 import BackEnd.Second.RegAlloc.Coloring
 import BackEnd.Second.SSA_Deconstruction
 
-import           Safe
 import           Data.Int                   (Int16)
-import           Data.Map                   (Map)
 import qualified Data.Map                   as M
-import           Data.Set                   (Set)
 import qualified Data.Set                   as S
 import           Data.Tree
 import           Data.Vector                ((!))
@@ -27,7 +24,6 @@ import           Data.FileEmbed             (embedFile)
 import qualified Data.ByteString.Char8      as BC
 import           Control.Lens               (use,uses,makeLenses)
 import           Control.Lens.Operators
-import           Control.Monad              (forM_, unless, when)
 import           Control.Monad.Trans.State
 import           Text.Printf                (printf)
 import           System.IO                  (Handle, hPutStrLn)
@@ -135,8 +131,10 @@ emitFun h f = do
   colMaps <- colorFun f
   f'@(AFunDef l _ _ _ _) <- ssaDeconstruct colMaps f
   log $ "Emit: " ++ show l
+  log $ show colMaps
   log $ show f'
   liftIO $ hPutStrLn h $ unLabel l ++ ":"
+  liftIO $ hPutStrLn h $ "\tsw\t$ra, 0($sp)"
   let stackMap = stackSets f'
   evalStateT (emitTree stackMap $ dfsBlock f') ES {
       _hout      = h
@@ -212,7 +210,7 @@ emitInst = \case
   x := AFMul y z        -> fff "mul.s" x y z
   x := AFDiv y z        -> fff "div.s" x y z
   x := AFLd  y (C i)    -> fri'"l.sr"  x y i
-  Do (AFSt x y (C i))   -> fri'"s.s"   x y i -- >> write ("#" ++ show (x,y))
+  Do (AFSt x y (C i))   -> fri'"s.s"   x y i
   x := AFLdi i          -> fri'"l.sr"  x regZero i
   Do (AFSti x i)        -> fri'"s.s"   x regZero i
 
@@ -252,6 +250,10 @@ emitInst = \case
   Do (ASwitch x ldef nls) -> do
     mapM_ (\(n,l) -> ril "beqi" x n l) nls
     br ldef
+
+  Do (ACmpBr  p x (C i) lt lf) -> cmpbri p x i lt lf
+  Do (ACmpBr  p x (V y) lt lf) -> cmpbr  p x y lt lf
+  Do (AFCmpBr p x    y  lt lf) -> cmpbrs p x y lt lf
 
   Do (ASave  x)    -> save x
   Do (AFSave x)    -> saveF x
@@ -341,9 +343,6 @@ prff :: Id -> Predicate -> Id -> Id -> Id -> CamlE ()
 prff s p x y z = write =<<
   printf "\t%s\t%s, %s, %s, %s" s <$> return (showPred p) <*> reg x <*> regF y <*> regF z
 
-showPred :: Predicate -> String
-showPred = map toLower . show
-
 move :: Id -> Id -> CamlE ()
 move x y = do
   rx <- reg x
@@ -369,18 +368,47 @@ cbr b (Label x) (Label y) = do
   write =<< printf "\tbeqi\t%s, 0, %s" <$> reg b <*> return y
   write =<< printf "\tj\t%s" <$> return x
 
+cmpbri :: Predicate -> Id -> Integer -> Label -> Label -> CamlE ()
+cmpbri NE x i lt lf = cmpbri EQ x i lf lt
+cmpbri LE x i lt lf = cmpbri GT x i lf lt
+cmpbri GE x i lt lf = cmpbri LT x i lf lt
+cmpbri p x i lt lf = do
+  write =<< printf "\t%s\t%s, %d, %s" bi <$> reg x <*> return i <*> return (unLabel lt)
+  write =<< printf "\tj\t%s" <$> return (unLabel lf)
+  where bi = "b" ++ showPred p ++ "i"
+
+cmpbr  :: Predicate -> Id -> Id -> Label -> Label -> CamlE ()
+cmpbr NE x y lt lf = cmpbr EQ x y lf lt
+cmpbr LE x y lt lf = cmpbr GT x y lf lt
+cmpbr GE x y lt lf = cmpbr LT x y lf lt
+cmpbr p x y lt lf = do
+  write =<< printf "\t%s\t%s, %s, %s" b <$> reg x <*> reg y <*> return (unLabel lt)
+  write =<< printf "\tj\t%s" <$> return (unLabel lf)
+  where b = "b" ++ showPred p
+
+cmpbrs :: Predicate -> Id -> Id -> Label -> Label -> CamlE ()
+cmpbrs NE x y lt lf = cmpbrs EQ x y lf lt
+cmpbrs GE x y lt lf = cmpbrs LT x y lf lt
+cmpbrs GT x y lt lf = cmpbrs LE x y lf lt
+cmpbrs p x y lt lf = do
+  write =<< printf "\t%s\t%s, %s, %s" bs <$> regF x <*> regF y <*> return (unLabel lt)
+  write =<< printf "\tj\t%s" <$> return (unLabel lf)
+  where bs = "c." ++ showPred p ++ ".s"
+
 ret :: CamlE ()
-ret = write $ printf "\tjr\t%s" regRa
+ret = do
+  rri' "lwr"  regRa regSp 0
+  write $ printf "\tjr\t%s" regRa
 
 call :: Type -> Maybe Id -> Label -> [Id] -> [Id] -> CamlE ()
 call t mx (Label f) ys zs = do
   setArgs ys zs
   ss <- stackSize
-  rri' "sw"   regRa regSp 0
+  --rri' "sw"   regRa regSp 0 ###
   rri  "addi" regSp regSp ss
   write $ "\tjal " ++ f ++ "\t# " ++ show mx
   rri  "addi" regSp regSp (-ss)
-  rri' "lwr"  regRa regSp 0
+  --rri' "lwr"  regRa regSp 0
   case mx of
     Nothing -> return ()
     Just x | t == TFloat -> movs x (fregs!0)
@@ -388,6 +416,7 @@ call t mx (Label f) ys zs = do
 
 tailCall :: Label -> [Id] -> [Id] -> CamlE ()
 tailCall (Label f) ys zs = do
+  rri' "lwr"  regRa regSp 0
   setArgs ys zs
   write $ "\tj " ++ f
 
@@ -417,31 +446,34 @@ push x = stack %= S.insert x
 
 save :: Id -> CamlE ()
 save x = uses stack (S.member x) >>= \case
-  True  -> write $ "\t# "++ x ++ " is already saved: "
+  True  -> return()--write $ "\t# "++ x ++ " is already saved: "
   False -> do push x
               n <- offset x
               rri' "sw" x regSp n
-              write $ "\t\t# save: " ++ x
+              --write $ "\t\t# save: " ++ x
 
 saveF :: Id -> CamlE ()
 saveF x = uses stack (S.member x) >>= \case
-  True  -> write $ "\t# "++ x ++ " is already saved: "
+  True  -> return ()--write $ "\t# "++ x ++ " is already saved: "
   False -> do push x
               n <- offset x
               fri' "s.s" x regSp n
-              write $ "\t\t# save: " ++ x
+              --write $ "\t\t# save: " ++ x
 
 restore :: Id -> CamlE ()
 restore x = do
   n <- offset x
   rri' "lwr" x regSp n
-  write $ "\t\t# restore: " ++ x
+  --write $ "\t\t# restore: " ++ x
 
 restoreF :: Id -> CamlE ()
 restoreF x = do
   n <- offset x
   fri' "l.sr" x regSp n
-  write $ "\t\t# restore: " ++ x
+  --write $ "\t\t# restore: " ++ x
+
+showPred :: Predicate -> String
+showPred = map toLower . show
 
 -- }}}
 

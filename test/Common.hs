@@ -23,6 +23,7 @@ import MiddleEnd.LLVM.MiddleEnd     (optimiseLLVM)
 import MiddleEnd.LLVM.BackEnd       (toLProg)
 import BackEnd.Second.FromLProg     (toAProg)
 import BackEnd.Second.Virtual       (virtual)
+import BackEnd.Second.Optimise      (optimiseA)
 import BackEnd.Second.Emit          (emitProg)
 
 import Prelude              hiding (lex)
@@ -55,6 +56,7 @@ compile ml = do
       >>= toLProg
       >>= toAProg
       >>= virtual
+      >>= optimiseA
       >>= emitProg out
 
 -- first

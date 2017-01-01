@@ -7,10 +7,9 @@ module BackEnd.First.RegAlloc where
 
 import Prelude hiding (exp,log)
 
-import Base hiding (unsafeLookup)
+import Base
 import BackEnd.First.Asm
 
-import           Data.Map (Map)
 import qualified Data.Map as M
 import qualified Data.Set as S
 import           Data.List (foldl')
@@ -36,7 +35,7 @@ regAlloc (AProg fdata fundefs e) = do
     return $ AProg fdata fundefs' e'
   case m of
     Right prog -> return prog
-    Left  err  -> throw $ Failure $ show err
+    Left  err  -> throwError $ Failure $ show err
 
 -------------------------------------------------------------------------------
 -- Types
@@ -157,7 +156,7 @@ find :: Id -> Type -> Map Id Id -> CamlRA Id
 find x t regenv
   | isReg x           = return x
   | M.member x regenv = return (unsafeLookup x regenv)
-  | otherwise         = throw (NoReg x t)
+  | otherwise         = throwError (NoReg x t)
 
 find' :: IdOrImm -> Map Id Id -> CamlRA IdOrImm
 find' (V x) regenv = V <$> find x TInt regenv
@@ -288,14 +287,14 @@ g' destt cont regenv exp = case exp of
 
   ACallCls x ys zs -> do
     if | length ys > maxArgs || length zs > length allFRegs - 1 ->
-            lift.throw $ Failure $ "cannot allocate registers for arugments to " ++ x
+            lift.throwError $ Failure $ "cannot allocate registers for arugments to " ++ x
        | otherwise -> do
             rx <- find x TInt regenv
             g'_call destt cont regenv exp (ACallCls rx) ys zs
 
   ACallDir l ys zs -> do
     if | length ys > maxArgs || length zs > length allFRegs - 1 ->
-            lift.throw $ Failure $ "cannot allocate registers for arugments to " ++ show l
+            lift.throwError $ Failure $ "cannot allocate registers for arugments to " ++ show l
        | otherwise ->
             g'_call destt cont regenv exp (ACallDir l) ys zs
 
@@ -303,7 +302,7 @@ g' destt cont regenv exp = case exp of
 
 g'_and_restore :: (Id,Type) -> Asm -> Map Id Id -> AExpr -> CamlRA (Asm, Map Id Id)
 g'_and_restore destt cont regenv exp =
-  g' destt cont regenv exp `catch` \(NoReg x t) -> do
+  g' destt cont regenv exp `catchError` \(NoReg x t) -> do
       lift.log $ "restoring " ++ x
       g destt cont regenv (AsmLet (x, t) (ARestore x) (AsmAns exp))
 

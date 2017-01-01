@@ -11,16 +11,12 @@ import Base
 import BackEnd.Second.Asm
 import BackEnd.Second.Analysis.Base
 
-import           Safe
 import           Prelude hiding (log,succ)
-import           Data.Map (Map)
 import qualified Data.Map as M
-import           Data.Set (Set)
 import qualified Data.Set as S
 import           Control.Monad.Trans.State
 import           Control.Lens (use,uses,view,makeLenses)
 import           Control.Lens.Operators
-import           Control.Monad (unless)
 
 -------------------------------------------------------------------------------
 -- Types
@@ -80,8 +76,10 @@ getSuccMap f
         go ~((n,_):rest) = gets (M.member n) >>= \case
           False
             | null rest -> do
-                let succBlocks  = [ b' | ~(Just b') <- map (`M.lookup` bmap) (nextBlockNames b) ]
-                                --map (`unsafeLookup` bmap) (nextBlockNames b)
+                let tmpf l = fromJustNote ("tmpf: " ++ show (l,f,bmap)) $ M.lookup l bmap
+                    succBlocks  = map tmpf (nextBlockNames b)
+                                -- [ b' | ~(Just b') <- map (`M.lookup` bmap) (nextBlockNames b) ]
+                                -- map (`unsafeLookup` bmap) (nextBlockNames b)
                     succInstIds = map firstInstId succBlocks
                 modify $ M.insert n succInstIds
                 mapM_ getSuccMapSub succBlocks

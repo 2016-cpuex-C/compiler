@@ -11,9 +11,7 @@ module MiddleEnd.KNormal (
 import Base
 import FrontEnd.Syntax
 import Control.Lens
-import Data.Set (Set)
 import qualified Data.Set as S
-import Data.Map (Map)
 import qualified Data.Map as M
 
 -----------------------
@@ -198,10 +196,10 @@ g env e = case e of
   EVar x ->
     case M.lookup x env of
       Just t  -> return (KVar x, t)
-      Nothing -> throw $ Failure ("unknown variable " ++ x ++ " found")
+      Nothing -> throwError $ Failure ("unknown variable " ++ x ++ " found")
       --Nothing -> uses extTyEnv (M.lookup x) >>= \case
       --  Just t@(TArray _) -> return (KExtArray x, t)
-      --  _ -> throw $ Failure ("external variable " ++ x ++" does not have an array type")
+      --  _ -> throwError $ Failure ("external variable " ++ x ++" does not have an array type")
 
   ELetRec (EFunDef (x,t) yts e1) e2 -> do
     let env' = M.insert x t env

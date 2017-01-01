@@ -13,13 +13,11 @@ import BackEnd.Decode
 import BackEnd.First.Asm
 
 import qualified Data.Set as S
-import           Data.Set    (Set)
 import           Data.Int    (Int16)
 import           Data.Vector ((!))
 import           Control.Lens
 import           Data.List (foldl', partition)
 import           Control.Exception.Base (assert)
-import           Control.Monad (when, forM_)
 import           System.IO (Handle, hPutStrLn)
 import           Text.Printf
 import           Control.Monad.Trans.State.Lazy

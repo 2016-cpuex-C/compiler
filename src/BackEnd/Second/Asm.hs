@@ -7,7 +7,6 @@ import Base
 
 import           Data.Vector (Vector, (!))
 import qualified Data.Vector as V
-import           Data.Map (Map)
 import qualified Data.Map as M
 import           Data.List (find, isPrefixOf)
 import           Control.Lens ((<+=),(<&>))
@@ -108,6 +107,8 @@ data AExpr -- 多相的な命令には型を加える
   | ABr     Label
   | ACBr    Id Label Label
   | ASwitch Id Label [(Integer,Label)]
+  | ACmpBr  Predicate Id IdOrImm Label Label
+  | AFCmpBr Predicate Id Id      Label Label
   | AExit
   deriving (Show,Eq,Ord)
 
@@ -155,7 +156,7 @@ blockMap (AFunDef _ _ _ blocks _) =
 firstStmt :: ABlock -> Statement
 firstStmt = head . aStatements
 
-lastStmt :: ABlock -> (InstId, Inst)
+lastStmt :: ABlock -> Statement
 lastStmt  = last . aStatements
 
 ----------

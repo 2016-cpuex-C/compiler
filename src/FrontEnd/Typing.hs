@@ -9,7 +9,7 @@ import Base
 import FrontEnd.Syntax
 
 import Data.IORef
-import Control.Monad (join, zipWithM_)
+import Control.Monad (zipWithM_)
 import Control.Monad.Trans.Except
 import qualified Data.Map as M
 import           Control.Lens
@@ -22,13 +22,13 @@ typing :: Expr -> Caml Expr
 typing e = do
   m <- runExceptT $ do
     t <- infer M.empty e
-    unify TUnit t `catch` \Unify{} -> throw Top
+    unify TUnit t `catchError` \Unify{} -> throwError Top
     extTyEnv <~ join (uses extTyEnv (mapM derefType))
     derefExpr e
   case m of
     Right e' -> return e'
-    Left Top -> throw $ Failure "top level does not have type unit"
-    Left err -> throw $ Failure $ show err
+    Left Top -> throwError $ Failure "top level does not have type unit"
+    Left err -> throwError $ Failure $ show err
 
 -------------------------------------------------------------------------------
 -- Types
@@ -193,14 +193,14 @@ infer env e =
       unifyM1 TInt     (infer env e2)
       return TUnit
 
-  `catch`
+  `catchError`
     \err -> case err of
       Unify t1 t2 -> do
         e' <- derefExpr e
         t1' <- derefType t1
         t2' <- derefType t2
-        throw $ Typing e' t1' t2'
-      _ -> throw err
+        throwError $ Typing e' t1' t2'
+      _ -> throwError err
   where
     int1 e' = do
       unifyM1 TInt (infer env e')
@@ -230,10 +230,10 @@ unify t1 t2 = case (t1,t2) of
 
   (TFun t1s t1', TFun t2s t2')
     | length t1s == length t2s -> zipWithM_ unify (t1':t1s) (t2':t2s)
-    | otherwise -> throw $ Unify t1 t2
+    | otherwise -> throwError $ Unify t1 t2
   (TTuple t1s, TTuple t2s)
     | length t1s == length t2s -> zipWithM_ unify t1s t2s
-    | otherwise -> throw $ Unify t1 t2
+    | otherwise -> throwError $ Unify t1 t2
   (TPtr t1', TPtr t2') -> unify t1' t2'
   (TVar ref1, TVar ref2)
     | ref1 == ref2 -> return ()
@@ -243,17 +243,17 @@ unify t1 t2 = case (t1,t2) of
           _             -> writeType ref1 t2
   (TVar ref1, _) -> readType ref1 >>= \case
       Nothing -> ifM (occur ref1 t2)
-                     (throw $ Unify t1 t2)
+                     (throwError $ Unify t1 t2)
                      (writeType ref1 t2)
       Just t1' -> unify t1' t2
   (_, TVar ref2) -> readType ref2 >>= \case
       Nothing -> ifM (occur ref2 t1)
-                     (throw $ Unify t1 t2)
+                     (throwError $ Unify t1 t2)
                      (writeType ref2 t1)
       Just t2' -> unify t1 t2'
   (TArray{}, _) -> error "FrontEnd.Typing: TArray (impossible)"
   (_, TArray{}) -> error "FrontEnd.Typing: TArray (impossible)"
-  _ -> throw $ Unify t1 t2
+  _ -> throwError $ Unify t1 t2
 
 unifyM1 :: Type -> CamlT Type -> CamlT ()
 unifyM1 t1 m2 = do

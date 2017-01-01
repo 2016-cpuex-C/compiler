@@ -11,7 +11,6 @@ import Prelude hiding (log)
 import Base
 import MiddleEnd.KNormal
 
-import           Data.Map (Map)
 import qualified Data.Map as M
 import           Control.Lens
 
