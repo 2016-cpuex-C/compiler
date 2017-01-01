@@ -2,6 +2,7 @@
 {-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module BackEnd.Second.RegAlloc.Coloring (
     Color
@@ -48,7 +49,7 @@ type CamlCS = StateT CS Caml
 -------------------------------------------------------------------------------
 
 colorFun :: AFunDef -> Caml (Map Id Color, Map Id Color)
-colorFun f@(AFunDef l xs ys _ _) = do
+colorFun f@(AFunDef l xs ys _ _) = withoutLogging $ do
   liveout <- analyzeLifetime f
   s <- execStateT (colorTree (dominatorTree f)) CS {
             _liveOut   = liveout
@@ -63,13 +64,13 @@ colorFun f@(AFunDef l xs ys _ _) = do
       (z,w) = (maxColorN (s^.colorMap), maxColorN (s^.colorMapF))
   when (x/=z && (x,z)/=(0,1) || y/=w && (y,w)/=(0,1)) $ do
     -- 返り値を捨てる関数があると(0,1)にはなりうるが気にしないで良い
-    log $ "========================"
-    log $ show l
-    log $ show (x,y)
-    log $ show (z,w)
-    log $ show (s^.colorMap)
-    log $ show (s^.colorMapF)
-    log $ show f
+    ($logError) "RegAlloc.Coloring"
+    ($logErrorSH) l
+    ($logErrorSH) (x,y)
+    ($logErrorSH) (z,w)
+    ($logErrorSH) (s^.colorMap)
+    ($logErrorSH) (s^.colorMapF)
+    ($logErrorSH) f
     error "RegAlloc: Congratulations! You've found a new bug!"
   return (s^.colorMap, s^.colorMapF)
 
@@ -89,7 +90,7 @@ chromaticN m = join bimap f $ unzip $ map snd (M.toList m)
 
 colorTree :: Tree ABlock -> CamlCS ()
 colorTree (Node (ABlock l stmts) bs) = do
-  logDebug $ "block: " ++ show l
+  $logDebug $ "block: " <> show' l
   mapM_ colorStmt stmts
   forM_ bs $ localState . colorTree
 
@@ -112,13 +113,13 @@ colorStmt (n,inst) = do
     mapM_ removeF $ S.filter deadF dsF
     -- 不要変数削除したら mapM_ assign (S.filter live ds) とかでよい
 
-    logDebug.init.unlines $ [ "  instid: " ++ show n
-                            , "      us:   " ++ show (useInst inst)
-                            , "      ds:   " ++ show (ds,dsF)
-                            , "      used: " ++ show (used',usedF')
-                            , "      free: " ++ show (free',freeF')
-                            , "      lout: " ++ show (liveout,liveoutF) ]
-
+    $logDebug $ pack.init.unlines $
+      [ "  instid: " ++ show n
+      , "      us:   " ++ show (useInst inst)
+      , "      ds:   " ++ show (ds,dsF)
+      , "      used: " ++ show (used',usedF')
+      , "      free: " ++ show (free',freeF')
+      , "      lout: " ++ show (liveout,liveoutF) ]
 
 -- usedとfreeの状態を復元する
 localState :: CamlCS a -> CamlCS a
@@ -145,7 +146,7 @@ assign x = use free >>= \case
   c:_ -> do free     %= tail
             used     %= M.insert x c
             colorMap %= M.insert x c
-            logDebug $ "    assign: " ++ show (x,c)
+            $logDebug $ "    assign: " <> show' (x,c)
   [] -> error "color tarinai"
 
 assignF :: Id -> CamlCS ()
@@ -153,26 +154,22 @@ assignF x = use freeF >>= \case
   c:_ -> do freeF     %= tail
             usedF     %= M.insert x c
             colorMapF %= M.insert x c
-            logDebug $ "    assign: " ++ show (x,c)
+            $logDebug $ "    assign: " <> show' (x,c)
   [] -> error "color tarinai"
 
 remove :: Id -> CamlCS ()
 remove x = uses used (M.lookup x) >>= \case
   Just c  -> do free %= (c:)
                 used %= M.delete x
-                logDebug $ "    remove: " ++ show (x,c)
+                $logDebug $ "    remove: " <> show' (x,c)
   Nothing -> return ()
 
 removeF :: Id -> CamlCS ()
 removeF x = uses usedF (M.lookup x) >>= \case
   Just c  -> do freeF %= (c:)
                 usedF %= M.delete x
-                logDebug $ "    remove: " ++ show (x,c)
+                $logDebug $ "    remove: " <> show' (x,c)
   Nothing -> return ()
-
-logDebug :: String -> CamlCS ()
-logDebug = const (return ())
-{-logDebug = lift.log-}
 
 unsafeLookup :: (Show a, Ord a) => a -> Map a b -> b
 unsafeLookup key dic = fromMaybe (error $ "Coloring: unsafeLookup: "++ show key) $ M.lookup key dic

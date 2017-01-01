@@ -1,5 +1,6 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
 module MiddleEnd.LambdaLifting where
@@ -93,24 +94,25 @@ f env e = case e of
     fvs' <- fv e1
     case toList $ fvs' \\ singleton x \\ fromList ys of
       [] -> do
-        lift.log $ x ++ " is directly callable"
+        -- lift.($logInfo) $ pack x <> " is directly callable"
         directlyCallable %= S.insert x
         e1' <- f envE1 e1
         e2' <- f envE2 e2
         return $ KLetRec fundef{kbody=e1'} e2'
 
       fvs -> do
-        lift.log $ "LambdaLifting: free variable(s) " ++ ppList fvs ++ " " ++
-                   "found in function " ++ x
+        --lift.($logInfo).pack $
+        --  "LambdaLifting: free variable(s) " ++ ppList fvs ++ " " ++
+        --  "found in function " ++ x
         let (fvs1,fvs2) = splitAt (maxArgs - length ys) fvs
             ts = [ t' | ~(Just t') <- map (`M.lookup` env) fvs1 ]
                --map (`unsafeLookup` env) fvs1
             insertOrigin = KLetRec fundef{kbody = KApp (liftName x) (fvs1++ys)}
             envE2' = M.insert (liftName x) (liftTy t ts) envE2
         if null fvs2 then do
-          lift.log $ x ++ " is directly callable"
+          -- lift.($logInfo) $ pack x <> " is directly callable"
           directlyCallable %= S.insert x
-        else lift.log $
+        else lift.($logWarn).pack $
           "there are so many free variables in " ++ x ++
           " that can't lift it: " ++ show (length fvs2) ++
           " variables remains"

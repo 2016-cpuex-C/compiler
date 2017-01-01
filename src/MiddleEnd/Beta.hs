@@ -1,4 +1,6 @@
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module MiddleEnd.Beta where
 {- let x = y in ... みたいなのを消す -}
@@ -47,7 +49,7 @@ g env e = case e of
   KLet (x,t) e1 e2 ->
       g env e1 >>= \case
         KVar y -> do
-          log $ "beta-reducing " ++ x ++ " = " ++ y
+          -- ($logInfo) $ "beta-reducing " <> pack x <> " = " <> pack y
           g (M.insert x y env) e2
         e1' -> do
           e2' <- g env e2

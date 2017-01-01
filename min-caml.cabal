@@ -19,10 +19,13 @@ library
                      , array
                      , extra
                      , vector
+                     , xformat
                      , bytestring
                      , containers
                      , file-embed
                      , transformers
+                     , fast-logger
+                     , monad-logger
                      , BitSyntax
                      , template-haskell
   exposed-modules:     Base

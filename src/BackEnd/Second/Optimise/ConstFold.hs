@@ -2,6 +2,7 @@
 {-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module BackEnd.Second.Optimise.ConstFold where
 
@@ -261,7 +262,7 @@ constFold (AProg fs) = AProg <$> mapM constFoldFun fs
 
 constFoldFun :: AFunDef -> Caml AFunDef
 constFoldFun f = do
-  log $ "constFoldFun: " ++ show (aFunName f)
+  --($logInfo) $ "constFoldFun: " <> show' (aFunName f)
   a@(executable',_) <- constFoldAnalysis f
   blocks <- mapM (constFoldBlock a)
               [ b | b <- aBody f, aBlockName b `S.member` executable' ]
@@ -290,7 +291,7 @@ constFoldStmt a@(_,vals) (n,i) = case i of
       l <- floatLabel f
       return $ Just (n,x:=ASetF l)
     Bot -> do
-      log $ "constFold: unused variable" ++ show (n,i)
+      ($logWarn) $ "constFold: unused variable" <> show' (n,i)
       {-return Nothing-}
       error $ "にゃん.."
 

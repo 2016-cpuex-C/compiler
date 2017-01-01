@@ -1,4 +1,7 @@
-{-# LANGUAGE LambdaCase #-}{-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE NoImplicitPrelude #-}
 {- KExpr -> CExpr -}
 
 module MiddleEnd.Closure (
@@ -168,7 +171,7 @@ g env known = \case
     fve1' <- lift $ fv e1'
     (known'', e1'') <- case toList $ fve1' \\ fromList ys of
         [] -> return (known', e1')   -- OK
-        zs -> do lift.log $
+        zs -> do lift.($logWarn).pack $
                       "free variable(s) " ++ ppList zs ++ " " ++
                       "found in function " ++ x ++ "\n" ++
                       "function " ++ x ++ " cannot be directly applied in fact"
@@ -182,7 +185,7 @@ g env known = \case
     e2' <- g env' known'' e2
     fve2' <- lift $ fv e2'
     if S.member x fve2' then do -- やや賢い->賢い
-        lift.log $ "make closure(s) " ++ x
+        lift.($logWarn) $ "make closure(s) " <> pack x
         return $ CMakeCls (x,t) (Closure (Label x) zs') e2'
     else
         return e2'

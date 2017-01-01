@@ -3,7 +3,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 
 module Base (
-
+  --{{{
   -- Data Types
   -------------
     Id
@@ -29,6 +29,7 @@ module Base (
   , startGP
   , logfile
   , instCount
+  , verbosity
 
   --
   -----------
@@ -44,12 +45,13 @@ module Base (
   , labelFloat
   , initialState
   , maxArgs
-  , log
+--  , log
   , runCaml
   , runCamlDefault
   , lift
   , liftIO
   , errorShow
+  , withoutLogging
 
   -- Util
   -----------
@@ -68,33 +70,44 @@ module Base (
   , unions2
   , difference2
   , both2
+  , show'
 
     -- export
   , module Safe
   , module Data.Map
   , module Data.Set
+  , module Data.Text
+  , module Data.Monoid
   , module Control.Monad
   , module Control.Monad.Except
-
+  , module Control.Monad.Logger
+  --}}}
 ) where
 
 import           Prelude                          hiding (log)
 import           Safe
 import           Data.IORef
-import           Control.Lens                     (makeLenses,use,uses,bimap)
+import           Control.Lens                     (makeLenses,uses,bimap)
 import           Control.Lens.Operators
 import           Data.Map                         (Map)
 import qualified Data.Map                         as M
 import           Data.Set                         (Set)
 import qualified Data.Set                         as S
 import           Data.Tree
+import           Data.Monoid
 import           Control.Monad                    (join,when,unless,forM_,forM,(>=>))
 import qualified Control.Monad.Trans as T         (MonadTrans,lift)
 import           Control.Monad.Trans.Except
 import           Control.Monad.Trans.State.Lazy
 import qualified Control.Monad.IO.Class           as IOC
-import           Control.Monad.Except             (throwError, catchError)
-import           System.IO                        (Handle, stdout, hPutStrLn)
+import           Control.Monad.Except             (throwError,catchError)
+import           System.IO                        (Handle,stdout)
+
+-- for logger
+import           Data.Text                        (Text,pack)
+import           Control.Monad.Logger
+import           System.Log.FastLogger
+import qualified Data.ByteString.Char8            as S8 (hPutStr)
 
 -------------------------------------------------------------------------------
 -- Types
@@ -136,12 +149,13 @@ data S = S { _idCount       :: Int             -- for Id module
                                                -- (address,size,type)
            , _startGP       :: Integer         -- sum of global array size
            , _logfile       :: Handle          -- file to log to
-           , _instCount    :: Int
+           , _instCount     :: Int
+           , _verbosity     :: LogLevel
            }
            deriving (Show,Eq)
 makeLenses ''S
 
-type Caml = StateT S (ExceptT Error IO)
+type Caml = LoggingT (StateT S (ExceptT Error IO))
 data Error = Failure String
            deriving (Show,Eq,Ord)
 
@@ -233,6 +247,7 @@ initialState = S { _idCount       = 0
                  , _optimiseLimit = 100
                  , _logfile       = stdout
                  , _instCount     = 0
+                 , _verbosity     = LevelInfo
                  }
 maxArgs :: Int
 maxArgs = 25
@@ -267,18 +282,34 @@ initialExtTyEnv = M.fromList
   , ("init_float_array"   , TFun [TInt,TFloat] (TPtr TFloat))
   ]
 
--- log --
-log :: String -> Caml ()
-log s = do
-  l <- use logfile
-  liftIO $ hPutStrLn l s
+-- logger --
+
+withoutLogging :: Caml a -> Caml a
+withoutLogging = filterLogger (const (const False))
+
+show' :: Show a => a -> Text
+show' = pack . show
 
 -- runner --
-runCamlDefault :: Caml a -> IO (Either Error a)
-runCamlDefault c = runExceptT $ evalStateT c initialState
 
 runCaml :: Caml a -> S -> IO (Either Error a)
-runCaml c s = runExceptT $ evalStateT c s
+runCaml c s = runExceptT $ evalStateT (runHLoggingT h v c) s
+  where
+    h = s^.logfile
+    v = s^.verbosity
+
+runCamlDefault :: Caml a -> IO (Either Error a)
+runCamlDefault c = runCaml c initialState
+
+runHLoggingT :: IOC.MonadIO m => Handle -> LogLevel -> LoggingT m a -> m a
+runHLoggingT h v c = runLoggingT (filterLogger p c) (defaultOutput h)
+  where p _ v' = v <= v'
+    -- v以上のもののみ出力
+
+defaultOutput :: Handle -> Loc -> LogSource -> LogLevel -> LogStr -> IO ()
+defaultOutput h a b c d =
+  let s = fromLogStr $ defaultLogStr a b c d
+  in  S8.hPutStr h s
 
 -------------------------------------------------------------------------------
 -- Util

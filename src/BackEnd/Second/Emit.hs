@@ -2,11 +2,10 @@
 {-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE BangPatterns #-}
 
 module BackEnd.Second.Emit where
 
-import Prelude hiding (log, Ordering(..))
+import Prelude hiding (Ordering(..))
 
 import Base
 import BackEnd.Decode
@@ -91,7 +90,7 @@ offset x = do
 
 emitProg :: Handle -> AProg -> Caml ()
 emitProg h prog = do
-  log "generating assembly.."
+  ($logInfo) $ pack "generating assembly.."
   let write' = liftIO . hPutStrLn h
       (main,others) = popMain prog
 
@@ -118,7 +117,7 @@ emitProg h prog = do
   -- libmincaml
   --------------
   write' $ BC.unpack $(embedFile "src/libmincaml.s")
-  log "complete."
+  ($logInfo) $ pack "complete."
 
   where
     retToExit main' = main' { aBody = map retToExitB (aBody main') }
@@ -130,9 +129,9 @@ emitFun :: Handle -> AFunDef -> Caml ()
 emitFun h f = do
   colMaps <- colorFun f
   f'@(AFunDef l _ _ _ _) <- ssaDeconstruct colMaps f
-  log $ "Emit: " ++ show l
-  log $ show colMaps
-  log $ show f'
+  --($logInfo) $ pack "EmitFun: " <> show' l
+  --($logDebugSH) $ show colMaps
+  --($logDebugSH) $ f'
   liftIO $ hPutStrLn h $ unLabel l ++ ":"
   liftIO $ hPutStrLn h $ "\tsw\t$ra, 0($sp)"
   let stackMap = stackSets f'
@@ -175,8 +174,9 @@ emitInst = \case
         write =<< printf "\tli\t%s, %d" <$> reg x <*> return i
     | otherwise -> do
         let (hi,lo) = devideInteger i
-        lift.log $ show i ++ " is out of 16bits range\n" ++
-                   "devide into " ++ show hi ++ " and " ++ show lo
+        lift.($logInfo).pack $
+          show i <> " is out of 16bits range\n" <>
+          "devide into " <> show hi <> " and " <> show lo
         write =<< printf "\tli\t%s, %d"       <$> reg x <*> return hi
         write =<< printf "\tsll\t%s, %s, 16"  <$> reg x <*> reg x
         write =<< printf "\taddi\t%s, %s, %d" <$> reg x <*> reg x <*> return lo
@@ -347,7 +347,7 @@ move :: Id -> Id -> CamlE ()
 move x y = do
   rx <- reg x
   ry <- reg y
-  let s | rx == ry  = "#mv"
+  let s | rx == ry  = "#mv" :: String
         | otherwise = "move"
   when (rx/=ry) $ write $ printf "\t%s\t%s, %s" s rx ry
 
@@ -355,7 +355,7 @@ movs :: Id -> Id -> CamlE ()
 movs x y = do
   rx <- regF x
   ry <- regF y
-  let s | rx == ry  = "#mv"
+  let s | rx == ry  = "#mv" :: String
         | otherwise = "mov.s"
   when (rx/=ry) $ write $ printf "\t%s\t%s, %s" s rx ry
 
@@ -479,5 +479,4 @@ showPred = map toLower . show
 
 unsafeLookup :: (Show a, Ord a) => a -> Map a b -> b
 unsafeLookup key dic = fromJustNote ("Emit: unsafeLookup: "++ show key) $ M.lookup key dic
-
 

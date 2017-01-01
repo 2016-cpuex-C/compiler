@@ -1,4 +1,6 @@
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module MiddleEnd.Inline where
 
@@ -38,7 +40,7 @@ g env e = case e of
   KApp x ys ->
     case M.lookup x env of
       Just (zts,e') -> do
-        log $ "inlining " ++ x
+        ($logInfo) $ "inlining " <> pack x
         let env' = M.fromList (zip (map fst zts) ys)
         Alpha.g env' e'
       _ -> return e

@@ -1,3 +1,5 @@
+{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module BackEnd.Second.Optimise (
     optimiseA
@@ -14,7 +16,6 @@ import Prelude hiding (log)
 
 optimiseA :: AProg -> Caml AProg
 optimiseA p = do
-  log "optimiseA"
+  ($logInfo) "optimiseA"
   return $ elim $ nanjaKore $ compareBranch $ tailCallOptimise p
-  {-return $ compareBranch $ tailCallOptimise p-}
 

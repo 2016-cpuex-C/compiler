@@ -2,6 +2,7 @@
 {-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
 module BackEnd.First.Emit where
@@ -90,8 +91,9 @@ g' oc (dest,exp) =
                     write $ printf "\tli\t%s, %d" x i
              | otherwise -> do
                     let (hi,lo) = devideInteger i
-                    lift.log $ show i ++ " is out of 16bits range\n" ++
-                               "devide into " ++ show hi ++ " and " ++ show lo
+                    lift.($logInfo).pack $
+                      show i ++ " is out of 16bits range\n" ++
+                      "devide into " ++ show hi ++ " and " ++ show lo
                     write $ printf "\tli\t%s, %d" x hi
                     write $ printf "\tsll\t%s, %s, 16" x x
                     write $ printf "\taddi\t%s, %s, %d" x x lo
@@ -349,7 +351,7 @@ emit handle prog = evalStateT (emit' handle prog) (EmitState S.empty [])
 emit' :: Handle -> AProg -> CamlE ()
 emit' handle (AProg fdata fundefs e) = do
   let write s = liftIO $ hPutStrLn handle s
-  lift $ log "generating assembly..."
+  lift $ ($logInfo) "generating assembly..."
 
   --floats
   write $ printf ".data"

@@ -1,10 +1,11 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE TupleSections #-}
+{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module FrontEnd.Typing where
 
-import Prelude hiding (log)
 import Base
 import FrontEnd.Syntax
 
@@ -59,7 +60,7 @@ derefType = \case
   TPtr t      -> TPtr   <$> derefType t
   TVar tv -> readType tv >>= \case
     Nothing -> do
-      lift.log $ "uninstantiated type variable detected; assuming int@."
+      lift.($logWarn) $ "uninstantiated type variable detected; assuming int@."
       writeType tv TInt
       return TInt
     Just t -> do
@@ -149,7 +150,7 @@ infer env e =
         Nothing -> uses extTyEnv (M.lookup x) >>= \case
           Just t -> return t
           Nothing -> do
-            lift.log $ "free variable " ++ x ++ " assumed as external@."
+            lift.($logWarn) $ "free variable " <> pack x <> " assumed as external@."
             t <- lift genType
             extTyEnv %= M.insert x t
             return t

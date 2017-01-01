@@ -1,6 +1,7 @@
 {-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module Main where
 
@@ -44,6 +45,9 @@ main :: IO ()
 main = execParser (info (helper <*> parseOpt) fullDesc) >>= \opts ->
   let s = initialState & threshold     .~ inline opts
                        & optimiseLimit .~ iter opts
+                       & verbosity     .~ if verbose opts
+                                            then LevelDebug
+                                            else LevelInfo
       withLogFile = case logf opts of
         Nothing -> ($ stdout)
         Just f  -> withFile f WriteMode
@@ -67,7 +71,7 @@ compile2 s f = do
       >>= kNormalize
       >>= alpha
       >>= optimise
-      >>= ((use globalHeap >>= log.show) $>)
+      >>= ((use globalHeap >>= ($logDebugSH)) $>)
       >>= lambdaLift
       >>= closureConvert
       >>= toLLVM
@@ -76,7 +80,7 @@ compile2 s f = do
       >>= toAProg
       >>= virtual
       >>= optimiseA
-      >>= ((use constFloats >>= log.show) $>)
+      >>= ((use constFloats >>= ($logDebugSH)) $>)
       >>= emitProg h
     case m of
       Right _  -> return()
@@ -94,7 +98,7 @@ compile1 s f = do
       >>= alpha
       >>= optimise
       >>= lambdaLift
-      >>= ((use globalHeap >>= log.show) $>)
+      >>= ((use globalHeap >>= ($logDebugSH)) $>)
       >>= closureConvert
       >>= virtualCode
       >>= simm
@@ -122,6 +126,7 @@ data MinCamlOptions
   , iter    :: Int
   , logf    :: Maybe String
   , first   :: Bool
+  , verbose :: Bool
   , args    :: [String]
   }
 
@@ -149,6 +154,9 @@ parseOpt = pure MinCamlOptions
     $$ short '1'
     <=> long "first"
     <=> help "use first compiler"
+  <*> switch
+    $$ short 'v'
+    <=> long "verbose"
   <*> some (argument str (metavar "FILES.."))
   where
     infixr 7 $$

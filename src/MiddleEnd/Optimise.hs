@@ -1,3 +1,5 @@
+{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module MiddleEnd.Optimise where
 
@@ -19,7 +21,7 @@ optimise e = use optimiseLimit >>= go e
   where
     go e' 0 = return e'
     go e' n = do
-      log $ "iter: " ++ show n
+      ($logInfo) $ "iter: " <> show' n
       e'' <- staticAlloc =<< cse =<< elim =<< constFold =<< inline =<< assoc =<< beta e'
       if e'==e''
         then return e'

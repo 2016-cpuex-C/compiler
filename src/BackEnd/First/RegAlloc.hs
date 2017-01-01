@@ -1,6 +1,8 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE TupleSections #-}
+{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
 module BackEnd.First.RegAlloc where
@@ -26,8 +28,9 @@ import qualified Data.Foldable as F
 
 regAlloc :: AProg -> Caml AProg
 regAlloc (AProg fdata fundefs e) = do
-  log $ "register allocation: may take some time " ++
-        "(up to a few minutes, depending on the size of functions)"
+  $(logInfo) $
+    "register allocation: may take some time " <>
+    "(up to a few minutes, depending on the size of functions)"
   m <- runExceptT $ do
     fundefs' <- mapM h fundefs
     tmp <- lift $ genTmp TUnit
@@ -135,13 +138,14 @@ alloc' destt cont regenv x t = --assert (M.notMember x regenv) $
             in case F.find (`S.notMember` live) (prefer++allregs) of
                  Just r  -> return $ Alloc r
                  Nothing -> do
-                  lift.log $ "register allocation failed for " ++ x
+                  lift.($logInfo) $ "register allocation failed for " <> pack x
                   let y = fromJust $ F.find p (reverse free)
                             where p y' = case M.lookup y' regenv of
                                           Just r -> not (isReg y') && r`elem`allregs
                                           Nothing -> False
-                      msg = "spilling " ++ y ++ " from " ++ show (unsafeLookup y regenv)
-                  lift (log msg) >> return (Spill y)
+                      msg = "spilling " <> pack y <>
+                            " from " <> show' (unsafeLookup y regenv)
+                  lift ($logInfo msg) >> return (Spill y)
 
 -------------------------------------------------------------------------------
 -- RegEnv Operations
@@ -303,7 +307,7 @@ g' destt cont regenv exp = case exp of
 g'_and_restore :: (Id,Type) -> Asm -> Map Id Id -> AExpr -> CamlRA (Asm, Map Id Id)
 g'_and_restore destt cont regenv exp =
   g' destt cont regenv exp `catchError` \(NoReg x t) -> do
-      lift.log $ "restoring " ++ x
+      lift.($logInfo) $ "restoring " <> pack x
       g destt cont regenv (AsmLet (x, t) (ARestore x) (AsmAns exp))
 
 g'_if :: (Id,Type) -> Asm -> Map Id Id -> AExpr

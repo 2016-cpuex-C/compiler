@@ -1,11 +1,12 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE OverloadedStrings #-}
 -- remove or simplify virtual instructions
 
 module BackEnd.Second.Virtual where
 
-import Prelude hiding (log)
+import Prelude
 
 import Base
 import BackEnd.Second.Asm
@@ -42,13 +43,13 @@ type CamlRS = StateT RS Caml
 
 virtual :: AProg -> Caml AProg
 virtual (AProg fundefs) = do
-  log "virtual"
+  ($logInfo) "virtual"
   {-AProg <$> mapM (virtualFunDef>=>zantei) fundefs-}
   AProg <$> mapM (virtualFunDef>=>saveAndRestore) fundefs
 
 virtualFunDef :: AFunDef -> Caml AFunDef
 virtualFunDef f@(AFunDef l _ _ blocks _) = do
-  log $ "virtualFunDef: " ++ show l
+  -- ($logInfo) $ "virtualFunDef: " <> show' l
   blocks' <- forM blocks $
                 mergePhis >=> calcPtr
   return f{ aBody=blocks' }
@@ -178,7 +179,7 @@ insertRestore fun@(AFunDef _ xs ys _ _) = do
   let stackMap  = stackSets fun
       blockTree = dfsBlock fun
   liveout <- analyzeLifetime fun
-  log.show $ toLiveOutB liveout
+  ($logDebugSH) $ toLiveOutB liveout
   blocks <- M.elems . view bmap <$>
     execStateT (insertRestoreTree (S.fromList (xs++ys)) stackMap blockTree) RS {
       _bmap     = blockMap fun
@@ -223,23 +224,15 @@ insertRestoreBlock mArgs stackIn (ABlock l stmts) = do
   regSetIn <- do
     preds <- uses predMap (M.findWithDefault [] l)
     x <- mapM (\l' -> uses liveOutB (uncurry S.union . lookupMapJustNote "" l')) preds
-        -- predsの
     if null x
       then return S.empty
       else return $ foldl1 S.intersection x
-  --lift.log $ "insertRestoreBlock: " ++ show l
-  --lift.log $ show regSetIn
-
-  {-stackSet %= S.filter (`S.member` stackIn)-}
   stackSet .= stackIn
   regSet   .= regSetIn `S.union` mArgs
   Just (stmts_,term) <- unsnoc <$> concatMapM insertRestoreStmt stmts
 
   inReg <- use regSet
   Just (liveout,liveoutF) <- uses liveOutB (M.lookup l)
-
-  --lift.log $ show l ++ ": liveout = " ++ show liveout
-  --lift.log $ show l ++ ": inReg   = " ++ show inReg
 
   restore  <- forM (S.toList $ liveout S.\\ inReg) $ \x -> do
     regSet %= S.insert x
@@ -252,11 +245,11 @@ insertRestoreBlock mArgs stackIn (ABlock l stmts) = do
   addBlock l $ stmts_ ++ restore ++ restoreF ++ [term]
 
 insertRestoreStmt :: Statement -> CamlRS [Statement]
-insertRestoreStmt s = do
-  --lift.log =<< do {
+insertRestoreStmt s = --do
+  --lift. $logDebug =<< do {
   --  regset <- use regSet;
   --  stkset <- use stackSet;
-  --  return $ show (fst s) ++ ": " ++ show regset ++ "\n    " ++ show stkset;
+  --  return $ show' (fst s) <> ": " <> show' regset <> "\n    " <> show' stkset;
   --  }
   case snd s of
     Do (ASave x) -> uses stackSet (S.member x) >>= \case

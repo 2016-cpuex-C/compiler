@@ -1,5 +1,6 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
 module MiddleEnd.StaticAlloc where
@@ -45,8 +46,8 @@ f mname env e = case e of
       addr <- use startGP
       startGP += size
       globalHeap %= M.insert gname (addr,size,TArray size elemty)
-      log $ "Global: " ++ name ++ " is allocated at " ++
-            show addr ++ " ~ " ++ show (addr+size-1)
+      --($logInfo) $ "Global: " <> pack name <> " is allocated at " <>
+      --             show' addr <> " ~ " <> show' (addr+size-1)
       return $ KArrayInit (Label gname) z
     _ -> return e
 
