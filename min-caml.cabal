@@ -20,13 +20,14 @@ library
                      , extra
                      , vector
                      , xformat
+                     , BitSyntax
                      , bytestring
                      , containers
                      , file-embed
-                     , transformers
+                     , regex-tdfa
                      , fast-logger
                      , monad-logger
-                     , BitSyntax
+                     , transformers
                      , template-haskell
   exposed-modules:     Base
                      , FrontEnd.Syntax

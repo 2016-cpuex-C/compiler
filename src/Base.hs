@@ -63,7 +63,8 @@ module Base (
   , insertAppendList
   , flipMap
   , mapToTree
-  , mapToDFSTree -- TODO rename
+  , dfsMap
+  , inOrderSortDFS
   , toList2
   , fromList2
   , union2
@@ -73,39 +74,32 @@ module Base (
   , show'
 
     -- export
-  , module Safe
-  , module Data.Map
-  , module Data.Set
-  , module Data.Text
-  , module Data.Monoid
-  , module Control.Monad
-  , module Control.Monad.Except
-  , module Control.Monad.Logger
+  , module Export
   --}}}
 ) where
 
-import           Prelude                          hiding (log)
-import           Safe
+import           Safe                             as Export
+import           Data.Map                         as Export (Map)
+import           Data.Set                         as Export (Set)
+import           Data.Monoid                      as Export
+import           Control.Monad                    as Export (join,when,unless,forM_,forM,(>=>))
+import           Control.Monad.Except             as Export (throwError,catchError)
+
 import           Data.IORef
 import           Control.Lens                     (makeLenses,uses,bimap)
 import           Control.Lens.Operators
-import           Data.Map                         (Map)
 import qualified Data.Map                         as M
-import           Data.Set                         (Set)
 import qualified Data.Set                         as S
 import           Data.Tree
-import           Data.Monoid
-import           Control.Monad                    (join,when,unless,forM_,forM,(>=>))
-import qualified Control.Monad.Trans as T         (MonadTrans,lift)
+import qualified Control.Monad.Trans              as T (MonadTrans,lift)
 import           Control.Monad.Trans.Except
 import           Control.Monad.Trans.State.Lazy
-import qualified Control.Monad.IO.Class           as IOC
-import           Control.Monad.Except             (throwError,catchError)
+import qualified Control.Monad.IO.Class           as IOC (MonadIO,liftIO)
 import           System.IO                        (Handle,stdout)
 
 -- for logger
-import           Data.Text                        (Text,pack)
-import           Control.Monad.Logger
+import           Data.Text                        as Export (Text,pack)
+import           Control.Monad.Logger             as Export
 import           System.Log.FastLogger
 import qualified Data.ByteString.Char8            as S8 (hPutStr)
 
@@ -356,15 +350,15 @@ flipMap = M.foldlWithKey f M.empty
   where f m x y = insertAppend y x m
 
 -- 後退辺があると無限ループする
--- ある場合はmapToDFSTreeを使う
+-- ある場合はdfsMapを使う
 mapToTree :: Ord a => a -> Map a [a] -> Tree a
 mapToTree root m = f root
   where f n = case M.lookup n m of
           Just es -> Node n (map f es)
           Nothing -> Node n []
 
-mapToDFSTree :: Ord a => a -> Map a [a] -> Tree a
-mapToDFSTree root m = evalState (f root) S.empty
+dfsMap :: Ord a => a -> Map a [a] -> Tree a
+dfsMap root m = evalState (f root) S.empty
   where
     f n = case M.lookup n m of
       Just es -> do
@@ -373,6 +367,9 @@ mapToDFSTree root m = evalState (f root) S.empty
         let es' = filter (`S.notMember` reached) es
         Node n <$> mapM f es'
       Nothing -> return $ Node n []
+
+inOrderSortDFS :: Tree a -> [a]
+inOrderSortDFS (Node n ns) = n : concatMap inOrderSortDFS ns
 
 ---------------
 -- (Set,Set) --

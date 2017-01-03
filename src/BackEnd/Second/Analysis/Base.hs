@@ -6,39 +6,23 @@ module BackEnd.Second.Analysis.Base where
 import Base
 import BackEnd.Second.Asm
 
+import           Prelude hiding(Ordering(..))
 import qualified Data.Map as M
 import qualified Data.Set as S
 import           Data.Tree
-import           Data.List (foldl',isPrefixOf,partition)
+import           Data.List (foldl')
 import           Data.List.Extra (groupSort)
-import           Data.Maybe (fromMaybe)
-
-----------
--- Prog --
-----------
-
-popMain :: AProg -> (AFunDef,[AFunDef])
-popMain (AProg fs) =
-  let ([main],others) = partition (\f -> aFunName f == Label "__main__") fs
-  in (main,others)
 
 ------------
 -- FunDef --
 ------------
 
--- TODO なるべくbr命令が潰せるように並び替える
-sortBlock :: AFunDef -> [ABlock]
-sortBlock (AFunDef _ _ _ blocks _) =
-  let name = unLabel . aBlockName
-      ([entry],others) = partition (\b -> "entry." `isPrefixOf` name b) blocks
-  in entry:others
-
 dfsBlock :: AFunDef -> Tree ABlock
 dfsBlock f = toBlock <$> dfsBlockName f
-  where toBlock l = fromMaybe (error "Impossible") (M.lookup l (blockMap f))
+  where toBlock l = fromJustNote "dfsBlock" (M.lookup l (blockMap f))
 
 dfsBlockName :: AFunDef -> Tree Label
-dfsBlockName f = mapToDFSTree (entryBlockName f) (succBlockMap f)
+dfsBlockName f = dfsMap (entryBlockName f) (succBlockMap f)
 
 -- TODO 名前がblockMapとかぶってる
 succBlockMap :: AFunDef -> Map Label [Label]
@@ -74,8 +58,7 @@ nextBlockNames (ABlock _ contents) = f $ toExpr $ last contents
       ACmpBr  _ _ _ l1 l2 -> [l1,l2]
       AFCmpBr _ _ _ l1 l2 -> [l1,l2]
       ASwitch _ l ils     -> l : map snd ils
-      i -> error $
-        "BackEnd.Second.Analysis.Base: nextBlockNames: non-terminator: " ++ show i
+      i -> errorShow "nextBlockNames: non-terminator: " i
 
 defSiteMapB :: ABlock -> Map Id Statement
 defSiteMapB (ABlock _ stmts) = M.fromList $ concat

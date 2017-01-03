@@ -5,10 +5,11 @@ module BackEnd.Second.Asm where
 
 import Base
 
+import           Text.Regex.TDFA
 import           Data.Vector (Vector, (!))
 import qualified Data.Vector as V
 import qualified Data.Map as M
-import           Data.List (find, isPrefixOf)
+import           Data.List (partition)
 import           Control.Lens ((<+=),(<&>))
 
 -------------------------------------------------------------------------------
@@ -129,29 +130,44 @@ type Register = Id
 -- Util
 -------------------------------------------------------------------------------
 
+----------
+-- Prog --
+----------
+
+popMain :: AProg -> (AFunDef,[AFunDef])
+popMain (AProg fs) =
+  case partition (\f -> aFunName f == Label "__main__") fs of
+    ([main],others) -> (main,others)
+    _ -> error "popMain"
+
 ------------
 -- FunDef --
 ------------
 
 isEmptyFun :: AFunDef -> Bool
-isEmptyFun = null.aBody
+isEmptyFun = null . aBody
 
 entryBlock :: AFunDef -> ABlock
-entryBlock (AFunDef _ _ _ blocks _) =
-  let name b = let Label l = aBlockName b in l
-      Just eb = find (\b -> "entry." `isPrefixOf` (name b)) blocks
-  in  eb
+entryBlock (AFunDef l _ _ blocks _) =
+  case partition isEntryBlock blocks of
+    ([eb],_) -> eb
+    _ -> errorShow "entryBlock: " l
 
 entryBlockName :: AFunDef -> Label
 entryBlockName = aBlockName . entryBlock
 
 blockMap :: AFunDef -> Map Label ABlock
 blockMap (AFunDef _ _ _ blocks _) =
-  M.fromList [ (l,b) | b@(ABlock l _) <- blocks]
+  M.fromList [ (l,b) | b@(ABlock l _) <- blocks ]
 
 -----------
 -- Block --
 -----------
+
+-- entry.12.32 のような形をしている
+-- TODO もっといい方法ないかなあ
+isEntryBlock :: ABlock -> Bool
+isEntryBlock (ABlock (Label x) _) = x =~ "^entry\\.[0-9]+\\.[0-9]+$"
 
 firstStmt :: ABlock -> Statement
 firstStmt = head . aStatements

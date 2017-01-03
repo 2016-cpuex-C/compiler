@@ -1395,7 +1395,7 @@ let rec solve_each_element iand_ofs and_group dirvec =
                 vecset intersection_point q0 q1 q2;
                 intersected_object_id.(0) <- iobj;
                 intsec_rectside.(0) <- t0
-               )
+              )
             else ()
            )
          else ()

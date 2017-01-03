@@ -17,7 +17,7 @@ import BackEnd.Second.SSA_Deconstruction
 import           Data.Int                   (Int16)
 import qualified Data.Map                   as M
 import qualified Data.Set                   as S
-import           Data.Tree
+import           Data.List                  ((\\))
 import           Data.Vector                ((!))
 import           Data.FileEmbed             (embedFile)
 import qualified Data.ByteString.Char8      as BC
@@ -27,16 +27,18 @@ import           Control.Monad.Trans.State
 import           Text.Printf                (printf)
 import           System.IO                  (Handle, hPutStrLn)
 import           Data.Char                  (toLower)
+import           Control.Arrow (second)
 
 -------------------------------------------------------------------------------
 -- Types
 -------------------------------------------------------------------------------
 
 data ES = ES {
-    _hout      :: Handle
-  , _colorMaps :: (Map Id Color, Map Id Color)
-  , _stack     :: Set Id
-  , _offset'   :: Map Id Integer
+    _hout          :: Handle
+  , _colorMaps     :: (Map Id Color, Map Id Color)
+  , _stack         :: Set Id
+  , _offset'       :: Map Id Integer
+  , _nextBlockName :: Maybe Label
   }
 makeLenses ''ES
 
@@ -135,31 +137,26 @@ emitFun h f = do
   liftIO $ hPutStrLn h $ unLabel l ++ ":"
   liftIO $ hPutStrLn h $ "\tsw\t$ra, 0($sp)"
   let stackMap = stackSets f'
-  evalStateT (emitTree stackMap $ dfsBlock f') ES {
-      _hout      = h
-    , _colorMaps = colMaps
-    , _stack     = S.empty
-    , _offset'   = M.empty
+  evalStateT (emitBlocks stackMap (sortBlocks f')) ES {
+      _hout          = h
+    , _colorMaps     = colMaps
+    , _stack         = S.empty
+    , _offset'       = M.empty
+    , _nextBlockName = Nothing
     }
 
-emitTree :: Map Label (Set Id) -> Tree ABlock -> CamlE ()
-emitTree stackMap (Node b ts) = do
-  let Just s = M.lookup (aBlockName b) stackMap
-  emitBlock s b
-  stkBak <- use stack
-  forM_ ts $ \t -> do
-    emitTree stackMap t
-    stack .= stkBak
+emitBlocks :: Map Label (Set Id) -> [ABlock] -> CamlE ()
+emitBlocks stackMap = go
+  where
+    go [] = return ()
+    go (b:bs) = do
+      nextBlockName .= (aBlockName <$> headMay bs)
+      emitBlock (lookupMapJustNote "" (aBlockName b) stackMap) b
+      go bs
 
 emitBlock :: Set Id -> ABlock -> CamlE ()
 emitBlock s (ABlock l stmts) = do
-  stack %= S.filter (`S.member` s)
-  stk <- use stack
-  unless (all (`S.member` stk) s) $ error . unlines . map unwords $
-    [ [ "emitBlock: bug: at", unLabel l ]
-    , [ show s, "should have been already saved" ]
-    , [ "but only ", show stk, "is actualy saved" ]
-    ]
+  stack .= s
   write $ unLabel l++":"
   mapM_ (emitInst.snd) stmts
 
@@ -267,6 +264,47 @@ emitInst = \case
 -- }}}
 
 -------------------------------------------------------------------------------
+-- Sort Basic Blocks
+-------------------------------------------------------------------------------
+
+-- なるべくbr命令が潰せるように並び替える
+-- とりあえず貪欲法でやっている
+-- TODO 最適解求めたい
+sortBlocks :: AFunDef -> [ABlock]
+sortBlocks f = map toBlock $ reverse $ execState (g (entryBlock f)) []
+  where
+    g b = do
+      modify (aBlockName b:)
+      visited <- get
+      let succs = nextBlockNames b \\ visited
+      case deleteAndFindFirstMay (`elem` prefer b) succs of
+        Just (l,ls) -> mapM_ (g.toBlock) (l:ls)
+        Nothing     -> mapM_ (g.toBlock) succs
+
+    -- bの直後に出力すると嬉しい
+    prefer b = case snd (lastStmt b) of
+      Do (ABr l)               -> [l]
+      Do (ACBr _ lt lf)        -> [lt,lf] -- cbrはどっちでも対応可能
+      Do (ACmpBr  EQ _ _ _ lf) -> [lf]
+      Do (ACmpBr  LT _ _ _ lf) -> [lf]
+      Do (ACmpBr  GT _ _ _ lf) -> [lf]
+      Do (ACmpBr  _  _ _ lt _) -> [lt]    -- emitでflipするため
+      Do (AFCmpBr EQ _ _ _ lf) -> [lf]
+      Do (AFCmpBr LE _ _ _ lf) -> [lf]
+      Do (AFCmpBr LT _ _ _ lf) -> [lf]
+      Do (AFCmpBr _  _ _ lt _) -> [lt]    -- 同上
+      Do (ASwitch _ l _)       -> [l]
+      _                        -> []
+
+    toBlock l = fromJustNote "sortBlocks" (M.lookup l (blockMap f))
+
+deleteAndFindFirstMay :: (a -> Bool) -> [a] -> Maybe (a,[a])
+deleteAndFindFirstMay _ [] = Nothing
+deleteAndFindFirstMay p (a:as)
+  | p a       = Just (a,as)
+  | otherwise = second (a:) <$> deleteAndFindFirstMay p as
+
+-------------------------------------------------------------------------------
 -- 命令フォーマット
 -------------------------------------------------------------------------------
 
@@ -360,40 +398,44 @@ movs x y = do
   when (rx/=ry) $ write $ printf "\t%s\t%s, %s" s rx ry
 
 br :: Label -> CamlE ()
-br (Label x) =
-  write $ printf "\t%s\t%s" "j" x
+br l = use nextBlockName >>= \case
+  Just l' | l==l' -> write $ printf "\t#%s\t%s" "j" (unLabel l)
+  _               -> write $ printf "\t%s\t%s" "j" (unLabel l)
 
 cbr :: Id -> Label -> Label -> CamlE ()
-cbr b (Label x) (Label y) = do
-  write =<< printf "\tbeqi\t%s, 0, %s" <$> reg b <*> return y
-  write =<< printf "\tj\t%s" <$> return x
-
-cmpbri :: Predicate -> Id -> Integer -> Label -> Label -> CamlE ()
-cmpbri NE x i lt lf = cmpbri EQ x i lf lt
-cmpbri LE x i lt lf = cmpbri GT x i lf lt
-cmpbri GE x i lt lf = cmpbri LT x i lf lt
-cmpbri p x i lt lf = do
-  write =<< printf "\t%s\t%s, %d, %s" bi <$> reg x <*> return i <*> return (unLabel lt)
-  write =<< printf "\tj\t%s" <$> return (unLabel lf)
-  where bi = "b" ++ showPred p ++ "i"
+cbr b lt lf = use nextBlockName >>= \case
+  Just l
+    | l==lf -> branch "beqi" (reg b) (return "0") lf lt
+    | l==lt -> branch "beqi" (reg b) (return "1") lt lf
+  _ -> branch "beqi" (reg b) (return "0") lf lt
 
 cmpbr  :: Predicate -> Id -> Id -> Label -> Label -> CamlE ()
 cmpbr NE x y lt lf = cmpbr EQ x y lf lt
 cmpbr LE x y lt lf = cmpbr GT x y lf lt
 cmpbr GE x y lt lf = cmpbr LT x y lf lt
-cmpbr p x y lt lf = do
-  write =<< printf "\t%s\t%s, %s, %s" b <$> reg x <*> reg y <*> return (unLabel lt)
-  write =<< printf "\tj\t%s" <$> return (unLabel lf)
-  where b = "b" ++ showPred p
+cmpbr p x y lt lf = branch ("b"++showPred p) (reg x) (reg y) lt lf
+
+cmpbri :: Predicate -> Id -> Integer -> Label -> Label -> CamlE ()
+cmpbri NE x i lt lf = cmpbri EQ x i lf lt
+cmpbri LE x i lt lf = cmpbri GT x i lf lt
+cmpbri GE x i lt lf = cmpbri LT x i lf lt
+cmpbri p x i lt lf = branch ("b"++showPred p++"i") (reg x) (return (show i)) lt lf
 
 cmpbrs :: Predicate -> Id -> Id -> Label -> Label -> CamlE ()
 cmpbrs NE x y lt lf = cmpbrs EQ x y lf lt
 cmpbrs GE x y lt lf = cmpbrs LT x y lf lt
 cmpbrs GT x y lt lf = cmpbrs LE x y lf lt
-cmpbrs p x y lt lf = do
-  write =<< printf "\t%s\t%s, %s, %s" bs <$> regF x <*> regF y <*> return (unLabel lt)
-  write =<< printf "\tj\t%s" <$> return (unLabel lf)
-  where bs = "c." ++ showPred p ++ ".s"
+cmpbrs p x y lt lf = branch ("c."++showPred p++".s") (regF x) (regF y) lt lf
+
+branch :: String       -- 命令
+       -> CamlE String -- operand1
+       -> CamlE String -- operand2
+       -> Label        -- dist (if true)
+       -> Label        -- dist (if false)
+       -> CamlE ()
+branch s x' y' lt lf = do
+  write =<< printf "\t%s\t%s, %s, %s" s <$> x' <*> y' <*> return (unLabel lt)
+  br lf
 
 ret :: CamlE ()
 ret = do
@@ -404,11 +446,9 @@ call :: Type -> Maybe Id -> Label -> [Id] -> [Id] -> CamlE ()
 call t mx (Label f) ys zs = do
   setArgs ys zs
   ss <- stackSize
-  --rri' "sw"   regRa regSp 0 ###
   rri  "addi" regSp regSp ss
   write $ "\tjal " ++ f ++ "\t# " ++ show mx
   rri  "addi" regSp regSp (-ss)
-  --rri' "lwr"  regRa regSp 0
   case mx of
     Nothing -> return ()
     Just x | t == TFloat -> movs x (fregs!0)
@@ -429,14 +469,12 @@ setArgs xs ys = do
       regF' x | isReg x             = x
               | M.member x colMapF  = fregs ! unsafeLookup x colMapF
               | otherwise           = error $ "setArgs: regF': " ++ x
-
       actToInst'  (Nop  (_,_)) = Do ANop
       actToInst'  (Move (x,y)) = x := AMove y
       actToInst'  (Swap (x,y)) = Do (ASwap x y)
       actToInstF' (Nop  (_,_)) = Do ANop
       actToInstF' (Move (x,y)) = x := AFMov y
       actToInstF' (Swap (x,y)) = Do (AFSwap x y)
-
       inst'  = map actToInst'  $ resolveBy reg'  $ zip allRegs  xs
       instF' = map actToInstF' $ resolveBy regF' $ zip allFRegs ys
   mapM_ emitInst $ inst' ++ instF'
@@ -446,31 +484,31 @@ push x = stack %= S.insert x
 
 save :: Id -> CamlE ()
 save x = uses stack (S.member x) >>= \case
-  True  -> return()--write $ "\t# "++ x ++ " is already saved: "
+  True  -> write $ "\t# "++ x ++ " is already saved: "
   False -> do push x
               n <- offset x
               rri' "sw" x regSp n
-              --write $ "\t\t# save: " ++ x
+              write $ "\t\t# save: " ++ x
 
 saveF :: Id -> CamlE ()
 saveF x = uses stack (S.member x) >>= \case
-  True  -> return ()--write $ "\t# "++ x ++ " is already saved: "
+  True  -> write $ "\t# "++ x ++ " is already saved: "
   False -> do push x
               n <- offset x
               fri' "s.s" x regSp n
-              --write $ "\t\t# save: " ++ x
+              write $ "\t\t# save: " ++ x
 
 restore :: Id -> CamlE ()
 restore x = do
   n <- offset x
   rri' "lwr" x regSp n
-  --write $ "\t\t# restore: " ++ x
+  write $ "\t\t# restore: " ++ x
 
 restoreF :: Id -> CamlE ()
 restoreF x = do
   n <- offset x
   fri' "l.sr" x regSp n
-  --write $ "\t\t# restore: " ++ x
+  write $ "\t\t# restore: " ++ x
 
 showPred :: Predicate -> String
 showPred = map toLower . show
