@@ -150,7 +150,7 @@ emitBlocks stackMap = go
     go [] = return ()
     go (b:bs) = do
       nextBlockName .= (aBlockName <$> headMay bs)
-      emitBlock (lookupMapJustNote "" (aBlockName b) stackMap) b
+      emitBlock (lookupMapNote "emitBlocks" (aBlockName b) stackMap) b
       go bs
 
 emitBlock :: Set Id -> ABlock -> CamlE ()

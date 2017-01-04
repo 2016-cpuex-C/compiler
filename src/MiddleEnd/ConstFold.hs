@@ -5,7 +5,6 @@ import Base
 import MiddleEnd.KNormal
 
 import qualified Data.Map as M
-import           Data.List   (foldl')
 import           Data.Maybe  (fromMaybe)
 
 fromJust :: Maybe a -> a

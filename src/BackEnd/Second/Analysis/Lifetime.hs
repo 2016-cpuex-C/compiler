@@ -52,7 +52,7 @@ analyzeLifetimeB fun = do
     b <- aBody fun
     let l = aBlockName b
         lastId = fst $ lastStmt b
-        lives = lookupMapJustNote "liveOutB" lastId liveOut'
+        lives = lookupMapNote "liveOutB" lastId liveOut'
     return (l,lives)
 
 analyzeLifetimeSub :: CamlLA ()

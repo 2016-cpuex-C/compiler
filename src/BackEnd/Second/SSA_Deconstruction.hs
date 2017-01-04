@@ -146,7 +146,7 @@ addBlock :: Label -> [Statement] -> CamlSSA ()
 addBlock l contents = bmap %= M.insert l (ABlock l contents)
 
 block :: Label -> CamlSSA ABlock
-block = uses bmap . lookupMapJustNote "SSA_Deconstruction: block: Impossible"
+block = uses bmap . lookupMapNote "SSA_Deconstruction: block: Impossible"
 
 -------------------------------------------------------------------------------
 --
@@ -161,9 +161,9 @@ deconstruct (colMap,colMapF) xvs = do
       varF  = [ ((x,False), (y,b)) | (x, PVVar y t b) <- xvs, t == TFloat ]
               -- memory上にあればTrue, registerにあればFalse
 
-      color  (x,False) = Reg $ lookupMapJustNote "color" x colMap
+      color  (x,False) = Reg $ lookupMapNote "color" x colMap
       color  _         = Mem
-      colorF (x,False) = Reg $ lookupMapJustNote "colorF" x colMapF
+      colorF (x,False) = Reg $ lookupMapNote "colorF" x colMapF
       colorF _         = Mem
 
       insts = concat [

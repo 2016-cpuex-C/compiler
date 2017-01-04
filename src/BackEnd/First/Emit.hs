@@ -17,7 +17,7 @@ import qualified Data.Set as S
 import           Data.Int    (Int16)
 import           Data.Vector ((!))
 import           Control.Lens
-import           Data.List (foldl', partition)
+import           Data.List (partition)
 import           Control.Exception.Base (assert)
 import           System.IO (Handle, hPutStrLn)
 import           Text.Printf

@@ -11,7 +11,6 @@ import BackEnd.First.Asm hiding (fv)
 import qualified Data.Map as M
 import qualified Data.Set as S
 import           Control.Lens
-import           Data.List (foldl')
 import           Data.Maybe (fromJust)
 import           Data.Foldable (foldlM)
 

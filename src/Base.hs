@@ -1,4 +1,5 @@
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE FlexibleContexts #-}
 
@@ -45,7 +46,6 @@ module Base (
   , labelFloat
   , initialState
   , maxArgs
---  , log
   , runCaml
   , runCamlDefault
   , lift
@@ -57,7 +57,7 @@ module Base (
   -----------
   , lookupRev
   , both
-  , lookupMapJustNote
+  , lookupMapNote
   , insertList
   , insertAppend
   , insertAppendList
@@ -65,6 +65,8 @@ module Base (
   , mapToTree
   , dfsMap
   , inOrderSortDFS
+  , lookupMapLensM
+  , lookupMapLensNoteM
   , toList2
   , fromList2
   , union2
@@ -82,27 +84,27 @@ import           Safe                             as Export
 import           Data.Map                         as Export (Map)
 import           Data.Set                         as Export (Set)
 import           Data.List                        as Export (foldl')
+import           Data.Text                        as Export (Text,pack)
 import           Data.Monoid                      as Export
+import           Control.Lens                     as Export (makeLenses,use,uses,view,bimap)
 import           Control.Monad                    as Export (join,when,unless,forM_,forM,(>=>))
 import           Control.Monad.Except             as Export (throwError,catchError)
+import           Control.Monad.Logger             as Export
 
 import           Data.IORef
-import           Control.Lens                     as Export (makeLenses,use,uses,view,bimap)
+import           Control.Lens                     (Lens')
 import           Control.Lens.Operators
 import qualified Data.Map                         as M
 import qualified Data.Set                         as S
 import           Data.Tree
+import qualified Data.ByteString.Char8            as S8 (hPutStr)
 import qualified Control.Monad.Trans              as T (MonadTrans,lift)
 import           Control.Monad.Trans.Except
 import           Control.Monad.Trans.State.Lazy
+import           Control.Monad.State.Class        (MonadState)
 import qualified Control.Monad.IO.Class           as IOC (MonadIO,liftIO)
 import           System.IO                        (Handle,stdout)
-
--- for logger
-import           Data.Text                        as Export (Text,pack)
-import           Control.Monad.Logger             as Export
 import           System.Log.FastLogger
-import qualified Data.ByteString.Char8            as S8 (hPutStr)
 
 -------------------------------------------------------------------------------
 -- Types
@@ -329,9 +331,9 @@ both f = bimap f f
 -- Map --
 ---------
 
-lookupMapJustNote :: (Ord k) => String -> k -> Map k a -> a
-lookupMapJustNote s k m = fromJustNote msg $ M.lookup k m
-  where msg = "lookupMapJustNote: " ++ s
+lookupMapNote :: (Ord k) => String -> k -> Map k a -> a
+lookupMapNote s k m = fromJustNote msg $ M.lookup k m
+  where msg = "lookupMapNote: " ++ s
 
 insertList :: Ord key => [(key,a)] -> Map key a -> Map key a
 insertList = M.union . M.fromList
@@ -371,6 +373,13 @@ dfsMap root m = evalState (f root) S.empty
 
 inOrderSortDFS :: Tree a -> [a]
 inOrderSortDFS (Node n ns) = n : concatMap inOrderSortDFS ns
+
+lookupMapLensM :: (Ord k, MonadState s m) => k -> Lens' s (Map k a) -> m (Maybe a)
+lookupMapLensM x m = uses m (M.lookup x)
+
+lookupMapLensNoteM :: (Ord k, MonadState s m) => String -> k -> Lens' s (Map k a) -> m a
+lookupMapLensNoteM s x m = fromJustNote msg <$> lookupMapLensM x m
+  where msg = "lookupMapLensNoteM: " ++ s
 
 ---------------
 -- (Set,Set) --

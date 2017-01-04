@@ -32,7 +32,7 @@ g env = \case
   AsmLet xt exp e -> AsmLet xt (g' env exp) (g env e)
 
 g' :: Map Id Integer -> AExpr -> AExpr
-g' env = let geti var = lookupMapJustNote "Simm" var env
+g' env = let geti var = lookupMapNote "Simm" var env
              get  var = C (geti var) in \case
   AAdd x (V y)
     | M.member y env -> AAdd x (get y)

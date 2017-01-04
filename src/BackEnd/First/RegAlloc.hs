@@ -14,7 +14,6 @@ import BackEnd.First.Asm
 
 import qualified Data.Map as M
 import qualified Data.Set as S
-import           Data.List (foldl')
 import           Data.Vector (Vector, (!))
 import           Data.Maybe (fromMaybe)
 import           Data.Foldable (foldlM)
