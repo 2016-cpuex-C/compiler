@@ -8,7 +8,6 @@ import Base
 import qualified Data.Set as S
 import           Data.Vector (Vector, (!))
 import qualified Data.Vector as V
-import           Control.Lens
 
 -----------------
 -- Asm.t = Asm --

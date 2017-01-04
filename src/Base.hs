@@ -81,12 +81,13 @@ module Base (
 import           Safe                             as Export
 import           Data.Map                         as Export (Map)
 import           Data.Set                         as Export (Set)
+import           Data.List                        as Export (foldl')
 import           Data.Monoid                      as Export
 import           Control.Monad                    as Export (join,when,unless,forM_,forM,(>=>))
 import           Control.Monad.Except             as Export (throwError,catchError)
 
 import           Data.IORef
-import           Control.Lens                     (makeLenses,uses,bimap)
+import           Control.Lens                     as Export (makeLenses,use,uses,view,bimap)
 import           Control.Lens.Operators
 import qualified Data.Map                         as M
 import qualified Data.Set                         as S

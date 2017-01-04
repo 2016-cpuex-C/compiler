@@ -22,7 +22,6 @@ import qualified Data.Map as M
 import           Data.Set       (toList, fromList, (\\))
 import qualified Data.Set as S
 import qualified Data.List as L
-import           Control.Lens
 import           Control.Monad.Trans.State.Lazy
 
 import           Data.Maybe (fromMaybe)

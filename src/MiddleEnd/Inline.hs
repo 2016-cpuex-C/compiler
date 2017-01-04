@@ -11,7 +11,6 @@ import           MiddleEnd.KNormal
 import qualified MiddleEnd.Alpha as Alpha
 
 import qualified Data.Map as M
-import           Control.Lens
 
 inline :: KExpr -> Caml KExpr
 inline = g M.empty

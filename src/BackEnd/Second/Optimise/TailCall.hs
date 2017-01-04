@@ -6,7 +6,6 @@ module BackEnd.Second.Optimise.TailCall where
 
 import Base
 import BackEnd.Second.Asm
-import BackEnd.Second.Analysis
 
 tailCallOptimise :: AProg -> AProg
 tailCallOptimise p = AProg $ main : map tailCallOptimiseFun others
@@ -18,6 +17,7 @@ tailCallOptimiseFun f = f { aBody = map tailCallOptimiseBlock $ aBody f }
 tailCallOptimiseBlock :: ABlock -> ABlock
 tailCallOptimiseBlock b = b { aStatements = f $ aStatements b }
   where
+    -- ラスト2命令で判断
     f [s] = [s]
     f stmts = (stmts'++) $ case (p,q) of
         ((i, x := ACall t l ys zs), (_, Do (ARet _ (Just (V y)))))

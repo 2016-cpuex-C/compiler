@@ -10,7 +10,7 @@ import MiddleEnd.LLVM.BackEnd
 import BackEnd.Second.Asm
 
 import           Prelude             hiding (log)
-import           Control.Lens               (use,uses,_1,_2)
+import           Control.Lens               (_1,_2)
 import           Control.Lens.Operators
 import           Control.Monad.Trans.State
 import           Data.List                  (isPrefixOf, partition)

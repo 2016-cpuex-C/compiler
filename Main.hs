@@ -32,7 +32,6 @@ import           Data.Functor           (($>))
 import           System.IO              (stdout, withFile, IOMode(..))
 import           Data.FileEmbed         (embedFile)
 import qualified Data.ByteString.Char8  as BC
-import           Control.Lens           (use)
 import           Control.Lens.Operators
 import           Options.Applicative
 import           System.FilePath.Posix  ((-<.>))

@@ -5,6 +5,7 @@
 
 module BackEnd.Second.Analysis.Lifetime (
     analyzeLifetime
+  , analyzeLifetimeB
   ) where
 
 import Base
@@ -15,7 +16,6 @@ import           Prelude hiding (log,succ)
 import qualified Data.Map as M
 import qualified Data.Set as S
 import           Control.Monad.Trans.State
-import           Control.Lens (use,uses,view,makeLenses)
 import           Control.Lens.Operators
 
 -------------------------------------------------------------------------------
@@ -35,6 +35,7 @@ type CamlLA = StateT LA Caml
 -- Main
 -------------------------------------------------------------------------------
 
+-- inst単位
 analyzeLifetime :: AFunDef -> Caml (Map InstId (Set Id, Set Id))
 analyzeLifetime f =
   view liveOut <$> execStateT analyzeLifetimeSub LA {
@@ -42,6 +43,17 @@ analyzeLifetime f =
     , _succMap = getSuccMap f
     , _liveOut = M.empty
   }
+
+-- block単位
+analyzeLifetimeB :: AFunDef -> Caml (Map Label (Set Id, Set Id))
+analyzeLifetimeB fun = do
+  liveOut' <- analyzeLifetime fun
+  return $ M.fromList $ do
+    b <- aBody fun
+    let l = aBlockName b
+        lastId = fst $ lastStmt b
+        lives = lookupMapJustNote "liveOutB" lastId liveOut'
+    return (l,lives)
 
 analyzeLifetimeSub :: CamlLA ()
 analyzeLifetimeSub = do

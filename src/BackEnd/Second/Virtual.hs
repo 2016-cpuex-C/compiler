@@ -2,6 +2,7 @@
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RankNTypes #-}
 -- remove or simplify virtual instructions
 
 module BackEnd.Second.Virtual where
@@ -14,13 +15,15 @@ import BackEnd.Second.Analysis
 
 import qualified Data.Map as M
 import qualified Data.Set as S
-import           Data.List ((\\), foldl')
+import           Data.List ((\\))
 import           Data.List.Extra (unsnoc)
 import           Data.Tree
-import           Control.Lens (view,use,uses,makeLenses)
+import           Control.Lens (Lens')
 import           Control.Lens.Operators
 import           Control.Monad.Trans.State
 import           Control.Monad.Extra (concatMapM)
+import           Control.Monad.State.Class (MonadState)
+import           Control.Arrow (second)
 
 -------------------------------------------------------------------------------
 -- Types
@@ -28,11 +31,14 @@ import           Control.Monad.Extra (concatMapM)
 
 data RS
   = RS {
-    _bmap     :: Map Label ABlock
-  , _predMap  :: Map Label [Label]
-  , _liveOutB :: Map Label (Set Id, Set Id)
-  , _regSet   :: Set Id
-  , _stackSet :: Set Id
+    _blockMap_   :: Map Label ABlock
+  , _liveOutB_   :: Map Label (Set Id, Set Id)
+  , _predMap_    :: Map Label [Label]
+  , _stackInMap_ :: Map Label (Set Id)
+  , _regInMap_   :: Map Label (Set Id)
+  , _regOutMap_  :: Map Label (Set Id)
+  , _regSet_     :: Set Id
+  , _stackSet_   :: Set Id
   }
 makeLenses ''RS
 type CamlRS = StateT RS Caml
@@ -44,12 +50,11 @@ type CamlRS = StateT RS Caml
 virtual :: AProg -> Caml AProg
 virtual (AProg fundefs) = do
   ($logInfo) "virtual"
-  {-AProg <$> mapM (virtualFunDef>=>zantei) fundefs-}
   AProg <$> mapM (virtualFunDef>=>saveAndRestore) fundefs
 
 virtualFunDef :: AFunDef -> Caml AFunDef
-virtualFunDef f@(AFunDef l _ _ blocks _) = do
-  -- ($logInfo) $ "virtualFunDef: " <> show' l
+virtualFunDef f@(AFunDef _l _ _ blocks _) = do
+  --($logInfo) $ "virtualFunDef: " <> show' _l
   blocks' <- forM blocks $
                 mergePhis >=> calcPtr
   return f{ aBody=blocks' }
@@ -122,7 +127,15 @@ calcPtr block@(ABlock _ insts) = do
 -------------------------------------------------------------------------------
 
 saveAndRestore :: AFunDef -> Caml AFunDef
-saveAndRestore = insertSave >=> insertRestore
+{-saveAndRestore = insertSave >=> insertRestore_-}
+saveAndRestore f = do
+  fi <- insertSave f
+  fr <- insertRestore fi
+  ($logDebug) ">>>saveAndRestore>>>"
+  ($logDebugSH) fi
+  ($logDebugSH) fr
+  ($logDebug) "<<<saveAndRestore<<<"
+  return fr
 
 ----------
 -- Save --
@@ -160,33 +173,136 @@ insertSaveI liveout inst@(n,i) = case i of
                     Just (x,_)      -> ([x],[])
                     Nothing         -> ([],[])
 
--- Analysis.Stackを使う
---
---  状態
---  + 現在saveされている変数の集合 saved :: Set Id
---
---  savedに無い変数はレジスタにある 逆も然り
---  (ただしsave直後の関数呼び出しを除く callではrestoreしないようにすれば良さそう)
---  + restoreの前にAnalysis.Stackを呼んで, 不要なsaveは除去しておく?
---  + savedにある変数を見たら直前にrestoreを挿入し,savedから削除
---  + traverseの順番を間違えると死ぬ
---    + 多分Emitと同じように単純にdfsでよい
--- ASaveは[Id]を引数に取るのがいいかもしれない?
--- used inst と saved のintersectionをとる
+-------------
+-- Restore --
+-------------
 
 insertRestore :: AFunDef -> Caml AFunDef
-insertRestore fun@(AFunDef _ xs ys _ _) = do
-  let stackMap  = stackSets fun
-      blockTree = dfsBlock fun
+insertRestore fun = do
+  stackInMap' <- stackInMap fun
+  regInMap'   <- regInMap fun
+  regOutMap'  <- regOutMap fun
+  ($logDebug) ">>>insertRestore>>>"
+  ($logDebugSH) regInMap'
+  ($logDebugSH) regOutMap'
+  ($logDebug) "<<<insertRestore<<<"
+  liveOutB'   <- analyzeLifetimeB fun
+  blocks <- M.elems . view blockMap_ <$>
+    execStateT (mapM_ insertRestoreBlock (aBody fun)) RS {
+      _blockMap_    = blockMap fun
+    , _liveOutB_    = liveOutB'
+    , _predMap_     = predBlockMap fun
+    , _stackInMap_  = stackInMap'
+    , _regInMap_    = regInMap'
+    , _regOutMap_   = regOutMap'
+    , _regSet_      = S.empty
+    , _stackSet_    = S.empty
+    }
+  return fun { aBody = blocks }
+
+-- TODO Baseに移動
+lookupMapLensM :: (Ord k, MonadState s m) => k -> Lens' s (Map k a) -> m (Maybe a)
+lookupMapLensM x m = uses m (M.lookup x)
+lookupMapLensNoteM :: (Ord k, MonadState s m) => String -> k -> Lens' s (Map k a) -> m a
+lookupMapLensNoteM s x m = fromJustNote msg <$> lookupMapLensM x m
+  where msg = "lookupMapLensNoteM: " ++ s
+
+-- 手続き的だなあ
+insertRestoreBlock :: ABlock -> CamlRS ()
+insertRestoreBlock (ABlock l stmts) = do
+  let msg = "insertRestoreBlock: "
+
+  -- initialize
+  stackSet_ <~ lookupMapLensNoteM msg l stackInMap_
+  regSet_   <~ lookupMapLensNoteM msg l regInMap_
+
+  -- stmts
+  Just (stmts',term) <- unsnoc <$> concatMapM insertRestoreStmt stmts
+
+  -- restore
+  regOut  <- lookupMapLensNoteM msg l regOutMap_
+  regSet' <- use regSet_
+  (liveOut',liveOutF') <- lookupMapLensNoteM msg l liveOutB_
+  let toBeRestored = regOut S.\\ regSet'
+  restores  <- mapM restore  $ S.toList $ liveOut'  `S.intersection` toBeRestored
+  restoreFs <- mapM restoreF $ S.toList $ liveOutF' `S.intersection` toBeRestored
+
+  -- end
+  addBlock l $ stmts' ++ restores ++ restoreFs ++ [term]
+
+insertRestoreStmt :: Statement -> CamlRS [Statement]
+insertRestoreStmt s@(id',inst) =
+  case inst of
+    Do (ASave x) -> uses stackSet_ (S.member x) >>= \case
+      True  -> return []
+      False -> stackSet_ %= S.insert x >> return [s]
+
+    Do (AFSave x) -> uses stackSet_ (S.member x) >>= \case
+      True  -> return []
+      False -> stackSet_ %= S.insert x >> return [s]
+
+    Do (APhiV lvs) -> do
+      lvs' <- mapM hogePhiVal lvs
+      regSet_ %= S.union (uncurry S.union $ defInst inst)
+      return [(id', Do (APhiV lvs'))]
+
+    _ -> do
+      let (used,usedF) = useInst inst
+      regSet' <- use regSet_
+      restores  <- mapM restore  $ S.toList $ used  S.\\ regSet'
+      restoreFs <- mapM restoreF $ S.toList $ usedF S.\\ regSet'
+      case inst of
+        x:=ACall{} -> regSet_ .= S.singleton x
+        Do ACall{} -> regSet_ .= S.empty
+        x := _     -> regSet_ %= S.insert x
+        _          -> return ()
+      return $ restores ++ restoreFs ++ [s]
+
+-- TODO なんでこれで結果が変わるのさ
+--      + SSAでなくなる
+--      + そのためregister割り当てに影響がある
+restore :: Id -> CamlRS Statement
+--restore x  = regSet_ %= S.insert x >> lift (assignInstId $ x := ARestore x)
+restore x  = regSet_ %= S.insert x >> lift (assignInstId $ Do (ARestore x))
+
+restoreF :: Id -> CamlRS Statement
+--restoreF x = regSet_ %= S.insert x >> lift (assignInstId $ x := AFRestore x)
+restoreF x = regSet_ %= S.insert x >> lift (assignInstId $ Do (AFRestore x))
+
+hogePhiVal :: (Label, [(Id,PhiVal)]) -> CamlRS (Label, [(Id,PhiVal)])
+hogePhiVal (l,xvs) = do
+  regOut' <- lookupMapLensNoteM "hogePhiVal: " l regOutMap_
+  let f (PVVar x t _)
+        | x `S.member` regOut' = PVVar x t False -- on register
+        | otherwise            = PVVar x t True  -- on memory
+      f v = v
+  return (l, map (second f) xvs)
+
+-------------------------------------------------------------------------------
+-------------------------------------------------------------------------------
+-------------------------------------------------------------------------------
+
+insertRestore_ :: AFunDef -> Caml AFunDef-- {{{
+insertRestore_ fun@(AFunDef _ xs ys _ _) = do
+  let blockTree = dfsBlock fun
+  stackMap <- stackInMap fun
   liveout <- analyzeLifetime fun
-  ($logDebugSH) $ toLiveOutB liveout
-  blocks <- M.elems . view bmap <$>
-    execStateT (insertRestoreTree (S.fromList (xs++ys)) stackMap blockTree) RS {
-      _bmap     = blockMap fun
-    , _predMap  = predBlockMap fun
-    , _liveOutB = toLiveOutB liveout
-    , _regSet   = S.empty
-    , _stackSet = S.empty
+
+  --($logDebug) $ "===================="
+  --($logDebugSH) =<< regInMap fun
+  --($logDebugSH) =<< regOutMap fun
+
+  --($logDebugSH) $ toLiveOutB liveout
+  blocks <- M.elems . view blockMap_ <$>
+    execStateT (insertRestoreTree_ (S.fromList (xs++ys)) stackMap blockTree) RS {
+      _blockMap_= blockMap fun
+    , _predMap_ = predBlockMap fun
+    , _liveOutB_= toLiveOutB liveout
+    , _regSet_  = S.empty
+    , _stackSet_= S.empty
+    , _stackInMap_ = undefined
+    , _regInMap_   = undefined
+    , _regOutMap_  = undefined
     }
   return fun { aBody = blocks }
 
@@ -198,14 +314,92 @@ insertRestore fun@(AFunDef _ xs ys _ _) = do
             lastId = fst $ lastStmt b
             lives = fromJustNote "そんなバナナ" $ M.lookup lastId liveout'
       ]
+-- }}}
 
 -- entry blockではArgsを考慮する必要がある
-insertRestoreTree :: Set Id -> Map Label (Set Id) -> Tree ABlock -> CamlRS ()
-insertRestoreTree mArgs stackMap (Node b ts) = do
+insertRestoreTree_ :: Set Id -> Map Label (Set Id) -> Tree ABlock -> CamlRS ()-- {{{
+insertRestoreTree_ mArgs stackMap (Node b ts) = do
   let l = aBlockName b
       Just s = M.lookup l stackMap
-  insertRestoreBlock mArgs s b
-  mapM_ (insertRestoreTree S.empty stackMap) ts
+  insertRestoreBlock_ mArgs s b
+  mapM_ (insertRestoreTree_ S.empty stackMap) ts
+-- }}}
+
+-- mArgs:   entryブロックの場合は引数がすでにレジスタにある
+-- stackIn: ブロックの先頭でstackにある変数
+insertRestoreBlock_ :: Set Id -> Set Id -> ABlock -> CamlRS ()-- {{{
+insertRestoreBlock_ mArgs stackIn (ABlock l stmts) = do
+
+  regSetIn <- do
+    preds <- uses predMap_ (M.findWithDefault [] l)
+    x <- mapM (\l' -> uses liveOutB_ (uncurry S.union . lookupMapJustNote "" l')) preds
+    if null x
+      then return S.empty
+      else return $ foldl1 S.intersection x
+
+  stackSet_ .= stackIn
+  regSet_   .= regSetIn `S.union` mArgs
+  Just (stmts_,term) <- unsnoc <$> concatMapM insertRestoreStmt_ stmts
+
+  inReg <- use regSet_
+  Just (liveout,liveoutF) <- uses liveOutB_ (M.lookup l)
+
+  restores  <- forM (S.toList $ liveout S.\\ inReg) $ \x -> do
+    regSet_ %= S.insert x
+    lift $ assignInstId $ Do (ARestore x)
+
+  restoreFs <- forM (S.toList $ liveoutF S.\\ inReg) $ \x -> do
+    regSet_ %= S.insert x
+    lift $ assignInstId $ Do (AFRestore x)
+
+  addBlock l $ stmts_ ++ restores ++ restoreFs ++ [term]
+-- }}}
+
+insertRestoreStmt_ :: Statement -> CamlRS [Statement]-- {{{
+insertRestoreStmt_ s = --do
+  --lift. $logDebug =<< do {
+  --  regset <- use regSet;
+  --  stkset <- use stackSet;
+  --  return $ show' (fst s) <> ": " <> show' regset <> "\n    " <> show' stkset;
+  --  }
+  case snd s of
+    Do (ASave x) -> uses stackSet_ (S.member x) >>= \case
+      True  -> return []
+      False -> stackSet_ %= S.insert x >> return [s]
+
+    Do (AFSave x) -> uses stackSet_ (S.member x) >>= \case
+      True  -> return []
+      False -> stackSet_ %= S.insert x >> return [s]
+
+    -- 使われる変数はregisterにあると考えて良い
+    -- 各ブロックの最後にrestoreしているため
+    -- TODO restoreしないほうが命令数は減る
+    --      registerに無い変数はSSA_Deconstructionでrestoreすべき
+    --      つらそう...
+    i@(Do APhiV{}) -> do
+      let added = S.union (uncurry S.union $ useInst i) (uncurry S.union $ defInst i)
+      regSet_ %= S.union added
+      return [s]
+
+    inst -> do
+      inReg <- use regSet_
+      let (used,usedF) = useInst inst
+      restores  <- forM (S.toList $ used S.\\ inReg) $ \x -> do
+        regSet_ %= S.insert x
+        lift $ assignInstId $ Do (ARestore x)
+      restoreFs <- forM (S.toList $ usedF S.\\ inReg) $ \x -> do
+        regSet_ %= S.insert x
+        lift $ assignInstId $ Do (AFRestore x)
+      case inst of
+        x:=ACall{} -> regSet_ .= S.singleton x
+        Do ACall{} -> regSet_ .= S.empty
+        x := _     -> regSet_ %= S.insert x
+        _          -> return ()
+      return $ restores ++ restoreFs ++ [s]
+-- }}}
+
+addBlock :: Label -> [Statement] -> CamlRS ()
+addBlock l contents = blockMap_ %= M.insert l (ABlock l contents)
 
 -- super tanuki
 -- 　 　 _    _
@@ -216,124 +410,3 @@ insertRestoreTree mArgs stackMap (Node b ts) = do
 -- ___.'､ヽ　 ノ
 --(_((_,ノＵ¯Ｕ
 --
--- mArgs:   entryブロックの場合は引数がすでにレジスタにある
--- stackIn: ブロックの先頭でstackにある変数
-insertRestoreBlock :: Set Id -> Set Id -> ABlock -> CamlRS ()
-insertRestoreBlock mArgs stackIn (ABlock l stmts) = do
-
-  regSetIn <- do
-    preds <- uses predMap (M.findWithDefault [] l)
-    x <- mapM (\l' -> uses liveOutB (uncurry S.union . lookupMapJustNote "" l')) preds
-    if null x
-      then return S.empty
-      else return $ foldl1 S.intersection x
-  stackSet .= stackIn
-  regSet   .= regSetIn `S.union` mArgs
-  Just (stmts_,term) <- unsnoc <$> concatMapM insertRestoreStmt stmts
-
-  inReg <- use regSet
-  Just (liveout,liveoutF) <- uses liveOutB (M.lookup l)
-
-  restore  <- forM (S.toList $ liveout S.\\ inReg) $ \x -> do
-    regSet %= S.insert x
-    lift $ assignInstId $ Do (ARestore x)
-
-  restoreF <- forM (S.toList $ liveoutF S.\\ inReg) $ \x -> do
-    regSet %= S.insert x
-    lift $ assignInstId $ Do (AFRestore x)
-
-  addBlock l $ stmts_ ++ restore ++ restoreF ++ [term]
-
-insertRestoreStmt :: Statement -> CamlRS [Statement]
-insertRestoreStmt s = --do
-  --lift. $logDebug =<< do {
-  --  regset <- use regSet;
-  --  stkset <- use stackSet;
-  --  return $ show' (fst s) <> ": " <> show' regset <> "\n    " <> show' stkset;
-  --  }
-  case snd s of
-    Do (ASave x) -> uses stackSet (S.member x) >>= \case
-      True  -> return []
-      False -> stackSet %= S.insert x >> return [s]
-
-    Do (AFSave x) -> uses stackSet (S.member x) >>= \case
-      True  -> return []
-      False -> stackSet %= S.insert x >> return [s]
-
-    -- 使われる変数はregisterにあると考えて良い
-    -- 各ブロックの最後にrestoreしているため
-    -- TODO restoreしないほうが命令数は減る
-    --      registerに無い変数はSSA_Deconstructionでrestoreすべき
-    --      つらそう...
-    i@(Do APhiV{}) -> do
-      let added = S.union (uncurry S.union $ useInst i) (uncurry S.union $ defInst i)
-      regSet %= S.union added
-      return [s]
-
-    inst -> do
-      inReg <- use regSet
-      let (used,usedF) = useInst inst
-      restore  <- forM (S.toList $ used S.\\ inReg) $ \x -> do
-        regSet %= S.insert x
-        lift $ assignInstId $ Do (ARestore x)
-      restoreF <- forM (S.toList $ usedF S.\\ inReg) $ \x -> do
-        regSet %= S.insert x
-        lift $ assignInstId $ Do (AFRestore x)
-      case inst of
-        x:=ACall{} -> regSet .= S.singleton x
-        Do ACall{} -> regSet .= S.empty
-        x := _     -> regSet %= S.insert x
-        _          -> return ()
-      return $ restore ++ restoreF ++ [s]
-
-addBlock :: Label -> [Statement] -> CamlRS ()
-addBlock l contents = bmap %= M.insert l (ABlock l contents)
-
-------------
--- zantei --
-------------
-
-zantei :: AFunDef -> Caml AFunDef
-zantei fundef@(AFunDef _ _ _ blocks _) = do
-  liveout <- analyzeLifetime fundef
-  blocks' <- mapM (zanteiB liveout) blocks
-  return fundef { aBody = blocks' }
-
-zanteiB :: Map InstId (Set Id, Set Id)
-        -> ABlock -> Caml ABlock
-zanteiB liveout b@(ABlock _ insts) = do
-  insts' <- concatMapM (zanteiI liveout) insts
-  return b { aStatements = insts' }
-
-zanteiI :: Map InstId (Set Id, Set Id)
-        -> (InstId, Inst) -> Caml [(InstId, Inst)]
-zanteiI liveout inst@(n,i) = case i of
-  Do ACall{} -> zanteiISub inst Nothing
-  x := ACall t _ _ _ -> zanteiISub inst (Just (x,t))
-  _ -> return [inst]
-  where
-    (live,liveF) =
-      fromJustNote ("zanteiI: live: " ++ show inst) (M.lookup n liveout)
-
-    zanteiISub :: (InstId, Inst)
-               -> Maybe (Id,Type) -> Caml [(InstId, Inst)]
-    zanteiISub inst' mx = do
-      ss' <- mapM assignInstId saves
-      rs' <- mapM assignInstId restores
-      return $ ss' ++ [inst'] ++ rs'
-
-      where
-        saves :: [Inst]
-        saves = map (Do . ASave) xs ++ map (Do .AFSave) ys
-
-        restores ::[Inst]
-        restores = map (Do . ARestore) xs ++ map (Do . AFRestore) ys
-
-        -- call前にsaveすべきもの
-        xs,ys :: [Id]
-        (xs,ys) = (S.toList live \\ m ,S.toList liveF \\ mF)
-            where (m,mF) = case mx of
-                    Just (x,TFloat) -> ([],[x])
-                    Just (x,_)      -> ([x],[])
-                    Nothing         -> ([],[])
-

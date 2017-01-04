@@ -18,10 +18,8 @@ import BackEnd.Second.RegAlloc.Dominance hiding (unsafeLookup)
 
 import qualified Data.Map as M
 import qualified Data.Set as S
-import           Control.Lens (use,uses,makeLenses)
 import           Control.Lens.Operators
 import           Control.Monad.Trans.State
-import           Data.Bifunctor (bimap)
 import           Data.Tree
 import           Data.Maybe (fromMaybe)
 

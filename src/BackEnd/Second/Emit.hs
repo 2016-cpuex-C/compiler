@@ -21,13 +21,12 @@ import           Data.List                  ((\\))
 import           Data.Vector                ((!))
 import           Data.FileEmbed             (embedFile)
 import qualified Data.ByteString.Char8      as BC
-import           Control.Lens               (use,uses,makeLenses)
 import           Control.Lens.Operators
 import           Control.Monad.Trans.State
 import           Text.Printf                (printf)
 import           System.IO                  (Handle, hPutStrLn)
 import           Data.Char                  (toLower)
-import           Control.Arrow (second)
+import Control.Arrow (second)
 
 -------------------------------------------------------------------------------
 -- Types
@@ -136,7 +135,7 @@ emitFun h f = do
   --($logDebugSH) $ f'
   liftIO $ hPutStrLn h $ unLabel l ++ ":"
   liftIO $ hPutStrLn h $ "\tsw\t$ra, 0($sp)"
-  let stackMap = stackSets f'
+  stackMap <- stackInMap f'
   evalStateT (emitBlocks stackMap (sortBlocks f')) ES {
       _hout          = h
     , _colorMaps     = colMaps
@@ -254,12 +253,14 @@ emitInst = \case
 
   Do (ASave  x)    -> save x
   Do (AFSave x)    -> saveF x
-  Do (ARestore x)  -> restore x
-  Do (AFRestore x) -> restoreF x
+  Do (ARestore x)  -> restore x x
+  Do (AFRestore x) -> restoreF x x
+  x := ARestore y  -> restore x y
+  x := AFRestore y -> restoreF x y
 
   Do AExit -> write "\texit"
 
-  e -> error $ "Emit: " ++ show e
+  e -> errorShow "Emit: " e
 
 -- }}}
 
@@ -498,17 +499,17 @@ saveF x = uses stack (S.member x) >>= \case
               fri' "s.s" x regSp n
               write $ "\t\t# save: " ++ x
 
-restore :: Id -> CamlE ()
-restore x = do
-  n <- offset x
+restore :: Id -> Id -> CamlE ()
+restore x y = do
+  n <- offset y
   rri' "lwr" x regSp n
-  write $ "\t\t# restore: " ++ x
+  write $ "\t\t# restore: " ++ x ++ "<-" ++ y
 
-restoreF :: Id -> CamlE ()
-restoreF x = do
-  n <- offset x
+restoreF :: Id -> Id -> CamlE ()
+restoreF x y = do
+  n <- offset y
   fri' "l.sr" x regSp n
-  write $ "\t\t# restore: " ++ x
+  write $ "\t\t# restore: " ++ x ++ "<-" ++ y
 
 showPred :: Predicate -> String
 showPred = map toLower . show

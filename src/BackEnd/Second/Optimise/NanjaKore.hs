@@ -50,6 +50,7 @@ hogeMap f =
         | h x < 2 = Just (x,(y,i))
         -- 一箇所でしか使われないという制限を付ける
         -- 条件が緩いとspillが起きる
+        -- TODO 同ブロックに制限すればいいのでは
       g _ = Nothing
       stmts = concatMap aStatements $ aBody f
       ret = M.fromList $ catMaybes $ map g stmts

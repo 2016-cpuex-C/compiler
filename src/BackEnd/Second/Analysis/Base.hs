@@ -10,7 +10,6 @@ import           Prelude hiding(Ordering(..))
 import qualified Data.Map as M
 import qualified Data.Set as S
 import           Data.Tree
-import           Data.List (foldl')
 import           Data.List.Extra (groupSort)
 
 ------------
@@ -29,8 +28,9 @@ succBlockMap :: AFunDef -> Map Label [Label]
 succBlockMap f = M.fromList
   [ (aBlockName b,ls) | b <- aBody f, let ls = nextBlockNames b ]
 
+-- entryBlockNameにはpredがないので M.insert (entryBlockName f) [] が必要
 predBlockMap :: AFunDef -> Map Label [Label]
-predBlockMap f = M.fromList $ groupSort $ concat
+predBlockMap f = M.insert (entryBlockName f) [] $ M.fromList $ groupSort $ concat
   [ zip ls (repeat (aBlockName b)) | b <- aBody f, let ls = nextBlockNames b ]
 
 defSiteMap :: AFunDef -> Map Id Statement

@@ -10,7 +10,6 @@ module MiddleEnd.KNormal (
 
 import Base
 import FrontEnd.Syntax
-import Control.Lens
 import qualified Data.Set as S
 import qualified Data.Map as M
 

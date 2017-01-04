@@ -17,11 +17,9 @@ import           Data.Bits
 import           Data.Sequence (Seq,ViewR(..),(<|),viewr)
 import qualified Data.Sequence as Seq
 
-import Control.Lens (makeLenses,uses)
 import Control.Lens.Operators hiding ((<|))
 import Control.Monad.Trans.State
 import Control.Monad.Extra (unlessM)
-import Data.List (foldl')
 import Data.List.Extra (allSame)
 import Control.Monad (filterM)
 import Data.Maybe (catMaybes)

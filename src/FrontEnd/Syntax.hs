@@ -3,7 +3,6 @@
 module FrontEnd.Syntax where
 
 import Base
-import Control.Lens
 
 ---------------------
 -- Syntax.t = Expr --

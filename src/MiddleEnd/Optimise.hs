@@ -12,7 +12,6 @@ import MiddleEnd.ConstFold
 import MiddleEnd.Elim
 import MiddleEnd.CSE
 import MiddleEnd.StaticAlloc
-import Control.Lens (use)
 
 import Prelude hiding (log)
 

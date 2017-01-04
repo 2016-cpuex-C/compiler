@@ -13,11 +13,11 @@ import BackEnd.Second.RegAlloc.Coloring (Color)
 
 import qualified Data.Map as M
 import           Data.List (partition)
-import           Control.Lens (view,use,uses,makeLenses)
 import           Control.Lens.Operators
 import           Control.Monad.Trans.State
 import           Data.List.Extra (anySame)
 import           Control.Arrow (second)
+--import           Debug.Trace (trace)
 
 -------------------------------------------------------------------------------
 -- Types
@@ -32,7 +32,10 @@ makeLenses ''SSAD
 type CamlSSA = StateT SSAD Caml
 
 data Dest = Reg Color | Mem
-  deriving (Eq,Ord,Show)
+  deriving (Ord,Show)
+instance Eq Dest where
+  Reg n == Reg m = n==m
+  _ == _ = False
 
 -------------------------------------------------------------------------------
 -- Main
@@ -67,8 +70,7 @@ ssaDeconstructSub = mapM_ deconstructBlock
 --        * lj'の中身は以下とする.
 --            I
 --            br l
---    + switchは放置(virtualで消しとこう)
---        * virtualで消すのはしんどい
+--    + 的な
 
 deconstructBlock :: ABlock -> CamlSSA ()
 deconstructBlock b = case snd (firstStmt b) of
@@ -81,7 +83,7 @@ deconstructBlock b = case snd (firstStmt b) of
 
 -- lj -> l の合流
 deconstructBlockSub :: Label -> (Label,[(Id,PhiVal)]) -> CamlSSA ()
-deconstructBlockSub l (lj,xvs) = do
+deconstructBlockSub l (lj,xvs) = do-- {{{
   colMaps <- use cmaps
   dePhiStmts <- lift $ deconstruct colMaps xvs
   bj@(ABlock _ stmts_j) <- block lj
@@ -123,7 +125,6 @@ deconstructBlockSub l (lj,xvs) = do
         addBlock lj stmts_j'
         addBlock lp stmts_p
 
-
     (id', Do (ASwitch x ldef ils)) -> do
         freshId <- lift freshInstId
         let lp = Label $ "phi_" ++ unLabel lj ++ "_" ++ unLabel l
@@ -139,12 +140,13 @@ deconstructBlockSub l (lj,xvs) = do
         addBlock lp stmts_p
 
     s -> error $ "SSA_Deconstruction: Impossible: " ++ show s
+-- }}}
 
 addBlock :: Label -> [Statement] -> CamlSSA ()
 addBlock l contents = bmap %= M.insert l (ABlock l contents)
 
 block :: Label -> CamlSSA ABlock
-block = uses bmap . lookupNote "SSA_Deconstruction: block: Impossible"
+block = uses bmap . lookupMapJustNote "SSA_Deconstruction: block: Impossible"
 
 -------------------------------------------------------------------------------
 --
@@ -159,9 +161,9 @@ deconstruct (colMap,colMapF) xvs = do
       varF  = [ ((x,False), (y,b)) | (x, PVVar y t b) <- xvs, t == TFloat ]
               -- memory上にあればTrue, registerにあればFalse
 
-      color  (x,False) = Reg $ lookupNote "color" x colMap
+      color  (x,False) = Reg $ lookupMapJustNote "color" x colMap
       color  _         = Mem
-      colorF (x,False) = Reg $ lookupNote "colorF" x colMapF
+      colorF (x,False) = Reg $ lookupMapJustNote "colorF" x colMapF
       colorF _         = Mem
 
       insts = concat [
@@ -177,13 +179,12 @@ deconstruct (colMap,colMapF) xvs = do
 -- are
 -------------------------------------------------------------------------------
 
--- TODO + PhiLifting (map (classify.snd) vars に重複があるとダメなので必要)
---      + safeCopyを求めるところ, classify xがMemにならないため
---        たまたまうまく行く
+-- TODO PhiLifting (map (classify.snd) vars に重複があるとダメなので必要)
 
-resolveBy :: Eq b => (a -> b)-> [(a,a)] -> [Action a]
+resolveBy :: (Show a, Show b, Eq b) => (a -> b)-> [(a,a)] -> [Action a]
 resolveBy classify vars
-  | anySame used = error "resolveBy: invalid argument"
+  -- | trace (show (vars, map (both classify) vars)) False = undefined
+  | anySame used = errorShow "resolveBy: invalid argument" (vars, map (both classify) vars)
   | otherwise = concat [nop, mov, rest]
   where
     nop  = map Nop identical
@@ -191,8 +192,8 @@ resolveBy classify vars
     rest = resolvePerm perm
 
     used = map (classify.snd) vars
-    (identical, tmp ) = partition (\(x,y) -> classify x == classify  y) vars
-    (safeCopy , perm) = partition (\(x,_) -> classify x `notElem` used) tmp
+    (identical, tmp) = partition (\(x,y) -> classify x == classify y) vars
+    (safeCopy, perm) = partition (\(x,_) -> classify x `notElem` used) tmp
 
     resolvePerm [] = []
     resolvePerm ((x,y):xys) =
@@ -219,7 +220,4 @@ actToInstF (Nop  (_,_))              = Do ANop
 actToInstF (Move ((x,_), (y,True)))  = x := AFRestore y
 actToInstF (Move ((x,_), (y,False))) = x := AFMov y
 actToInstF (Swap ((x,_), (y,_)))     = Do (AFSwap x y)
-
-lookupNote :: Ord k => String -> k -> Map k a -> a
-lookupNote s key dic = fromJustNote s $ M.lookup key dic
 

@@ -61,7 +61,7 @@ library
                      , BackEnd.Second.FromLProg
                      , BackEnd.Second.Analysis
                      , BackEnd.Second.Analysis.Base
-                     , BackEnd.Second.Analysis.Stack
+                     , BackEnd.Second.Analysis.StackAndReg
                      , BackEnd.Second.Analysis.Lifetime
                      , BackEnd.Second.Virtual
                      , BackEnd.Second.Optimise
