@@ -18,7 +18,7 @@ import MiddleEnd.LLVM.FrontEnd.Prog     (toLLVM)
 import MiddleEnd.LLVM.MiddleEnd         (optimiseLLVM)
 import MiddleEnd.LLVM.BackEnd           (toLProg)
 import BackEnd.Second.FromLProg         (toAProg)
-import BackEnd.Second.Virtual           (virtual)
+import BackEnd.Second.Virtual           (virtual,saveAndRestore)
 import BackEnd.Second.Optimise          (optimiseA)
 import BackEnd.Second.Emit              (emitProg)
 
@@ -79,6 +79,8 @@ compile2 s f = do
       >>= toAProg
       >>= virtual
       >>= optimiseA
+      >>= saveAndRestore
+      >>= \e -> ($logDebugSH) e >> return e
       >>= ((use constFloats >>= ($logDebugSH)) $>)
       >>= emitProg h
     case m of

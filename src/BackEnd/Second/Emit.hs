@@ -260,6 +260,10 @@ emitInst = \case
 
   Do AExit -> write "\texit"
 
+  x := APrim (Label "madd") _ [] [y,z,w] -> ffff "madd.s" x y z w
+  x := APrim (Label "sqrt") _ [] [y]     -> ff "sqrt" x y
+  x := APrim (Label "floor") _ [] [y]     -> ff "floor" x y
+
   e -> errorShow "Emit: " e
 
 -- }}}
@@ -297,7 +301,7 @@ sortBlocks f = map toBlock $ reverse $ execState (g (entryBlock f)) []
       Do (ASwitch _ l _)       -> [l]
       _                        -> []
 
-    toBlock l = fromJustNote "sortBlocks" (M.lookup l (blockMap f))
+    toBlock l = lookupMapNote "sortBlocks" l (blockMap f)
 
 deleteAndFindFirstMay :: (a -> Bool) -> [a] -> Maybe (a,[a])
 deleteAndFindFirstMay _ [] = Nothing
@@ -365,6 +369,10 @@ rrri s x y z i = write =<<
 rrii :: String -> Id -> Id -> Integer -> Integer -> CamlE ()
 rrii s x y i j = write =<<
   printf "\t%s\t%s, %s, %d, %d" s <$> reg x <*> reg y <*> return i <*> return j
+
+ffff :: String -> Id -> Id -> Id -> Id -> CamlE ()
+ffff s x y z w = write =<<
+  printf "\t%s\t%s, %s, %s, %s" s <$> regF x <*> regF y <*> regF z <*> regF w
 
 ril :: String -> Id -> Integer -> Label -> CamlE ()
 ril s x i (Label l) = write =<<
@@ -465,11 +473,11 @@ setArgs :: [Id] -> [Id] -> CamlE ()
 setArgs xs ys = do
   (colMap,colMapF)  <- use colorMaps
   let reg' x  | isReg x             = x
-              | M.member x colMap   = regs ! unsafeLookup x colMap
-              | otherwise           = error $ "setArgs: reg': " ++ x
+              | M.member x colMap   = regs ! lookupMapNote "reg'" x colMap
+              | otherwise           = error "reg'"
       regF' x | isReg x             = x
-              | M.member x colMapF  = fregs ! unsafeLookup x colMapF
-              | otherwise           = error $ "setArgs: regF': " ++ x
+              | M.member x colMapF  = fregs ! lookupMapNote "regF'" x colMapF
+              | otherwise           = error "regF'"
       actToInst'  (Nop  (_,_)) = Do ANop
       actToInst'  (Move (x,y)) = x := AMove y
       actToInst'  (Swap (x,y)) = Do (ASwap x y)
@@ -488,34 +496,35 @@ save x = uses stack (S.member x) >>= \case
   True  -> write $ "\t# "++ x ++ " is already saved: "
   False -> do push x
               n <- offset x
-              rri' "sw" x regSp n
-              write $ "\t\t# save: " ++ x
+              {-rri' "sw" x regSp n-}
+              rri' "save" x regSp n
+              --write $ "\t\t# save: " ++ x
 
 saveF :: Id -> CamlE ()
 saveF x = uses stack (S.member x) >>= \case
   True  -> write $ "\t# "++ x ++ " is already saved: "
   False -> do push x
               n <- offset x
-              fri' "s.s" x regSp n
-              write $ "\t\t# save: " ++ x
+              {-fri' "s.s" x regSp n-}
+              fri' "save.s" x regSp n
+              --write $ "\t\t# save: " ++ x
 
 restore :: Id -> Id -> CamlE ()
 restore x y = do
   n <- offset y
-  rri' "lwr" x regSp n
-  write $ "\t\t# restore: " ++ x ++ "<-" ++ y
+  {-rri' "lwr" x regSp n-}
+  rri' "restore" x regSp n
+  --write $ "\t\t# restore: " ++ x ++ "<-" ++ y
 
 restoreF :: Id -> Id -> CamlE ()
 restoreF x y = do
   n <- offset y
-  fri' "l.sr" x regSp n
-  write $ "\t\t# restore: " ++ x ++ "<-" ++ y
+  {-fri' "l.sr" x regSp n-}
+  fri' "restore.s" x regSp n
+  --write $ "\t\t# restore: " ++ x ++ "<-" ++ y
 
 showPred :: Predicate -> String
 showPred = map toLower . show
 
 -- }}}
-
-unsafeLookup :: (Show a, Ord a) => a -> Map a b -> b
-unsafeLookup key dic = fromJustNote ("Emit: unsafeLookup: "++ show key) $ M.lookup key dic
 

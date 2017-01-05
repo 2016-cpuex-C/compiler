@@ -46,10 +46,10 @@ type CamlRS = StateT RS Caml
 virtual :: AProg -> Caml AProg
 virtual (AProg fundefs) = do
   ($logInfo) "virtual"
-  AProg <$> mapM (virtualFunDef>=>saveAndRestore) fundefs
+  AProg <$> mapM virtualFunDef fundefs
 
 virtualFunDef :: AFunDef -> Caml AFunDef
-virtualFunDef f@(AFunDef _l _ _ blocks _) = do
+virtualFunDef f@(AFunDef _ _ _ blocks _) = do
   blocks' <- forM blocks $
                 mergePhis >=> calcPtr
   return f{ aBody=blocks' }
@@ -121,8 +121,8 @@ calcPtr block@(ABlock _ insts) = do
 -- Save/Restore
 -------------------------------------------------------------------------------
 
-saveAndRestore :: AFunDef -> Caml AFunDef
-saveAndRestore = insertSave >=> insertRestore
+saveAndRestore :: AProg -> Caml AProg
+saveAndRestore (AProg fs) = AProg <$> mapM (insertSave >=> insertRestore) fs
 
 ----------
 -- Save --
@@ -147,8 +147,7 @@ insertSaveI liveout inst@(n,i) = case i of
   _ -> return [inst]
 
   where
-    (live,liveF)  = fromJustNote ("insertSaveI: live: "++show inst)
-                                 (M.lookup n liveout)
+    (live,liveF)  = lookupMapNote ("insertSaveI: live: "++show inst) n liveout
     insertSaveISub inst' mx = do
       ss' <- mapM assignInstId saves
       return $ ss' ++ [inst']
@@ -251,4 +250,26 @@ hogePhiVal (l,xvs) = do
 
 addBlock :: Label -> [Statement] -> CamlRS ()
 addBlock l contents = blockMap_ %= M.insert l (ABlock l contents)
+
+-------------------------------------------------------------------------------
+-- Primitives
+-------------------------------------------------------------------------------
+
+-- libmincaml.mlで実装したほうが効率が良かった
+prim :: AFunDef -> Caml AFunDef
+prim f = return f { aBody = map primBlock (aBody f) }
+
+primBlock :: ABlock -> ABlock
+primBlock b = b { aStatements = map primStmt (aStatements b) }
+
+primStmt :: Statement -> Statement
+primStmt = second primInst
+
+primInst :: Inst -> Inst
+primInst = \case
+  x := ACall _ (Label "min_caml_sqrt")  [] [y]        -> x := APrim (Label "sqrt")    (TFun [TFloat] TFloat) [] [y]
+  x := ACall _ (Label "min_caml_floor") [] [y]        -> x := APrim (Label "floor")   (TFun [TFloat] TFloat) [] [y]
+  --x := ACall _ (Label "min_caml_int_of_float") [] [y] -> x := APrim (Label "ftoi")    (TFun [TInt] TFloat)   [] [y]
+  --x := ACall _ (Label "min_caml_float_of_int") [y] [] -> x := APrim (Label "itof")    (TFun [TInt] TFloat) [V y] []
+  i -> i
 

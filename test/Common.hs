@@ -22,7 +22,7 @@ import MiddleEnd.LLVM.FrontEnd.Prog (toLLVM)
 import MiddleEnd.LLVM.MiddleEnd     (optimiseLLVM)
 import MiddleEnd.LLVM.BackEnd       (toLProg)
 import BackEnd.Second.FromLProg     (toAProg)
-import BackEnd.Second.Virtual       (virtual)
+import BackEnd.Second.Virtual       (virtual,saveAndRestore)
 import BackEnd.Second.Optimise      (optimiseA)
 import BackEnd.Second.Emit          (emitProg)
 
@@ -42,7 +42,7 @@ compile ml = do
   devnull <- openFile "/dev/null" WriteMode
   withFile (mlToS ml) WriteMode $ \out ->
     (`runCaml` (initialState&logfile.~devnull
-                            &threshold.~100))
+                            &threshold.~0))
     $ lex (libmincamlML ++ s)
       >>= parse
       >>= typing
@@ -57,6 +57,7 @@ compile ml = do
       >>= toAProg
       >>= virtual
       >>= optimiseA
+      >>= saveAndRestore
       >>= emitProg out
 
 -- first

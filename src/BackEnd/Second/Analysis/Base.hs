@@ -18,7 +18,7 @@ import           Data.List.Extra (groupSort)
 
 dfsBlock :: AFunDef -> Tree ABlock
 dfsBlock f = toBlock <$> dfsBlockName f
-  where toBlock l = fromJustNote "dfsBlock" (M.lookup l (blockMap f))
+  where toBlock l = lookupMapNote "dfsBlock" l (blockMap f)
 
 dfsBlockName :: AFunDef -> Tree Label
 dfsBlockName f = dfsMap (entryBlockName f) (succBlockMap f)
@@ -95,6 +95,7 @@ defInst (x:=i) | float i   = (S.empty, S.singleton x)
       AFLdi {} -> True
       ACall TFloat _ _ _ -> True
       ASelect TFloat _ _ _ -> True
+      APrim _ (TFun _ TFloat) _ _ -> True
       _ -> False
 -- }}}
 
@@ -174,5 +175,7 @@ useInst = \case
       ARestore{}  -> ([],[])
       AFRestore{} -> ([],[])
       AExit       -> ([],[])
+
+      APrim _ _ xs' ys -> (concatMap h xs',ys)
       --}}}
 

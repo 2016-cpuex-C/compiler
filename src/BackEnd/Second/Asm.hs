@@ -102,6 +102,9 @@ data AExpr -- 多相的な命令には型を加える
   | AFStHP Id IdOrImm
   | AIncHP IdOrImm
 
+  -- other primitives Integers Floats
+  | APrim Label Type [IdOrImm] [Id]
+
   -- terminator
   | ATailCall Type Label [Id] [Id]
   | ARet    Type (Maybe IdOrImm)

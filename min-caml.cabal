@@ -69,6 +69,7 @@ library
                      , BackEnd.Second.Optimise.TailCall
                      , BackEnd.Second.Optimise.CompareBranch
                      , BackEnd.Second.Optimise.NanjaKore
+                     , BackEnd.Second.Optimise.MulAdd
                      , BackEnd.Second.Optimise.Elim
                      , BackEnd.Second.RegAlloc
                      , BackEnd.Second.RegAlloc.Dominance
