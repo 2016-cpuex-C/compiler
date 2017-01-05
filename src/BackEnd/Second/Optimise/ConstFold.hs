@@ -33,22 +33,22 @@ data Value = Top | Bot | CInt Integer | CFloat Float
 
 data CFState
   = CFState {
-    _executable :: Set Label
-  , _values     :: Map Id Value
-  , _bmap       :: Map Label ABlock
-  , _labelQ     :: Seq Label
-  , _stmtQ      :: Seq Statement
-  , _useSite    :: Map Id [Statement]
+    _executables :: Set Label
+  , _valMap_     :: Map Id Value
+  , _blockMap_   :: Map Label ABlock
+  , _useSiteMap_ :: Map Id [Statement]
+  , _labelQ      :: Seq Label
+  , _stmtQ       :: Seq Statement
   }
 makeLenses ''CFState
 
 type CamlCF = StateT CFState Caml
 
 isExecutable :: Label -> CamlCF Bool
-isExecutable l = uses executable (S.member l)
+isExecutable l = uses executables (S.member l)
 
 getValue :: Id -> CamlCF Value
-getValue x = uses values (M.lookup x) >>= \case
+getValue x = uses valMap_ (M.lookup x) >>= \case
   Nothing -> return Bot
   Just v  -> return v
 
@@ -58,7 +58,7 @@ setLabel :: Label -> CamlCF ()
 setLabel l = unlessM (isExecutable l) $ do
   {-lift.log $ "setLabel:" ++ show l-}
   labelQ %= (l<|)
-  executable %= S.insert l
+  executables %= S.insert l
 
 -- こちらは一つの変数につき高々2回
 -- Bot -> Const, Const -> Topとリフトされる
@@ -68,8 +68,8 @@ setValue x v = do
     Top -> return ()
     _   -> do
       {-lift.log $ "setValue: " ++ show (x,v)-}
-      values %= M.insert x v
-      added <- uses useSite (M.findWithDefault [] x)
+      valMap_ %= M.insert x v
+      added <- uses useSiteMap_ (M.findWithDefault [] x)
       mapM_ addStmt added
 
 popStmt :: CamlCF (Maybe Statement)
@@ -86,7 +86,7 @@ addStmt :: Statement -> CamlCF ()
 addStmt s = stmtQ %= (s<|)
 
 getBlock :: Label -> CamlCF ABlock
-getBlock l = uses bmap (fromJustNote msg . M.lookup l)
+getBlock l = uses blockMap_ (lookupMapNote msg l)
   where msg = "getBlock: " ++ show l
 
 -------------------------------------------------------------------------------
@@ -97,25 +97,24 @@ getBlock l = uses bmap (fromJustNote msg . M.lookup l)
 constFoldAnalysis :: AFunDef -> Caml (Set Label, Map Id Value)
 constFoldAnalysis f = do
   let s = CFState {
-          _executable = S.empty
-        , _values     = M.empty
-        , _bmap       = blockMap f
-        , _labelQ     = Seq.empty
-        , _stmtQ      = Seq.empty
-        , _useSite    = useSiteMap f
+          _executables = S.empty
+        , _valMap_     = M.empty
+        , _blockMap_   = blockMap f
+        , _useSiteMap_ = useSiteMap f
+        , _labelQ      = Seq.empty
+        , _stmtQ       = Seq.empty
         }
   s' <- flip execStateT s $ do
           setLabel (entryBlockName f)
           mapM_ (`setValue`Top) $ aArgs f ++ aFArgs f
           loopBlock
-  return (s'^.executable, s'^.values)
+  return (s'^.executables, s'^.valMap_)
 
 loopBlock :: CamlCF ()
 loopBlock = popLabel >>= \case
   Nothing -> return ()
   Just l  -> do
     b <- getBlock l
-    {-lift.log $ "loopBlock:" ++ show l-}
     mapM_ addStmt (aStatements b)
     loopStmt
 
@@ -261,9 +260,9 @@ constFold (AProg fs) = AProg <$> mapM constFoldFun fs
 constFoldFun :: AFunDef -> Caml AFunDef
 constFoldFun f = do
   --($logInfo) $ "constFoldFun: " <> show' (aFunName f)
-  a@(executable',_) <- constFoldAnalysis f
+  a@(executables',_) <- constFoldAnalysis f
   blocks <- mapM (constFoldBlock a)
-              [ b | b <- aBody f, aBlockName b `S.member` executable' ]
+              [ b | b <- aBody f, aBlockName b `S.member` executables' ]
   return $ f { aBody = blocks }
 
 constFoldBlock :: (Set Label, Map Id Value) -> ABlock -> Caml ABlock
@@ -290,7 +289,7 @@ constFoldStmt a@(_,vals) (n,i) = case i of
       return $ Just (n,x:=ASetF l)
     Bot -> do
       ($logWarn) $ "constFold: unused variable" <> show' (n,i)
-      {-return Nothing-}
+      {-return Nothing 普通ありえないのでバグを疑う-}
       error $ "にゃん.."
 
 -- 定数畳み込み
@@ -359,6 +358,4 @@ constFoldExpr (exes,vals) e =
 
   _ -> return e
 -- }}}
-
-
 

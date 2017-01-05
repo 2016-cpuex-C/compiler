@@ -24,8 +24,8 @@ import           Control.Arrow (second)
 -------------------------------------------------------------------------------
 
 data SSAD = SSAD {
-    _bmap  :: Map Label ABlock
-  , _cmaps :: (Map Id Color,Map Id Color)
+    _blockMap_  :: Map Label ABlock
+  , _colorMaps_ :: (Map Id Color,Map Id Color)
   }
 makeLenses ''SSAD
 
@@ -43,12 +43,12 @@ instance Eq Dest where
 
 ssaDeconstruct :: (Map Id Color, Map Id Color) -> AFunDef -> Caml AFunDef
 ssaDeconstruct colMaps f@(AFunDef _ _ _ blocks _) =
-  bmapToFun . view bmap <$> execStateT (ssaDeconstructSub blocks) SSAD {
-      _bmap  = blockMap f
-    , _cmaps = colMaps
+  blockMapToFun . view blockMap_ <$> execStateT (ssaDeconstructSub blocks) SSAD {
+      _blockMap_  = blockMap f
+    , _colorMaps_ = colMaps
     }
   where
-    bmapToFun m = f { aBody = map snd $ M.toList m }
+    blockMapToFun m = f { aBody = map snd $ M.toList m }
 
 ssaDeconstructSub :: [ABlock] -> CamlSSA ()
 ssaDeconstructSub = mapM_ deconstructBlock
@@ -82,9 +82,10 @@ deconstructBlock b = case snd (firstStmt b) of
   _ -> return ()
 
 -- lj -> l の合流
+-- TODO 抽象化
 deconstructBlockSub :: Label -> (Label,[(Id,PhiVal)]) -> CamlSSA ()
 deconstructBlockSub l (lj,xvs) = do-- {{{
-  colMaps <- use cmaps
+  colMaps <- use colorMaps_
   dePhiStmts <- lift $ deconstruct colMaps xvs
   bj@(ABlock _ stmts_j) <- block lj
   case lastStmt bj of
@@ -143,10 +144,10 @@ deconstructBlockSub l (lj,xvs) = do-- {{{
 -- }}}
 
 addBlock :: Label -> [Statement] -> CamlSSA ()
-addBlock l contents = bmap %= M.insert l (ABlock l contents)
+addBlock l contents = blockMap_ %= M.insert l (ABlock l contents)
 
 block :: Label -> CamlSSA ABlock
-block = uses bmap . lookupMapNote "SSA_Deconstruction: block: Impossible"
+block = uses blockMap_ . lookupMapNote "SSA_Deconstruction: block: Impossible"
 
 -------------------------------------------------------------------------------
 --
@@ -180,7 +181,8 @@ deconstruct (colMap,colMapF) xvs = do
 -------------------------------------------------------------------------------
 
 -- TODO PhiLifting (map (classify.snd) vars に重複があるとダメなので必要)
-
+--      本来(Mem,Mem)はsafeCopyだがpermになってしまっている
+--      (今のところは左側にMemが来ることはないので大丈夫)
 resolveBy :: (Show a, Show b, Eq b) => (a -> b)-> [(a,a)] -> [Action a]
 resolveBy classify vars
   -- | trace (show (vars, map (both classify) vars)) False = undefined

@@ -23,9 +23,9 @@ import           Control.Lens.Operators
 -------------------------------------------------------------------------------
 
 data LA = LA {
-    _succMap :: Map InstId [InstId]
-  , _instMap :: Map InstId (Label, Inst)
-  , _liveOut :: Map InstId (Set Id, Set Id)
+    _succMap_ :: Map InstId [InstId]
+  , _instMap_ :: Map InstId (Label, Inst)
+  , _liveOut_ :: Map InstId (Set Id, Set Id)
   } deriving Show
 makeLenses ''LA
 
@@ -38,10 +38,10 @@ type CamlLA = StateT LA Caml
 -- inst単位
 analyzeLifetime :: AFunDef -> Caml (Map InstId (Set Id, Set Id))
 analyzeLifetime f =
-  view liveOut <$> execStateT analyzeLifetimeSub LA {
-      _instMap = getInstMap f
-    , _succMap = getSuccMap f
-    , _liveOut = M.empty
+  view liveOut_ <$> execStateT analyzeLifetimeSub LA {
+      _instMap_ = instMap f
+    , _succMap_ = succMap f
+    , _liveOut_ = M.empty
   }
 
 -- block単位
@@ -57,16 +57,16 @@ analyzeLifetimeB fun = do
 
 analyzeLifetimeSub :: CamlLA ()
 analyzeLifetimeSub = do
-  liveOutOld <- use liveOut
-  mapM_ update =<< uses instMap M.keys
-  liveOutNew <- use liveOut
+  liveOutOld <- use liveOut_
+  mapM_ update =<< uses instMap_ M.keys
+  liveOutNew <- use liveOut_
   unless (liveOutNew==liveOutOld) analyzeLifetimeSub
 
 update :: InstId -> CamlLA ()
 update n = do
-  Just succs <- uses succMap (M.lookup n)
+  Just succs <- uses succMap_ (M.lookup n)
   new <- next n succs
-  liveOut %= M.insert n new
+  liveOut_ %= M.insert n new
 
 next :: InstId -> [InstId] -> CamlLA (Set Id, Set Id)
 next n succs = unions2 <$> mapM f succs
@@ -76,25 +76,22 @@ next n succs = unions2 <$> mapM f succs
 -- Successor Map
 -------------------------------------------------------------------------------
 
--- TODO 名前変更 (getだとStateっぽい)
-getSuccMap :: AFunDef -> Map InstId [InstId]
-getSuccMap f
+succMap :: AFunDef -> Map InstId [InstId]
+succMap f
   | isEmptyFun f = M.empty
-  | otherwise    = execState (getSuccMapSub (entryBlock f)) M.empty
+  | otherwise    = execState (succMapSub (entryBlock f)) M.empty
   where
     bmap = blockMap f
-    getSuccMapSub b@(ABlock _ stmts) = go stmts
+    succMapSub b@(ABlock _ stmts) = go stmts
       where
         go ~((n,_):rest) = gets (M.member n) >>= \case
           False
             | null rest -> do
-                let tmpf l = fromJustNote ("tmpf: " ++ show (l,f,bmap)) $ M.lookup l bmap
-                    succBlocks  = map tmpf (nextBlockNames b)
-                                -- [ b' | ~(Just b') <- map (`M.lookup` bmap) (nextBlockNames b) ]
-                                -- map (`unsafeLookup` bmap) (nextBlockNames b)
+                let succBlocks  = [ lookupMapNote "succMap" l' bmap
+                                  | l' <- nextBlockNames b ]
                     succInstIds = map firstInstId succBlocks
                 modify $ M.insert n succInstIds
-                mapM_ getSuccMapSub succBlocks
+                mapM_ succMapSub succBlocks
             | otherwise -> do
                 modify $ M.insert n [fst $ head rest]
                 go rest
@@ -106,9 +103,8 @@ getSuccMap f
 -- Instruction Map
 -------------------------------------------------------------------------------
 
--- TODO 名前変更 (getだとStateっぽい)
-getInstMap :: AFunDef -> Map InstId (Label, Inst)
-getInstMap (AFunDef _ _ _ blocks _) = M.unions $ map instMapSub blocks
+instMap :: AFunDef -> Map InstId (Label, Inst)
+instMap (AFunDef _ _ _ blocks _) = M.unions $ map instMapSub blocks
   where
     instMapSub :: ABlock -> Map InstId (Label, Inst)
     instMapSub (ABlock b insts) = M.fromList [ (n, (b,i)) | (n,i) <- insts ]
@@ -118,21 +114,21 @@ getInstMap (AFunDef _ _ _ blocks _) = M.unions $ map instMapSub blocks
 -------------------------------------------------------------------------------
 
 blockOfInst :: InstId -> CamlLA Label
-blockOfInst n = uses instMap (fst.fromJustNote msg.M.lookup n)
+blockOfInst n = uses instMap_ (fst. lookupMapNote msg n)
   where msg = "Analysis.Lifetime.blockOfInst: " ++ show n
 
 out' :: InstId -> CamlLA (Set Id, Set Id)
-out' n = uses liveOut (M.findWithDefault (S.empty,S.empty) n)
+out' n = uses liveOut_ (M.findWithDefault (S.empty,S.empty) n)
 
 def' :: InstId -> CamlLA (Set Id, Set Id)
-def' n = defInst <$> uses instMap (snd.fromJustNote msg.M.lookup n)
+def' n = defInst <$> uses instMap_ (snd. lookupMapNote msg n)
   where msg = "Analysis.Lifetime.def': " ++ show n
 
 -- Variables used in instruction `m` after the execution of `n`
 -- (phi function uses different variables dependent on its predecessor)
 -- (nande kokodake eigo yanen)
 use' :: InstId -> InstId -> CamlLA (Set Id, Set Id)
-use' n m = uses instMap (snd.fromJustNote msg.M.lookup m) >>= useInst'
+use' n m = uses instMap_ (snd. lookupMapNote msg m) >>= useInst'
   where
     msg = "use'" ++ show (n,m)
 

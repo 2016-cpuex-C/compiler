@@ -177,13 +177,11 @@ toATerminator lterm = do' =<< case lterm of
 bind :: Id -> AExpr -> CamlV ()
 bind x ainst = do
   n <- lift $ instCount <+= 1
-  {-modify ((n, x:=ainst):)-}
   _1 %= ((n, x:=ainst):)
 
 do' :: AExpr -> CamlV ()
 do' ainst    = do
   n <- lift $ instCount <+= 1
-  {-modify ((n,Do ainst):)-}
   _1 %= ((n,Do ainst):)
 
 label :: Label -> CamlV Label

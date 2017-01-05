@@ -19,5 +19,4 @@ optimiseA :: AProg -> Caml AProg
 optimiseA p = do
   ($logInfo) "optimiseA"
   return $ elim $ mulAdd $ nanjaKore $ compareBranch $ tailCallOptimise p
-  {-return $ elim $ nanjaKore $ compareBranch $ tailCallOptimise p-}
 

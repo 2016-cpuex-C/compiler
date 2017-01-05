@@ -31,7 +31,7 @@ cElim e = do
      | calculated -> case e of
           KUnit -> return e
           KInt{} -> return e
-          _ -> KVar <$> asks (fromJustNote "cElim".M.lookup e)
+          _ -> KVar <$> asks (lookupMapNote "cElim" e)
      | otherwise -> case e of
           KLet (x,t) e1 e2 -> do
             e2' <- local (M.insert e1 x) (cElim e2)

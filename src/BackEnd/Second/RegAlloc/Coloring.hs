@@ -14,7 +14,7 @@ import Prelude hiding (log)
 import Base
 import BackEnd.Second.Asm
 import BackEnd.Second.Analysis
-import BackEnd.Second.RegAlloc.Dominance hiding (unsafeLookup)
+import BackEnd.Second.RegAlloc.Dominance
 
 import qualified Data.Map as M
 import qualified Data.Set as S
@@ -48,6 +48,7 @@ type CamlCS = StateT CS Caml
 
 colorFun :: AFunDef -> Caml (Map Id Color, Map Id Color)
 colorFun f@(AFunDef l xs ys _ _) = withoutLogging $ do
+--colorFun f@(AFunDef l xs ys _ _) = do
   liveout <- analyzeLifetime f
   s <- execStateT (colorTree (dominatorTree f)) CS {
             _liveOut   = liveout
@@ -60,8 +61,7 @@ colorFun f@(AFunDef l xs ys _ _) = withoutLogging $ do
           }
   let (x,y) = bimap (max (length xs)) (max (length ys)) $ chromaticN liveout
       (z,w) = (maxColorN (s^.colorMap), maxColorN (s^.colorMapF))
-  when (x/=z && (x,z)/=(0,1) || y/=w && (y,w)/=(0,1)) $ do
-    -- 返り値を捨てる関数があると(0,1)にはなりうるが気にしないで良い
+  when (x/=z || y/=w ) $ do
     ($logError) "RegAlloc.Coloring"
     ($logErrorSH) l
     ($logErrorSH) (x,y)
@@ -88,7 +88,7 @@ chromaticN m = join bimap f $ unzip $ map snd (M.toList m)
 
 colorTree :: Tree ABlock -> CamlCS ()
 colorTree (Node (ABlock l stmts) bs) = do
-  $logDebug $ "block: " <> show' l
+  ($logDebug) $ "block: " <> show' l
   mapM_ colorStmt stmts
   forM_ bs $ localState . colorTree
 
