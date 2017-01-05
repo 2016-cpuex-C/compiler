@@ -21,7 +21,6 @@ import qualified Data.Set as S
 import           Control.Lens.Operators
 import           Control.Monad.Trans.State
 import           Data.Tree
-import           Data.Maybe (fromMaybe)
 
 -------------------------------------------------------------------------------
 -- Types
@@ -94,7 +93,7 @@ colorTree (Node (ABlock l stmts) bs) = do
 
 colorStmt :: Statement -> CamlCS ()
 colorStmt (n,inst) = do
-    (liveout, liveoutF) <- uses liveOut (unsafeLookup n)
+    (liveout, liveoutF) <- uses liveOut (lookupMapNote "colorStmt" n)
     (used',   usedF'  ) <- (,) <$> use used <*> use usedF
     (free',   freeF'  ) <- (,) <$> use free <*> use freeF
 
@@ -168,7 +167,4 @@ removeF x = uses usedF (M.lookup x) >>= \case
                 usedF %= M.delete x
                 $logDebug $ "    remove: " <> show' (x,c)
   Nothing -> return ()
-
-unsafeLookup :: (Show a, Ord a) => a -> Map a b -> b
-unsafeLookup key dic = fromMaybe (error $ "Coloring: unsafeLookup: "++ show key) $ M.lookup key dic
 
