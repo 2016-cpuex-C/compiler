@@ -5,10 +5,7 @@ import Base
 import MiddleEnd.KNormal
 
 import qualified Data.Map as M
-import           Data.Maybe  (fromMaybe)
-
-fromJust :: Maybe a -> a
-fromJust = fromMaybe (error "ConstFold.hs")
+import           Data.Bits
 
 constFold :: KExpr -> Caml KExpr
 constFold = return . g M.empty
@@ -21,11 +18,11 @@ memberT :: Id -> Map Id KExpr -> Bool
 memberT x env = case M.lookup x env of Just (KTuple _) -> True; _ -> False
 
 findI :: Id -> Map Id KExpr -> Integer
-findI x env = case fromJust $ M.lookup x env of KInt i -> i; _ -> error "findI"
+findI x env = case M.lookup x env of Just (KInt i) -> i; _ -> error "findI"
 findF :: Id -> Map Id KExpr -> Float
-findF x env = case fromJust $ M.lookup x env of KFloat f -> f; _ -> error "findF"
+findF x env = case M.lookup x env of Just (KFloat f) -> f; _ -> error "findF"
 findT :: Id -> Map Id KExpr -> [Id]
-findT x env = case fromJust $ M.lookup x env of KTuple ys -> ys; _ -> error "findT"
+findT x env = case M.lookup x env of Just (KTuple ys) -> ys; _ -> error "findT"
 
 g :: Map Id KExpr -> KExpr -> KExpr
 g env e = case e of
@@ -47,6 +44,12 @@ g env e = case e of
     | memberI x env && memberI y env -> KInt $ findI x env * findI y env
   KDiv x y
     | memberI x env && memberI y env -> KInt $ findI x env `div` findI y env
+  KLAnd x y
+    | memberI x env && memberI y env -> KInt $ findI x env .&. findI y env
+  KLOr x y
+    | memberI x env && memberI y env -> KInt $ findI x env .|. findI y env
+  KLXor x y
+    | memberI x env && memberI y env -> KInt $ findI x env `xor` findI y env
 
   KFAdd x y
     | memberF x env && memberF y env -> KFloat $ findF x env + findF y env

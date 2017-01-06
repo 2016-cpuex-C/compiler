@@ -42,6 +42,9 @@ tokens :-
   <0> ">="          { tk $ TokenGe          }
   <0> "<"           { tk $ TokenLt          }
   <0> ">"           { tk $ TokenGt          }
+  <0> "&"           { tk $ TokenAnd         }
+  <0> "|"           { tk $ TokenOr          }
+  <0> "^"           { tk $ TokenXor          }
   <0> if            { tk $ TokenIf          }
   <0> then          { tk $ TokenThen        }
   <0> else          { tk $ TokenElse        }
@@ -67,7 +70,7 @@ tokens :-
   <comment> "(*"    { incCommentDepth       }
   <comment> "*)"    { decCommentDepth       }
   <comment> .       { skip                  }
-  <comment> \n      { skip                  } --別枠らしい
+  <comment> \n      { skip                  } --別枠
 
 {
 data Token = TokenBool Bool
@@ -88,6 +91,9 @@ data Token = TokenBool Bool
            | TokenGe
            | TokenLt
            | TokenGt
+           | TokenAnd
+           | TokenOr
+           | TokenXor
            | TokenIf
            | TokenThen
            | TokenElse

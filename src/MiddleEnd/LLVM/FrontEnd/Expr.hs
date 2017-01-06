@@ -4,7 +4,7 @@
 module MiddleEnd.LLVM.FrontEnd.Expr where
 {- CExpr -> [BasicBlock] -}
 
-import Prelude hiding (div, EQ)
+import Prelude hiding (div,and,or, EQ)
 
 import Base hiding (Named(..))
 import MiddleEnd.Closure
@@ -45,11 +45,14 @@ convertExpr e = case e of
     CIfEq x y e1 e2 -> convertIf EQ x y e1 e2
     CIfLe x y e1 e2 -> convertIf LE x y e1 e2
 
-    CNeg{}  -> ret' e TInt
-    CAdd{}  -> ret' e TInt
-    CSub{}  -> ret' e TInt
-    CMul{}  -> ret' e TInt
-    CDiv{}  -> ret' e TInt
+    CNeg {} -> ret' e TInt
+    CAdd {} -> ret' e TInt
+    CSub {} -> ret' e TInt
+    CMul {} -> ret' e TInt
+    CDiv {} -> ret' e TInt
+    CLAnd{} -> ret' e TInt
+    CLOr {} -> ret' e TInt
+    CLXor{} -> ret' e TInt
     CFNeg{} -> ret' e TFloat
     CFAdd{} -> ret' e TFloat
     CFSub{} -> ret' e TFloat
@@ -101,11 +104,14 @@ bind (x,tx) e = typeEnv %= M.insert x tx >> case e of
     CInt n    -> assignInst (Just x) $ constInstI n
     CBool b   -> assignInst (Just x) $ constInstB b
     CFloat f  -> assignInst (Just x) $ constInstF f
-    CNeg y    -> assignInst (Just x) $ neg y
-    CAdd y z  -> assignInst (Just x) $ add y z
-    CSub y z  -> assignInst (Just x) $ sub y z
-    CMul y z  -> assignInst (Just x) $ mul y z
-    CDiv y z  -> assignInst (Just x) $ div y z
+    CNeg  y   -> assignInst (Just x) $ neg y
+    CAdd  y z -> assignInst (Just x) $ add y z
+    CSub  y z -> assignInst (Just x) $ sub y z
+    CMul  y z -> assignInst (Just x) $ mul y z
+    CDiv  y z -> assignInst (Just x) $ div y z
+    CLAnd y z -> assignInst (Just x) $ and y z
+    CLOr  y z -> assignInst (Just x) $ or  y z
+    CLXor y z -> assignInst (Just x) $ xor y z
     CFNeg y   -> assignInst (Just x) $ fneg y
     CFAdd y z -> assignInst (Just x) $ fadd y z
     CFSub y z -> assignInst (Just x) $ fsub y z

@@ -32,6 +32,9 @@ data AExpr = ANop
            | ASub Id IdOrImm
            | AMul Id IdOrImm
            | ADiv Id IdOrImm
+           | AAnd Id IdOrImm
+           | AOr  Id IdOrImm
+           | AXor Id IdOrImm
            | ASll Id Int -- shift left logical
            | ALd Id IdOrImm
            | ASt Id Id IdOrImm
@@ -172,6 +175,9 @@ fvAExpr = \case
   ASub x y'    -> x : fvOfIdOrImm y'
   AMul x y'    -> x : fvOfIdOrImm y'
   ADiv x y'    -> x : fvOfIdOrImm y'
+  AAnd x y'    -> x : fvOfIdOrImm y'
+  AOr  x y'    -> x : fvOfIdOrImm y'
+  AXor x y'    -> x : fvOfIdOrImm y'
   ALd x y'     -> x : fvOfIdOrImm y'
   ALdDF x y'   -> x : fvOfIdOrImm y'
 

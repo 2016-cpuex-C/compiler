@@ -1,4 +1,3 @@
-{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE LambdaCase #-}
 
 module MiddleEnd.KNormal (
@@ -25,6 +24,9 @@ data KExpr = KUnit
            | KSub  Id Id
            | KMul  Id Id
            | KDiv  Id Id
+           | KLAnd Id Id
+           | KLOr  Id Id
+           | KLXor Id Id
            | KFNeg Id
            | KFAdd Id Id
            | KFSub Id Id
@@ -66,6 +68,9 @@ fv = \case
   KSub    x y -> S.fromList [x,y]
   KMul    x y -> S.fromList [x,y]
   KDiv    x y -> S.fromList [x,y]
+  KLAnd   x y -> S.fromList [x,y]
+  KLOr    x y -> S.fromList [x,y]
+  KLXor   x y -> S.fromList [x,y]
   KFAdd   x y -> S.fromList [x,y]
   KFSub   x y -> S.fromList [x,y]
   KFMul   x y -> S.fromList [x,y]
@@ -121,55 +126,25 @@ g env e = case e of
   ENot e' ->
     g env (EIf e' (EBool False) (EBool True))
 
-  ENeg e' ->
-    insertLet (g env e') $ \x ->
-    return (KNeg x, TInt)
+  ENeg  e'    -> int1 KNeg e'
+  EAdd  e1 e2 -> int2 KAdd  e1 e2
+  ESub  e1 e2 -> int2 KSub  e1 e2
+  EMul  e1 e2 -> int2 KMul  e1 e2
+  EDiv  e1 e2 -> int2 KDiv  e1 e2
+  ELAnd e1 e2 -> int2 KLAnd e1 e2
+  ELOr  e1 e2 -> int2 KLOr  e1 e2
+  ELXor e1 e2 -> int2 KLXor e1 e2
 
-  EAdd e1 e2 ->
-    insertLet (g env e1) $ \x ->
-    insertLet (g env e2) $ \y ->
-    return (KAdd x y, TInt)
-  ESub e1 e2 ->
-    insertLet (g env e1) $ \x ->
-    insertLet (g env e2) $ \y ->
-    return (KSub x y, TInt)
-  EMul e1 e2 ->
-    insertLet (g env e1) $ \x ->
-    insertLet (g env e2) $ \y ->
-    return (KMul x y, TInt)
-  EDiv e1 e2 ->
-    insertLet (g env e1) $ \x ->
-    insertLet (g env e2) $ \y ->
-    return (KDiv x y, TInt)
+  EFNeg e'    -> float1 KFNeg e'
+  EFAdd e1 e2 -> float2 KFAdd e1 e2
+  EFSub e1 e2 -> float2 KFSub e1 e2
+  EFMul e1 e2 -> float2 KFMul e1 e2
+  EFDiv e1 e2 -> float2 KFDiv e1 e2
 
-  EFNeg e' ->
-    insertLet (g env e') $ \x ->
-    return (KFNeg x, TFloat)
+  EEq{} -> g env (EIf e (EBool True) (EBool False))
+  ELe{} -> g env (EIf e (EBool True) (EBool False))
 
-  EFAdd e1 e2 ->
-    insertLet (g env e1) $ \x ->
-    insertLet (g env e2) $ \y ->
-    return (KFAdd x y, TFloat)
-  EFSub e1 e2 ->
-    insertLet (g env e1) $ \x ->
-    insertLet (g env e2) $ \y ->
-    return (KFSub x y, TFloat)
-  EFMul e1 e2 ->
-    insertLet (g env e1) $ \x ->
-    insertLet (g env e2) $ \y ->
-    return (KFMul x y, TFloat)
-  EFDiv e1 e2 ->
-    insertLet (g env e1) $ \x ->
-    insertLet (g env e2) $ \y ->
-    return (KFDiv x y, TFloat)
-
-  EEq _e1 _e2 ->
-    g env (EIf e (EBool True) (EBool False))
-  ELe _e1 _e2 ->
-    g env (EIf e (EBool True) (EBool False))
-
-  EIf (ENot e1) e2 e3 ->
-    g env (EIf e1 e3 e2)
+  EIf (ENot e1) e2 e3 -> g env (EIf e1 e3 e2)
 
   EIf (EEq e1 e2) e3 e4 ->
     insertLet (g env e1) $ \x ->
@@ -177,6 +152,7 @@ g env e = case e of
       (e3', t3) <- g env e3
       (e4',_t4) <- g env e4
       return (KIfEq x y e3' e4', t3)
+
   EIf (ELe e1 e2) e3 e4 ->
     insertLet (g env e1) $ \x ->
     insertLet (g env e2) $ \y -> do
@@ -254,6 +230,20 @@ g env e = case e of
     insertLet (g env e2) $ \y ->
     insertLet (g env e3) $ \z ->
     return (KPut x y z, TUnit)
+
+  where
+    arity1 t f e1 =
+      insertLet (g env e1) $ \x ->
+      return (f x, t)
+    int1 = arity1 TInt
+    float1 = arity1 TFloat
+
+    arity2 t f e1 e2 =
+      insertLet (g env e1) $ \x ->
+      insertLet (g env e2) $ \y ->
+      return (f x y, t)
+    int2 = arity2 TInt
+    float2 = arity2 TFloat
 
 kNormalize :: Expr -> Caml KExpr
 kNormalize e = fst <$> g M.empty e

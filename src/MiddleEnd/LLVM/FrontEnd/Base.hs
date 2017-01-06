@@ -296,12 +296,15 @@ constInstF :: Float -> Instruction
 constInstF f = FAdd mathFlag (opeF 0) (opeF f) []
 
 neg :: Id -> Instruction
-add,sub,mul,div :: Id -> Id -> Instruction
+add,sub,mul,div,and,or,xor :: Id -> Id -> Instruction
 neg x   = Sub False False (opeI 0) (localRef (x,TInt)) []
 add x y = Add False False (localRef (x,TInt)) (localRef (y,TInt)) []
 sub x y = Sub False False (localRef (x,TInt)) (localRef (y,TInt)) []
 mul x y = Mul False False (localRef (x,TInt)) (localRef (y,TInt)) []
 div x y = SDiv      False (localRef (x,TInt)) (localRef (y,TInt)) []
+and x y = And             (localRef (x,TInt)) (localRef (y,TInt)) []
+or  x y = Or              (localRef (x,TInt)) (localRef (y,TInt)) []
+xor x y = Xor             (localRef (x,TInt)) (localRef (y,TInt)) []
 
 fneg :: Id -> Instruction
 fadd,fsub,fmul,fdiv :: Id -> Id -> Instruction

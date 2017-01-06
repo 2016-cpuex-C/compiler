@@ -35,6 +35,9 @@ data CExpr = CUnit
            | CSub      Id Id
            | CMul      Id Id
            | CDiv      Id Id
+           | CLAnd     Id Id
+           | CLOr      Id Id
+           | CLXor     Id Id
            | CFNeg     Id
            | CFAdd     Id Id
            | CFSub     Id Id
@@ -96,6 +99,9 @@ fv e_ = do
       CSub  x y -> return $ S.fromList [x,y]
       CMul  x y -> return $ S.fromList [x,y]
       CDiv  x y -> return $ S.fromList [x,y]
+      CLAnd x y -> return $ S.fromList [x,y]
+      CLOr  x y -> return $ S.fromList [x,y]
+      CLXor x y -> return $ S.fromList [x,y]
       CFAdd x y -> return $ S.fromList [x,y]
       CFSub x y -> return $ S.fromList [x,y]
       CFMul x y -> return $ S.fromList [x,y]
@@ -145,6 +151,9 @@ g env known = \case
   KSub  x y -> return $ CSub  x y
   KMul  x y -> return $ CMul  x y
   KDiv  x y -> return $ CDiv  x y
+  KLAnd x y -> return $ CLAnd x y
+  KLOr  x y -> return $ CLOr  x y
+  KLXor x y -> return $ CLXor x y
   KFAdd x y -> return $ CFAdd x y
   KFSub x y -> return $ CFSub x y
   KFMul x y -> return $ CFMul x y

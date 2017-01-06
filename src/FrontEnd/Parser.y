@@ -30,6 +30,9 @@ import FrontEnd.Syntax
     '>='        { TokenGe          }
     '<'         { TokenLt          }
     '>'         { TokenGt          }
+    '&'         { TokenAnd         }
+    '|'         { TokenOr          }
+    '^'         { TokenXor         }
     if          { TokenIf          }
     then        { TokenThen        }
     else        { TokenElse        }
@@ -59,14 +62,12 @@ import FrontEnd.Syntax
 %left  ','
 %left  '=' '<>' '<=' '<' '>' '>='
 %left  '+' '-' '+.' '-.'
-%left  '*' '/' '*.' '/.'
+%left  '*' '/' '*.' '/.' '&' '|' '^'
 %left  prec_neg
 %left  prec_app
 %left  '.'
 
 %nonassoc '>' '<'
-%left '+' '-'
-%left '*' '/'
 
 %%
 
@@ -74,11 +75,14 @@ Expr :: { Expr }
     : SimpleExpr                                       { $1                 }
     | not Expr %prec prec_app                          { ENot $2            }
     | '-' Expr  %prec prec_neg                         { neg $2             }
-    | Expr '+' Expr                                    { EAdd $1 $3         }
-    | Expr '-' Expr                                    { ESub $1 $3         }
-    | Expr '*' Expr                                    { EMul $1 $3         }
-    | Expr '/' Expr                                    { EDiv $1 $3         }
-    | Expr '=' Expr                                    { EEq  $1 $3         }
+    | Expr '+' Expr                                    { EAdd  $1 $3        }
+    | Expr '-' Expr                                    { ESub  $1 $3        }
+    | Expr '*' Expr                                    { EMul  $1 $3        }
+    | Expr '/' Expr                                    { EDiv  $1 $3        }
+    | Expr '&' Expr                                    { ELAnd $1 $3        }
+    | Expr '|' Expr                                    { ELOr  $1 $3        }
+    | Expr '^' Expr                                    { ELXor $1 $3        }
+    | Expr '=' Expr                                    { EEq   $1 $3        }
     | Expr '<>' Expr                                   { ENot (EEq $1 $3)   }
     | Expr '<' Expr                                    { ENot (ELe $3 $1)   }
     | Expr '>' Expr                                    { ENot (ELe $1 $3)   }

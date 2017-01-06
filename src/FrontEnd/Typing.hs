@@ -85,6 +85,9 @@ derefExpr = \case
   ESub e1 e2    -> ESub   <$> derefExpr e1 <*> derefExpr e2
   EMul e1 e2    -> EMul   <$> derefExpr e1 <*> derefExpr e2
   EDiv e1 e2    -> EDiv   <$> derefExpr e1 <*> derefExpr e2
+  ELAnd e1 e2   -> ELAnd  <$> derefExpr e1 <*> derefExpr e2
+  ELOr  e1 e2   -> ELOr   <$> derefExpr e1 <*> derefExpr e2
+  ELXor  e1 e2  -> ELXor   <$> derefExpr e1 <*> derefExpr e2
   EFNeg e       -> EFNeg  <$> derefExpr e
   EFAdd e1 e2   -> EFAdd  <$> derefExpr e1 <*> derefExpr e2
   EFSub e1 e2   -> EFSub  <$> derefExpr e1 <*> derefExpr e2
@@ -120,10 +123,13 @@ infer env e =
     ENeg  e' -> int1   e'
     EFNeg e' -> float1 e'
 
-    EAdd e1 e2 -> int2 e1 e2
-    ESub e1 e2 -> int2 e1 e2
-    EMul e1 e2 -> int2 e1 e2
-    EDiv e1 e2 -> int2 e1 e2
+    EAdd  e1 e2 -> int2 e1 e2
+    ESub  e1 e2 -> int2 e1 e2
+    EMul  e1 e2 -> int2 e1 e2
+    EDiv  e1 e2 -> int2 e1 e2
+    ELAnd e1 e2 -> int2 e1 e2
+    ELOr  e1 e2 -> int2 e1 e2
+    ELXor e1 e2 -> int2 e1 e2
 
     EFAdd e1 e2 -> float2 e1 e2
     EFSub e1 e2 -> float2 e1 e2

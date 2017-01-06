@@ -17,6 +17,9 @@ data Expr = EUnit
           | ESub      Expr Expr
           | EMul      Expr Expr
           | EDiv      Expr Expr
+          | ELAnd     Expr Expr -- bitwise and
+          | ELOr      Expr Expr -- bitwise or
+          | ELXor     Expr Expr -- bitwise xor
           | EFNeg     Expr
           | EFAdd     Expr Expr
           | EFSub     Expr Expr

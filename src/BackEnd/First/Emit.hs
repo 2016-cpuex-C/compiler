@@ -103,14 +103,21 @@ g' oc (dest,exp) =
       AMov y ->  when (x /= y) $ write $ printf "\tmove\t%s, %s" x y
       ANeg y ->  write $ printf "\tneg\t%s, %s" x y
 
-      AAdd y (V z) -> write $ printf "\tadd\t%s, %s, %s" x y z
-      AAdd y (C i) -> write $ printf "\taddi\t%s, %s, %d" x y i
-      ASub y (V z) -> write $ printf "\tsub\t%s, %s, %s" x y z
-      ASub y (C i) -> write $ printf "\tsubi\t%s, %s, %d" x y i -- #
-      AMul y (V z) -> write $ printf "\tmult\t%s, %s, %s" x y z
-      AMul y (C i) -> write $ printf "\tmulti\t%s, %s, %d" x y i -- #
-      ADiv y (V z) -> write $ printf "\tdiv\t%s, %s" y z -- #
-      ADiv y (C i) -> write $ printf "\tdivi\t%s, %s, %d" x y i -- #
+      AAdd y (V z) -> write $ printf "\tadd\t%s, %s, %s"   x y z
+      ASub y (V z) -> write $ printf "\tsub\t%s, %s, %s"   x y z
+      AMul y (V z) -> write $ printf "\tmult\t%s, %s, %s"  x y z
+      ADiv y (V z) -> write $ printf "\tdiv\t%s, %s, %s"   x y z
+      AAnd y (V z) -> write $ printf "\tand\t%s, %s, %s"   x y z
+      AOr  y (V z) -> write $ printf "\tor\t%s, %s, %s"    x y z
+      AXor y (V z) -> write $ printf "\txor\t%s, %s, %s"   x y z
+      AAdd y (C i) -> write $ printf "\taddi\t%s, %s, %d"  x y i
+      ASub y (C i) -> write $ printf "\tsubi\t%s, %s, %d"  x y i
+      AMul y (C i) -> write $ printf "\tmulti\t%s, %s, %d" x y i
+      ADiv y (C i) -> write $ printf "\tdivi\t%s, %s, %d"  x y i
+      AAnd y (C i) -> write $ printf "\tandi\t%s, %s, %d"  x y i
+      AOr  y (C i) -> write $ printf "\tori\t%s, %s, %d"   x y i
+      AXor y (C i) -> write $ printf "\txori\t%s, %s, %d"  x y i
+
       ASll y i -- TODO ASrl追加しよう
         | i >= 0    -> write $ printf "\tsll\t%s, %s, %d" x y i
         | otherwise -> write $ printf "\tsrl\t%s, %s, %d" x y (-i)
@@ -252,6 +259,9 @@ g' oc (dest,exp) =
       AAdd{}  -> g' oc (NonTail (regs!0), exp) >> ret
       ASub{}  -> g' oc (NonTail (regs!0), exp) >> ret
       AMul{}  -> g' oc (NonTail (regs!0), exp) >> ret
+      AAnd{}  -> g' oc (NonTail (regs!0), exp) >> ret
+      AOr {}  -> g' oc (NonTail (regs!0), exp) >> ret
+      AXor{}  -> g' oc (NonTail (regs!0), exp) >> ret
       ADiv{}  -> error "Emit.hs: impossible"
       ASll{}  -> g' oc (NonTail (regs!0), exp) >> ret
       ALd{}   -> g' oc (NonTail (regs!0), exp) >> ret

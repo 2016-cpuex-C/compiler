@@ -44,11 +44,18 @@ g' env = let geti var = lookupMapNote "Simm" var env
     | M.member y env && geti y == 4 -> ASll x 2
     | M.member x env && geti x == 2 -> ASll y 1
     | M.member x env && geti x == 4 -> ASll y 2
-    -- | otherwise -> error "Simm.hs: impossible"
-  --AMul _ (C _) -> e --error "Simm.hs: impossible" -- sinとかでありうる
   ADiv x (V y)
     | M.member y env && geti y == 2 -> ASll x (-1)
     | otherwise -> error "Simm.hs: impossible"
+  AAnd x (V y)
+    | M.member y env -> AAnd x (get y)
+    | M.member x env -> AAnd y (get x)
+  AOr x (V y)
+    | M.member y env -> AOr x (get y)
+    | M.member x env -> AOr y (get x)
+  AXor x (V y)
+    | M.member y env -> AXor x (get y)
+    | M.member x env -> AXor y (get x)
 
   ALd x (V y)
     | M.member y env -> ALd x (get y)
