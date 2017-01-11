@@ -100,7 +100,7 @@ import           Data.Tree
 import qualified Data.ByteString.Char8            as S8 (hPutStr)
 import qualified Control.Monad.Trans              as T (MonadTrans,lift)
 import           Control.Monad.Trans.Except
-import           Control.Monad.Trans.State.Lazy
+import           Control.Monad.Trans.State.Strict
 import           Control.Monad.State.Class        (MonadState)
 import qualified Control.Monad.IO.Class           as IOC (MonadIO,liftIO)
 import           System.IO                        (Handle,stdout)
