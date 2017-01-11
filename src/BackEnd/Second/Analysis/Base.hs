@@ -87,6 +87,7 @@ defInst (x:=i) | float i   = (S.empty, S.singleton x)
     float = \case-- {{{
       ASetF {} -> True
       AFMov {} -> True
+      AFNeg {} -> True
       AFAdd {} -> True
       AFSub {} -> True
       AFMul {} -> True
@@ -118,9 +119,11 @@ useInst = \case
       ASti x _         -> ([x],[])
       AFSti x _        -> ([],[x])
       AMove x          -> ([x],[])
+      ANeg x           -> ([x],[])
       ACBr x _ _       -> ([x],[])
       ASwitch x _ _    -> ([x],[])
       AFMov x          -> ([],[x])
+      AFNeg x          -> ([],[x])
       AFAdd x y        -> ([],[x,y])
       AFSub x y        -> ([],[x,y])
       AFMul x y        -> ([],[x,y])

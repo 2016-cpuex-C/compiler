@@ -55,7 +55,10 @@ toStatements (Do linst) = toAExpr linst >>= do'
 toAExpr :: LInst -> CamlV AExpr
 toAExpr linst = case linst of
   LAdd  y z -> idii' AAdd y z
-  LSub  y z -> idii  ASub y z
+  LSub  y z
+    | isInt y && -- TODO multiでよい
+      opeInt y == 0 -> ANeg <$> toId z
+    | otherwise     -> idii  ASub y z
   LMul  y z -> idii' AMul y z
   LDiv  y z -> idii  ADiv y z
   LSll  y z -> idii  ASll y z
@@ -65,7 +68,10 @@ toAExpr linst = case linst of
   LXor  y z -> idii  AXor y z
 
   LFAdd y z -> ff AFAdd y z
-  LFSub y z -> ff AFSub y z
+  LFSub y z
+    | isFloat y &&
+      opeFloat y == 0.0 -> AFNeg <$> toId z
+    | otherwise         -> ff AFSub y z
   LFMul y z -> ff AFMul y z
   LFDiv y z -> ff AFDiv y z
 

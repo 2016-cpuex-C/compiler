@@ -45,6 +45,7 @@ data AExpr -- 多相的な命令には型を加える
   | ASetF  Label
   | ASetL  Label -- closure
   | AMove  Id
+  | ANeg   Id
   | AAdd   Id IdOrImm
   | ASub   Id IdOrImm
   | AMul   Id IdOrImm
@@ -57,6 +58,7 @@ data AExpr -- 多相的な命令には型を加える
   | ASti   Id Integer
 
   | AFMov  Id
+  | AFNeg  Id
   | AFAdd  Id Id
   | AFSub  Id Id
   | AFMul  Id Id

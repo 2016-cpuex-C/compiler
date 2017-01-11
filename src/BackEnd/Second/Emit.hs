@@ -130,8 +130,9 @@ emitFun :: Handle -> AFunDef -> Caml ()
 emitFun h f = do
   colMaps <- colorFun f
   f'@(AFunDef l _ _ _ _) <- ssaDeconstruct colMaps f
-  --($logInfo) $ pack "EmitFun: " <> show' l
-  --($logDebugSH) $ show colMaps
+  ($logInfo) $ pack "EmitFun: " <> show' l
+  --($logDebugSH) $ colMaps
+  --($logDebugSH) $ f
   --($logDebugSH) $ f'
   liftIO $ hPutStrLn h $ unLabel l ++ ":"
   liftIO $ hPutStrLn h $ "\tsw\t$ra, 0($sp)"
@@ -181,6 +182,7 @@ emitInst = \case
         write =<< printf "\tl.sl\t%s, %s" <$> regF x <*> return l
 
   x := AMove y          -> move x y
+  x := ANeg  y          -> rr  "neg"   x y
   x := AAdd y (V z)     -> rrr "add"   x y z
   x := AAdd y (C i)     -> rri "addi"  x y i
   x := ASub y (V z)     -> rrr "sub"   x y z
@@ -201,6 +203,7 @@ emitInst = \case
   Do (ASti x i)         -> rri'"sw" x regZero i
 
   x := AFMov y          -> movs x y
+  x := AFNeg y          -> ff  "neg.s" x y
   x := AFAdd y z        -> fff "add.s" x y z
   x := AFSub y z        -> fff "sub.s" x y z
   x := AFMul y z        -> fff "mul.s" x y z
