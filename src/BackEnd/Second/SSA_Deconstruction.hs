@@ -12,12 +12,12 @@ import BackEnd.Second.Asm
 import BackEnd.Second.RegAlloc.Coloring (Color)
 
 import qualified Data.Map as M
-import           Data.List (partition)
+import           Data.List (delete, partition)
 import           Control.Lens.Operators
 import           Control.Monad.Trans.State
 import           Data.List.Extra (anySame)
-import           Control.Arrow (second)
---import           Debug.Trace (trace)
+import           Control.Arrow (first, second)
+
 
 -------------------------------------------------------------------------------
 -- Types
@@ -183,19 +183,25 @@ deconstruct (colMap,colMapF) xvs = do
 -- TODO PhiLifting (map (classify.snd) vars に重複があるとダメなので必要)
 --      本来(Mem,Mem)はsafeCopyだがpermになってしまっている
 --      (今のところは左側にMemが来ることはないので大丈夫)
-resolveBy :: (Show a, Show b, Eq b) => (a -> b)-> [(a,a)] -> [Action a]
+resolveBy :: (Show a, Show b, Eq a, Eq b) => (a -> b)-> [(a,a)] -> [Action a]
 resolveBy classify vars
-  -- | trace (show (vars, map (both classify) vars)) False = undefined
-  | anySame used = errorShow "resolveBy: invalid argument" (vars, map (both classify) vars)
+  | anySame (rights vars) = errorShow "resolveBy: invalid argument" (vars, map (both classify) vars)
   | otherwise = concat [nop, mov, rest]
   where
     nop  = map Nop identical
     mov  = map Move safeCopy
     rest = resolvePerm perm
 
-    used = map (classify.snd) vars
-    (identical, tmp) = partition (\(x,y) -> classify x == classify y) vars
-    (safeCopy, perm) = partition (\(x,_) -> classify x `notElem` used) tmp
+    rights = map (classify.snd)
+
+    (identical, tmp) =
+      let f (x,y) = classify x == classify y
+      in  partition f vars
+    (safeCopy, perm) =
+      let f (safe,yet) (x,y)
+            | classify x `elem` rights yet = (safe, yet)
+            | otherwise                    = ((x,y):safe, delete (x,y) yet)
+      in  first reverse $ foldl' f ([],vars) tmp
 
     resolvePerm [] = []
     resolvePerm ((x,y):xys) =
