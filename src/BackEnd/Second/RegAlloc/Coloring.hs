@@ -5,8 +5,9 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 module BackEnd.Second.RegAlloc.Coloring (
-    Color
+    Color(..)
   , colorFun
+  , colorToInt
   ) where
 
 import Prelude hiding (log)
@@ -26,7 +27,12 @@ import           Data.Tree
 -- Types
 -------------------------------------------------------------------------------
 
-type Color = Int
+data Color = R Int | F Int
+  deriving (Show,Eq,Ord)
+
+colorToInt :: Color -> Int
+colorToInt (R n) = n
+colorToInt (F n) = n
 
 data CS = CS {
     _liveOut   :: Map InstId (Set Id, Set Id) -- read only
@@ -45,34 +51,38 @@ type CamlCS = StateT CS Caml
 -- Main
 -------------------------------------------------------------------------------
 
-colorFun :: AFunDef -> Caml (Map Id Color, Map Id Color)
-colorFun f@(AFunDef l xs ys _ _) = withoutLogging $ do
---colorFun f@(AFunDef l xs ys _ _) = do
-  liveout <- analyzeLifetime f
-  s <- execStateT (colorTree (dominatorTree f)) CS {
-            _liveOut   = liveout
-          , _colorMap  = M.fromList $ zip xs [0..]
-          , _colorMapF = M.fromList $ zip ys [0..]
-          , _used      = M.fromList $ zip xs [0..]
-          , _usedF     = M.fromList $ zip ys [0..]
-          , _free      = [length xs..length allRegs-1]
-          , _freeF     = [length ys..length allFRegs-1]
-          }
-  let (x,y) = bimap (max (length xs)) (max (length ys)) $ chromaticN liveout
-      (z,w) = (maxColorN (s^.colorMap), maxColorN (s^.colorMapF))
-  when (x/=z || y/=w ) $ do
-    ($logError) "RegAlloc.Coloring"
-    ($logErrorSH) l
-    ($logErrorSH) (x,y)
-    ($logErrorSH) (z,w)
-    ($logErrorSH) (s^.colorMap)
-    ($logErrorSH) (s^.colorMapF)
-    ($logErrorSH) f
-    error "RegAlloc: Congratulations! You've found a new bug!"
-  return (s^.colorMap, s^.colorMapF)
+colorFun :: AFunDef -> Caml (Map Id Color)
+--colorFun f@(AFunDef l xs ys _ _) = withoutLogging $ do
+colorFun f@(AFunDef l xs ys _ _) = do
+    liveout <- analyzeLifetime f
+    s <- execStateT (colorTree (dominatorTree f)) CS {
+              _liveOut   = liveout
+            , _colorMap  = M.fromList $ zip xs $ map R [0..]
+            , _colorMapF = M.fromList $ zip ys $ map F [0..]
+            , _used      = M.fromList $ zip xs $ map R [0..]
+            , _usedF     = M.fromList $ zip ys $ map F [0..]
+            , _free      = map R [length xs..length allRegs-1]
+            , _freeF     = map F [length ys..length allFRegs-1]
+            }
+    let (x,y) = bimap (max (length xs)) (max (length ys)) $ chromaticN liveout
+        (z,w) = (maxColorN (s^.colorMap), maxColorN (s^.colorMapF))
+    when (x/=z || y/=w ) $ do
+      ($logError) "RegAlloc.Coloring"
+      ($logErrorSH) l
+      ($logErrorSH) (x,y)
+      ($logErrorSH) (z,w)
+      ($logErrorSH) (s^.colorMap)
+      ($logErrorSH) (s^.colorMapF)
+      ($logErrorSH) f
+      error "RegAlloc: Congratulations! You've found a new bug!"
+    --($logDebugSH) l
+    ($logDebug)   $ "chromatic number: " <> show' (l,x,y)
+    return (M.union (s^.colorMap) (s^.colorMapF))
+ `catchError` \(Failure e) ->
+    error $ e ++ "@" ++ show l
 
-maxColorN :: Map Id Color -> Color
-maxColorN m = maximum' [ n | (_,n) <- M.toList m ]
+maxColorN :: Map Id Color -> Int
+maxColorN m = maximum' [ colorToInt n | (_,n) <- M.toList m ]
   where maximum' [] = 0
         maximum' n  = maximum n + 1
 
@@ -86,16 +96,17 @@ chromaticN m = join bimap f $ unzip $ map snd (M.toList m)
 -------------------------------------------------------------------------------
 
 colorTree :: Tree ABlock -> CamlCS ()
-colorTree (Node (ABlock l stmts) bs) = do
-  ($logDebug) $ "block: " <> show' l
+colorTree (Node (ABlock _l stmts) bs) = do
+  --($logDebug) $ "block: " <> show' l
   mapM_ colorStmt stmts
   forM_ bs $ localState . colorTree
+
 
 colorStmt :: Statement -> CamlCS ()
 colorStmt (n,inst) = do
     (liveout, liveoutF) <- uses liveOut (lookupMapNote "colorStmt" n)
     (used',   usedF'  ) <- (,) <$> use used <*> use usedF
-    (free',   freeF'  ) <- (,) <$> use free <*> use freeF
+    --(free',   freeF'  ) <- (,) <$> use free <*> use freeF
 
     let (ds,dsF) = defInst inst
         dead  x = x `S.notMember` liveout
@@ -110,13 +121,13 @@ colorStmt (n,inst) = do
     mapM_ removeF $ S.filter deadF dsF
     -- 不要変数削除したら mapM_ assign (S.filter live ds) とかでよい
 
-    $logDebug $ pack.init.unlines $
-      [ "  instid: " ++ show n
-      , "      us:   " ++ show (useInst inst)
-      , "      ds:   " ++ show (ds,dsF)
-      , "      used: " ++ show (used',usedF')
-      , "      free: " ++ show (free',freeF')
-      , "      lout: " ++ show (liveout,liveoutF) ]
+    -- $logDebug $ pack.init.unlines $
+    --   [ "  instid: " ++ show n
+    --   , "      us:   " ++ show (useInst inst)
+    --   , "      ds:   " ++ show (ds,dsF)
+    --   , "      used: " ++ show (used',usedF')
+    --   , "      free: " ++ show (free',freeF')
+    --   , "      lout: " ++ show (liveout,liveoutF) ]
 
 -- usedとfreeの状態を復元する
 localState :: CamlCS a -> CamlCS a
@@ -143,28 +154,28 @@ assign x = use free >>= \case
   c:_ -> do free     %= tail
             used     %= M.insert x c
             colorMap %= M.insert x c
-            $logDebug $ "    assign: " <> show' (x,c)
-  [] -> error "color tarinai"
+            -- $logDebug $ "    assign: " <> show' (x,c)
+  [] -> lift $ throwError $ Failure "color tarinai"
 
 assignF :: Id -> CamlCS ()
 assignF x = use freeF >>= \case
   c:_ -> do freeF     %= tail
             usedF     %= M.insert x c
             colorMapF %= M.insert x c
-            $logDebug $ "    assign: " <> show' (x,c)
+            -- $logDebug $ "    assign: " <> show' (x,c)
   [] -> error "color tarinai"
 
 remove :: Id -> CamlCS ()
 remove x = uses used (M.lookup x) >>= \case
   Just c  -> do free %= (c:)
                 used %= M.delete x
-                $logDebug $ "    remove: " <> show' (x,c)
+                -- $logDebug $ "    remove: " <> show' (x,c)
   Nothing -> return ()
 
 removeF :: Id -> CamlCS ()
 removeF x = uses usedF (M.lookup x) >>= \case
   Just c  -> do freeF %= (c:)
                 usedF %= M.delete x
-                $logDebug $ "    remove: " <> show' (x,c)
+                -- $logDebug $ "    remove: " <> show' (x,c)
   Nothing -> return ()
 

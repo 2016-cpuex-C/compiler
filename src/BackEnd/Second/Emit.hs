@@ -26,7 +26,7 @@ import           Control.Monad.Trans.State
 import           Text.Printf                (printf)
 import           System.IO                  (Handle, hPutStrLn)
 import           Data.Char                  (toLower)
-import Control.Arrow (second)
+import           Control.Arrow              (second)
 
 -------------------------------------------------------------------------------
 -- Types
@@ -34,7 +34,7 @@ import Control.Arrow (second)
 
 data ES = ES {
     _hout          :: Handle
-  , _colorMaps     :: (Map Id Color, Map Id Color)
+  , _colorMap      :: Map Id Color
   , _stack         :: Set Id
   , _offset'       :: Map Id Integer
   , _nextBlockName :: Maybe Label
@@ -55,20 +55,16 @@ write s = do
 reg :: Id -> CamlE Register
 reg x
   | isReg x   = return x
-  | otherwise = do
-      colMap <- uses colorMaps fst
-      case M.lookup x colMap of
-        Just n  -> return $ regs!n
-        Nothing -> error $ "reg: " ++ x
+  | otherwise = uses colorMap (M.lookup x) >>= \case
+      Just (R n)  -> return $ regs!n
+      _ -> error $ "reg: " ++ x
 
 regF :: Id -> CamlE Register
 regF x
   | isReg x   = return x
-  | otherwise = do
-      colMapF <- uses colorMaps snd
-      case M.lookup x colMapF of
-        Just n  -> return $ fregs!n
-        Nothing -> error $ "freg: " ++ x
+  | otherwise = uses colorMap (M.lookup x) >>= \case
+      Just (F n)  -> return $ fregs!n
+      _ -> error $ "regF: " ++ x
 
 stackSize :: CamlE Integer
 stackSize = do
@@ -139,7 +135,7 @@ emitFun h f = do
   stackMap <- stackInMap f'
   evalStateT (emitBlocks stackMap (sortBlocks f')) ES {
       _hout          = h
-    , _colorMaps     = colMaps
+    , _colorMap     = colMaps
     , _stack         = S.empty
     , _offset'       = M.empty
     , _nextBlockName = Nothing
@@ -474,13 +470,15 @@ tailCall (Label f) ys zs = do
 
 setArgs :: [Id] -> [Id] -> CamlE ()
 setArgs xs ys = do
-  (colMap,colMapF)  <- use colorMaps
-  let reg' x  | isReg x             = x
-              | M.member x colMap   = regs ! lookupMapNote "reg'" x colMap
-              | otherwise           = error "reg'"
-      regF' x | isReg x             = x
-              | M.member x colMapF  = fregs ! lookupMapNote "regF'" x colMapF
-              | otherwise           = error "regF'"
+  colMap  <- use colorMap
+  let reg' x  | isReg x = x
+              | otherwise = case M.lookup x colMap of
+                  Just (R n) -> regs!n
+                  _          -> error "regF'"
+      regF' x | isReg x = x
+              | otherwise = case M.lookup x colMap of
+                  Just (F n) -> fregs!n
+                  _          -> error "regF'"
       actToInst'  (Nop  (_,_)) = Do ANop
       actToInst'  (Move (x,y)) = x := AMove y
       actToInst'  (Swap (x,y)) = Do (ASwap x y)

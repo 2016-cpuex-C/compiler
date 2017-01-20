@@ -25,7 +25,7 @@ import           Control.Arrow (first, second)
 
 data SSAD = SSAD {
     _blockMap_  :: Map Label ABlock
-  , _colorMaps_ :: (Map Id Color,Map Id Color)
+  , _colorMaps_ :: Map Id Color
   }
 makeLenses ''SSAD
 
@@ -41,11 +41,11 @@ instance Eq Dest where
 -- Main
 -------------------------------------------------------------------------------
 
-ssaDeconstruct :: (Map Id Color, Map Id Color) -> AFunDef -> Caml AFunDef
-ssaDeconstruct colMaps f@(AFunDef _ _ _ blocks _) =
+ssaDeconstruct :: Map Id Color -> AFunDef -> Caml AFunDef
+ssaDeconstruct colMap f@(AFunDef _ _ _ blocks _) =
   blockMapToFun . view blockMap_ <$> execStateT (ssaDeconstructSub blocks) SSAD {
       _blockMap_  = blockMap f
-    , _colorMaps_ = colMaps
+    , _colorMaps_ = colMap
     }
   where
     blockMapToFun m = f { aBody = map snd $ M.toList m }
@@ -153,9 +153,9 @@ block = uses blockMap_ . lookupMapNote "SSA_Deconstruction: block: Impossible"
 --
 -------------------------------------------------------------------------------
 
-deconstruct :: (Map Id Color, Map Id Color)
+deconstruct :: Map Id Color
             -> [(Id,PhiVal)] -> Caml [Statement]
-deconstruct (colMap,colMapF) xvs = do
+deconstruct colMap xvs = do
   let int   = [ (x,i) | (x, PVInt i) <- xvs ]
       float = [ (x,l) | (x, PVFloat l) <- xvs ]
       var   = [ ((x,False), (y,b)) | (x, PVVar y t b) <- xvs, t /= TFloat ]
@@ -164,7 +164,7 @@ deconstruct (colMap,colMapF) xvs = do
 
       color  (x,False) = Reg $ lookupMapNote "color" x colMap
       color  _         = Mem
-      colorF (x,False) = Reg $ lookupMapNote "colorF" x colMapF
+      colorF (x,False) = Reg $ lookupMapNote "colorF" x colMap
       colorF _         = Mem
 
       insts = concat [
