@@ -76,6 +76,7 @@ library
                      , BackEnd.Second.RegAlloc.Dominance.Pure
                      , BackEnd.Second.RegAlloc.Coloring
                      , BackEnd.Second.RegAlloc.Coalescing
+                     , BackEnd.Second.RegAlloc.Coalescing.PhiOptimise
                      , BackEnd.Second.RegAlloc.PhiLifting
                      , BackEnd.Second.RegAlloc.Spilling
                      , BackEnd.Second.SSA_Deconstruction

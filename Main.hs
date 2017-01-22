@@ -79,8 +79,10 @@ compile2 s f = do
       >>= toAProg
       >>= virtual
       >>= optimiseA
+      >>= (($logDebug) "optimiseA end" $>)
       >>= saveAndRestore
-      >>= \e -> ($logDebugSH) e >> return e
+      >>= (($logDebug) "saveAndRestore end" $>)
+      -- >>= \e -> ($logDebugSH) e >> return e
       >>= ((use constFloats >>= ($logDebugSH)) $>)
       >>= emitProg h
     case m of

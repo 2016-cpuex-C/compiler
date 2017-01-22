@@ -92,8 +92,8 @@ data AExpr -- 多相的な命令には型を加える
   | APtrG Label [IdOrImm]
   | APhi  [(Label,PhiVal)]
 
-    -- Virtual.hsで出現
-  | APhiV [(Label,[(Id,PhiVal)])]
+  | APhiV     [(Label,[(Id,PhiVal)])] -- APhiのベクトル化
+  | APhiS     [(Id,PhiVal)]           -- APhiVの一行版
   | ASave     Id
   | AFSave    Id
   | ARestore  Id
@@ -104,7 +104,7 @@ data AExpr -- 多相的な命令には型を加える
   | AFStHP Id IdOrImm
   | AIncHP IdOrImm
 
-  -- other primitives Integers Floats
+  -- other primitives
   | APrim Label Type [IdOrImm] [Id]
 
   -- terminator
@@ -153,10 +153,11 @@ isEmptyFun :: AFunDef -> Bool
 isEmptyFun = null . aBody
 
 entryBlock :: AFunDef -> ABlock
+entryBlock (AFunDef _ _ _ [block] _) = block
 entryBlock (AFunDef l _ _ blocks _) =
   case partition isEntryBlock blocks of
     ([eb],_) -> eb
-    _ -> errorShow "entryBlock: " l
+    x -> errorShow "entryBlock: " (l,x)
 
 entryBlockName :: AFunDef -> Label
 entryBlockName = aBlockName . entryBlock

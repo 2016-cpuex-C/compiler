@@ -11,7 +11,7 @@ import Base
 import BackEnd.Decode
 import BackEnd.Second.Asm
 import BackEnd.Second.Analysis
-import BackEnd.Second.RegAlloc.Coloring
+import BackEnd.Second.RegAlloc
 import BackEnd.Second.SSA_Deconstruction
 
 import           Data.Int                   (Int16)
@@ -123,19 +123,19 @@ emitProg h prog = do
     retToExitS stmt = stmt
 
 emitFun :: Handle -> AFunDef -> Caml ()
-emitFun h f = do
-  colMaps <- colorFun f
-  f'@(AFunDef l _ _ _ _) <- ssaDeconstruct colMaps f
+emitFun h f@(AFunDef l _ _ _ _) = do
   ($logInfo) $ pack "EmitFun: " <> show' l
-  --($logDebugSH) $ colMaps
-  --($logDebugSH) $ f
-  --($logDebugSH) $ f'
+  colMap <- regAlloc f
+  ($logDebugSH) $ f
+  f' <- ssaDeconstruct colMap f
+  ($logDebugSH) $ colMap
+  ($logDebugSH) $ f'
   liftIO $ hPutStrLn h $ unLabel l ++ ":"
   liftIO $ hPutStrLn h $ "\tsw\t$ra, 0($sp)"
   stackMap <- stackInMap f'
   evalStateT (emitBlocks stackMap (sortBlocks f')) ES {
       _hout          = h
-    , _colorMap     = colMaps
+    , _colorMap     = colMap
     , _stack         = S.empty
     , _offset'       = M.empty
     , _nextBlockName = Nothing
@@ -220,8 +220,8 @@ emitInst = \case
   x := ACmp  p y (C i)  -> prri "cmpi"  p x y i
   x := AFCmp p y z      -> prff "cmp.s" p x y z
 
-  Do (ASwap  x y)       -> rr "swap" x y
-  Do (AFSwap x y)       -> ff "swap.s" x y
+  Do (ASwap  x y)       -> swap x y
+  Do (AFSwap x y)       -> swaps x y
 
   x := ACall t f ys zs  -> call t (Just x) f ys zs
   Do (ACall  t f ys zs) -> call t Nothing  f ys zs
@@ -397,12 +397,28 @@ move x y = do
         | otherwise = "move"
   when (rx/=ry) $ write $ printf "\t%s\t%s, %s" s rx ry
 
+swap :: Id -> Id -> CamlE ()
+swap x y = do
+  rx <- reg x
+  ry <- reg y
+  let s | rx == ry  = "#swap" :: String
+        | otherwise = "swap"
+  when (rx/=ry) $ write $ printf "\t%s\t%s, %s" s rx ry
+
 movs :: Id -> Id -> CamlE ()
 movs x y = do
   rx <- regF x
   ry <- regF y
   let s | rx == ry  = "#mv" :: String
         | otherwise = "mov.s"
+  when (rx/=ry) $ write $ printf "\t%s\t%s, %s" s rx ry
+
+swaps :: Id -> Id -> CamlE ()
+swaps x y = do
+  rx <- regF x
+  ry <- regF y
+  let s | rx == ry  = "#swaps" :: String
+        | otherwise = "swap.s"
   when (rx/=ry) $ write $ printf "\t%s\t%s, %s" s rx ry
 
 br :: Label -> CamlE ()
@@ -470,13 +486,13 @@ tailCall (Label f) ys zs = do
 
 setArgs :: [Id] -> [Id] -> CamlE ()
 setArgs xs ys = do
-  colMap  <- use colorMap
+  colMap'  <- use colorMap
   let reg' x  | isReg x = x
-              | otherwise = case M.lookup x colMap of
+              | otherwise = case M.lookup x colMap' of
                   Just (R n) -> regs!n
                   _          -> error "regF'"
       regF' x | isReg x = x
-              | otherwise = case M.lookup x colMap of
+              | otherwise = case M.lookup x colMap' of
                   Just (F n) -> fregs!n
                   _          -> error "regF'"
       actToInst'  (Nop  (_,_)) = Do ANop

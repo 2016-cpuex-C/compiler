@@ -60,7 +60,9 @@ module Base (
   , lookupMapNote
   , insertList
   , insertAppend
+  , insertAppendS
   , insertAppendList
+  , insertAppendSetS
   , flipMap
   , mapToTree
   , dfsMap
@@ -334,10 +336,20 @@ insertAppend x y = M.alter f x
   where f Nothing   = Just [y]
         f (Just ys) = Just (y:ys)
 
+insertAppendS :: (Ord a, Ord b) => a -> b -> Map a (Set b) -> Map a (Set b)
+insertAppendS x y = M.alter f x
+  where f Nothing   = Just (S.singleton y)
+        f (Just ys) = Just (S.insert y ys)
+
 insertAppendList :: Ord a => a -> [b] -> Map a [b] -> Map a [b]
 insertAppendList x ys = M.alter f x
   where f Nothing   = Just ys
         f (Just ys') = Just (ys++ys')
+
+insertAppendSetS :: (Ord a, Ord b) => a -> Set b -> Map a (Set b) -> Map a (Set b)
+insertAppendSetS x ys = M.alter f x
+  where f Nothing   = Just ys
+        f (Just ys') = Just (S.union ys ys')
 
 flipMap :: (Ord a, Ord b) => Map a b -> Map b [a]
 flipMap = M.foldlWithKey f M.empty

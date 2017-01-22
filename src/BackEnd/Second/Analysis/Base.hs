@@ -72,19 +72,29 @@ useSiteMapB (ABlock _ stmts) = M.fromList $ groupSort $ concat
 -- Inst --
 ----------
 
+transposePhi :: [(Label,[(Id,PhiVal)])] -> [(Id,[(Label,PhiVal)])]
+transposePhi phi = M.toList $ foldl' f M.empty phi
+  where
+    f acc (l,xvs) = foldl' (g l) acc xvs
+    g l acc' (x,p) = insertAppend x (l,p) acc'
+
 defInst :: Inst -> (Set Id, Set Id)
-defInst (Do (APhiV ps)) =
+defInst = \case
+  Do (APhiV ps) ->
     (S.fromList [ x | (x,v) <- concatMap snd ps, not (isFloat v)]
     ,S.fromList [ x | (x,v) <- concatMap snd ps, isFloat v])
+  Do (APhiS xys) ->
+    (S.fromList [ x | (x,v) <- xys, not (isFloat v)]
+    ,S.fromList [ x | (x,v) <- xys, isFloat v])
+  Do{} -> (S.empty, S.empty)
+  x := i
+    | retFloat i -> (S.empty, S.singleton x)
+    | otherwise  -> (S.singleton x, S.empty)
   where
     isFloat PVFloat{}          = True
     isFloat (PVVar _ TFloat _) = True
     isFloat _                  = False
-defInst Do{} = (S.empty, S.empty)
-defInst (x:=i) | float i   = (S.empty, S.singleton x)
-               | otherwise = (S.singleton x, S.empty)
-  where
-    float = \case-- {{{
+    retFloat = \case-- {{{
       ASetF {} -> True
       AFMov {} -> True
       AFNeg {} -> True
@@ -167,11 +177,12 @@ useInst = \case
       ACmpBr  _ x y' _ _     -> (x : h y',[])
       AFCmpBr _ x y  _ _     -> ([],[x,y])
 
-      APhi lvs -> ([ y | (_, PVVar y t _) <- lvs, t/=TFloat ]
-                  ,[ y | (_, PVVar y t _) <- lvs, t==TFloat ])
-      APhiV ps -> ([ y | (_, PVVar y t _) <- concatMap snd ps, t/=TFloat ]
-                  ,[ y | (_, PVVar y t _) <- concatMap snd ps, t==TFloat ])
-
+      APhi lvs  -> ([ y | PVVar y t _ <- map snd lvs, t/=TFloat ]
+                   ,[ y | PVVar y t _ <- map snd lvs, t==TFloat ])
+      APhiS xvs -> ([ y | PVVar y t _ <- map snd xvs, t/=TFloat ]
+                   ,[ y | PVVar y t _ <- map snd xvs, t==TFloat ])
+      APhiV ps  -> ([ y | PVVar y t _ <- map snd $ concatMap snd ps, t/=TFloat ]
+                   ,[ y | PVVar y t _ <- map snd $ concatMap snd ps, t==TFloat ])
       -- TODO
       ASave x     -> ([x],[])
       AFSave x    -> ([],[x])
