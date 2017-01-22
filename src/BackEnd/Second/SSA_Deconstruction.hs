@@ -85,8 +85,8 @@ deconstructBlock b = case snd (firstStmt b) of
 -- TODO 抽象化
 deconstructBlockSub :: Label -> (Label,[(Id,PhiVal)]) -> CamlSSA ()
 deconstructBlockSub l (lj,xvs) = do-- {{{
-  colMaps <- use colorMaps_
-  dePhiStmts <- lift $ deconstruct colMaps xvs
+  colMaps' <- use colorMaps_
+  dePhiStmts <- lift $ deconstruct colMaps' xvs
   bj@(ABlock _ stmts_j) <- block lj
   case lastStmt bj of
     s@(_, Do (ABr _))  -> do

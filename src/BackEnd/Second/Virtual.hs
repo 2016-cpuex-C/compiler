@@ -130,25 +130,25 @@ saveAndRestore (AProg fs) = AProg <$> mapM (insertSave >=> insertRestore) fs
 
 insertSave :: AFunDef -> Caml AFunDef
 insertSave fun@(AFunDef _ _ _ blocks _) = do
-  liveout <- analyzeLifetime fun
-  blocks' <- mapM (insertSaveB liveout) blocks
+  liveOut' <- analyzeLifetime fun
+  blocks' <- mapM (insertSaveB liveOut') blocks
   return fun { aBody = blocks' }
 
 insertSaveB :: Map InstId (Set Id, Set Id) -> ABlock -> Caml ABlock
-insertSaveB liveout b@(ABlock _ insts) = do
-  insts' <- concatMapM (insertSaveI liveout) insts
+insertSaveB liveOut' b@(ABlock _ insts) = do
+  insts' <- concatMapM (insertSaveS liveOut') insts
   return b { aStatements = insts' }
 
-insertSaveI :: Map InstId (Set Id, Set Id)
-            -> (InstId, Inst) -> Caml [(InstId, Inst)]
-insertSaveI liveout inst@(n,i) = case i of
-  Do ACall{}         -> insertSaveISub inst Nothing
-  x := ACall t _ _ _ -> insertSaveISub inst (Just (x,t))
+insertSaveS :: Map InstId (Set Id, Set Id)
+            -> Statement -> Caml [Statement]
+insertSaveS liveOut' inst@(n,i) = case i of
+  Do ACall{}         -> insertSaveSSub inst Nothing
+  x := ACall t _ _ _ -> insertSaveSSub inst (Just (x,t))
   _ -> return [inst]
 
   where
-    (live,liveF)  = lookupMapNote ("insertSaveI: live: "++show inst) n liveout
-    insertSaveISub inst' mx = do
+    (live,liveF)  = lookupMapNote ("insertSaveI: live: "++show inst) n liveOut'
+    insertSaveSSub inst' mx = do
       ss' <- mapM assignInstId saves
       return $ ss' ++ [inst']
       where
@@ -209,11 +209,11 @@ insertRestoreStmt :: Statement -> CamlRS [Statement]
 insertRestoreStmt s@(id',inst) =
   case inst of
     Do (ASave x) -> uses stackSet_ (S.member x) >>= \case
-      True  -> return []
+      True  -> return [] -- already saved
       False -> stackSet_ %= S.insert x >> return [s]
 
     Do (AFSave x) -> uses stackSet_ (S.member x) >>= \case
-      True  -> return []
+      True  -> return [] -- already saved
       False -> stackSet_ %= S.insert x >> return [s]
 
     Do (APhiV lvs) -> do

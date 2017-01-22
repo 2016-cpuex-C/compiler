@@ -8,6 +8,7 @@ module BackEnd.Second.RegAlloc.Coloring (
     Color(..)
   , colorFun
   , colorToInt
+  , maxColorN
   ) where
 
 import Prelude hiding (log)
@@ -64,8 +65,9 @@ colorFun f@(AFunDef l xs ys _ _) = do
             , _free      = map R [length xs..length allRegs-1]
             , _freeF     = map F [length ys..length allFRegs-1]
             }
-    let (x,y) = bimap (max (length xs)) (max (length ys)) $ chromaticN liveout
-        (z,w) = (maxColorN (s^.colorMap), maxColorN (s^.colorMapF))
+    let colMap = M.union (s^.colorMap) (s^.colorMapF)
+        (x,y) = bimap (max (length xs)) (max (length ys)) $ chromaticN liveout
+        (z,w) = maxColorN colMap
     when (x/=z || y/=w ) $ do
       ($logError) "RegAlloc.Coloring"
       ($logErrorSH) l
@@ -77,12 +79,13 @@ colorFun f@(AFunDef l xs ys _ _) = do
       error "RegAlloc: Congratulations! You've found a new bug!"
     --($logDebugSH) l
     ($logDebug)   $ "chromatic number: " <> show' (l,x,y)
-    return (M.union (s^.colorMap) (s^.colorMapF))
+    return colMap
  `catchError` \(Failure e) ->
     error $ e ++ "@" ++ show l
 
-maxColorN :: Map Id Color -> Int
-maxColorN m = maximum' [ colorToInt n | (_,n) <- M.toList m ]
+maxColorN :: Map Id Color -> (Int,Int)
+maxColorN m = (maximum' [ n | (_,R n) <- M.toList m ]
+              ,maximum' [ n | (_,F n) <- M.toList m ])
   where maximum' [] = 0
         maximum' n  = maximum n + 1
 
