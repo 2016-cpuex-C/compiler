@@ -136,7 +136,7 @@ do' = \case
     CInt~0 -> setLabel lf
     Top    -> setLabel lt >> setLabel lf
     _      -> return ()
-  APhiV phis -> mapM_ processPhi (transpose phis)
+  APhiV phis -> mapM_ processPhi (transposePhi phis)
   ASwitch x l ils -> getValue x >>= \case
     CInt i -> case lookup i ils of
       Just l' -> setLabel l'
@@ -147,12 +147,7 @@ do' = \case
   AFCmpBr{} -> error "ConstFold: Not Implemented"
   _ -> return ()
 
-  where
-    transpose :: [(Label,[(Id,PhiVal)])] -> [(Id,[(Label,PhiVal)])]
-    transpose phis = M.toList $ foldl' f M.empty phis
-      where
-        f acc (l,xvs) = foldl' (g l) acc xvs
-        g l acc' (x,p) = insertAppend x (l,p) acc'
+  -- transposePhi :: [(Label,[(Id,PhiVal)])] -> [(Id,[(Label,PhiVal)])]
 
 -- rule 4,5,7
 bind' :: Id -> AExpr -> CamlCF ()

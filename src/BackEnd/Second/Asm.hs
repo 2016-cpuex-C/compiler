@@ -109,12 +109,12 @@ data AExpr -- 多相的な命令には型を加える
 
   -- terminator
   | ATailCall Type Label [Id] [Id]
-  | ARet    Type (Maybe IdOrImm)
-  | ABr     Label
-  | ACBr    Id Label Label
-  | ASwitch Id Label [(Integer,Label)]
-  | ACmpBr  Predicate Id IdOrImm Label Label
-  | AFCmpBr Predicate Id Id      Label Label
+  | ARet      Type (Maybe IdOrImm)
+  | ABr       Label
+  | ACBr      Id Label Label
+  | ASwitch   Id Label [(Integer,Label)]
+  | ACmpBr    Predicate Id IdOrImm Label Label
+  | AFCmpBr   Predicate Id Id      Label Label
   | AExit
   deriving (Show,Eq,Ord)
 

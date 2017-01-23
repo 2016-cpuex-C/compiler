@@ -22,11 +22,11 @@ elimFun f = f { aBody = map g (aBody f) }
 elimBlock :: Map Id [Statement] -> ABlock -> ABlock
 elimBlock dic b = b { aStatements = catMaybes $ map g (aStatements b) }
   where
-    notUsed x = null $ M.findWithDefault [] x dic
+    unUsed x = null $ M.findWithDefault [] x dic
     g s@(n,inst) = case inst of
       x := e@ACall{}
-        | notUsed x -> Just (n,Do e)
+        | unUsed x -> Just (n,Do e)
       x := _
-        | notUsed x -> Nothing
+        | unUsed x -> Nothing
       _ -> Just s
 

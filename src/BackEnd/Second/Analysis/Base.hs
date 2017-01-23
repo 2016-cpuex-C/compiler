@@ -1,4 +1,5 @@
-{-# LANGUAGE LambdaCase #-} {-# LANGUAGE MultiWayIf #-}
+{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE TupleSections #-}
 
 module BackEnd.Second.Analysis.Base where

@@ -8,13 +8,13 @@
 
 module BackEnd.Second.RegAlloc (
     regAlloc
-  , module Export
+  , Color(..)
   ) where
 
 import Base
 import BackEnd.Second.Asm
-import BackEnd.Second.RegAlloc.Coloring   as Export
-import BackEnd.Second.RegAlloc.Coalescing as Export
+import BackEnd.Second.RegAlloc.Coloring
+import BackEnd.Second.RegAlloc.Coalescing --as Export
 
 regAlloc :: AFunDef -> Caml (Map Id Color)
 regAlloc f = coalesce f =<< colorFun f

@@ -18,8 +18,8 @@ import Data.List (isPrefixOf)
 
 inline :: KExpr -> Caml KExpr
 inline e = do
-  {-limit <- use threshold-}
-  inlineSub 2000 e
+  limit <- use threshold
+  inlineSub limit e
 
 size :: KExpr -> Int
 size = \case
@@ -31,7 +31,7 @@ size = \case
   _ -> 1
 
 inlineSub :: Int -> KExpr -> Caml KExpr
-inlineSub _ = g M.empty
+inlineSub _limit = g M.empty
   where
     g :: Map Id ([(Id,Type)], KExpr) -> KExpr -> Caml KExpr
     g env e = case e of
@@ -40,9 +40,9 @@ inlineSub _ = g M.empty
 
       KLet xt e1 e2 -> KLet xt <$> g env e1 <*> g env e2
       KLetRec f@(KFunDef (x,t) yts e1) e2 -> do
-        ($logDebug) $ "sizeof " <> pack x <> ": " <> show' (size e1, isRecursive f)
-        --let inlining = size e1 < limit && (not (isRecursive f))
-        let inlining = not (isRecursive f)
+        --($logDebug) $ "sizeof " <> pack x <> ": " <> show' (size e1, isRecursive f)
+        let inlining = size e1 < _limit && (not (isRecursive f))
+        {-let inlining = not (isRecursive f)-}
             env' = if not inlining then env else M.insert x (yts,e1) env
         e1' <- g env' e1
         e2' <- g env' e2

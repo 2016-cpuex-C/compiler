@@ -17,6 +17,7 @@ import           Control.Lens.Operators
 import           Control.Monad.Trans.State
 import           Data.List.Extra (anySame)
 import           Control.Arrow (first, second)
+import           Control.Monad.Extra (concatMapM)
 
 
 -------------------------------------------------------------------------------
@@ -25,7 +26,7 @@ import           Control.Arrow (first, second)
 
 data SSAD = SSAD {
     _blockMap_  :: Map Label ABlock
-  , _colorMaps_ :: Map Id Color
+  , _colorMap_ :: Map Id Color
   }
 makeLenses ''SSAD
 
@@ -37,24 +38,36 @@ instance Eq Dest where
   Reg n == Reg m = n==m
   _ == _ = False
 
+addBlock :: Label -> [Statement] -> CamlSSA ()
+addBlock l contents = blockMap_ %= M.insert l (ABlock l contents)
+
+modifyBlock :: Label -> ([Statement] -> [Statement]) -> CamlSSA ()
+modifyBlock l f = addBlock l . f =<< aStatements <$> block l
+
+block :: Label -> CamlSSA ABlock
+block = uses blockMap_ . lookupMapNote "SSA_Deconstruction: block: no block"
+
 -------------------------------------------------------------------------------
 -- Main
 -------------------------------------------------------------------------------
 
 ssaDeconstruct :: Map Id Color -> AFunDef -> Caml AFunDef
 ssaDeconstruct colMap f@(AFunDef _ _ _ blocks _) =
-  blockMapToFun . view blockMap_ <$> execStateT (ssaDeconstructSub blocks) SSAD {
+  blockMapToFun . view blockMap_ <$> execStateT (ssaDeconstructSub labels) SSAD {
       _blockMap_  = blockMap f
-    , _colorMaps_ = colMap
+    , _colorMap_ = colMap
     }
   where
+    labels = map aBlockName blocks
     blockMapToFun m = f { aBody = map snd $ M.toList m }
 
-ssaDeconstructSub :: [ABlock] -> CamlSSA ()
-ssaDeconstructSub = mapM_ deconstructBlock
+ssaDeconstructSub :: [Label] -> CamlSSA ()
+ssaDeconstructSub ls = do
+  mapM_ deconstructAPhiV ls
+  mapM_ deconstructAPhiS ls
 
 -------------------------------------------------------------------------------
---
+-- APhiV
 -------------------------------------------------------------------------------
 
 --ブロックlの先頭のAPhiV [(Label,[(Id,PhiVal)])]
@@ -72,20 +85,18 @@ ssaDeconstructSub = mapM_ deconstructBlock
 --            br l
 --    + 的な
 
-deconstructBlock :: ABlock -> CamlSSA ()
-deconstructBlock b = case snd (firstStmt b) of
+deconstructAPhiV :: Label -> CamlSSA ()
+deconstructAPhiV l = snd . firstStmt <$> block l >>= \case
   Do (APhiV phis) -> do
-    let l = aBlockName b
-    mapM_ (deconstructBlockSub l) phis
-    ABlock _ stmts <- block l -- 更新されている
-    addBlock l (tail stmts)
+    modifyBlock l tail -- APhiVを削除
+    mapM_ (deconstructAPhiVSub l) phis
   _ -> return ()
 
 -- lj -> l の合流
 -- TODO 抽象化
-deconstructBlockSub :: Label -> (Label,[(Id,PhiVal)]) -> CamlSSA ()
-deconstructBlockSub l (lj,xvs) = do-- {{{
-  colMaps' <- use colorMaps_
+deconstructAPhiVSub :: Label -> (Label,[(Id,PhiVal)]) -> CamlSSA ()
+deconstructAPhiVSub l (lj,xvs) = do-- {{{
+  colMaps' <- use colorMap_
   dePhiStmts <- lift $ deconstruct colMaps' xvs
   bj@(ABlock _ stmts_j) <- block lj
   case lastStmt bj of
@@ -143,14 +154,21 @@ deconstructBlockSub l (lj,xvs) = do-- {{{
     s -> error $ "SSA_Deconstruction: Impossible: " ++ show s
 -- }}}
 
-addBlock :: Label -> [Statement] -> CamlSSA ()
-addBlock l contents = blockMap_ %= M.insert l (ABlock l contents)
+-------------------------------------------------------------------------------
+-- APhiS
+-------------------------------------------------------------------------------
 
-block :: Label -> CamlSSA ABlock
-block = uses blockMap_ . lookupMapNote "SSA_Deconstruction: block: Impossible"
+deconstructAPhiS :: Label -> CamlSSA ()
+deconstructAPhiS l = do
+  stmts <- aStatements <$> block l
+  colMap' <- use colorMap_
+  let f s@(_,i) = case i of
+        Do (APhiS xvs) -> deconstruct colMap' xvs
+        _ -> return [s]
+  addBlock l =<< lift (concatMapM f stmts)
 
 -------------------------------------------------------------------------------
---
+-- Main?
 -------------------------------------------------------------------------------
 
 deconstruct :: Map Id Color

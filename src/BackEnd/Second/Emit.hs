@@ -128,8 +128,8 @@ emitFun h f@(AFunDef l _ _ _ _) = do
   colMap <- regAlloc f
   ($logDebugSH) $ f
   f' <- ssaDeconstruct colMap f
-  ($logDebugSH) $ colMap
-  ($logDebugSH) $ f'
+  --($logDebugSH) $ colMap
+  --($logDebugSH) $ f'
   liftIO $ hPutStrLn h $ unLabel l ++ ":"
   liftIO $ hPutStrLn h $ "\tsw\t$ra, 0($sp)"
   stackMap <- stackInMap f'

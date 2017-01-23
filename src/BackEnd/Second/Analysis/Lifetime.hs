@@ -19,7 +19,6 @@ import qualified Data.Map as M
 import qualified Data.Set as S
 import           Control.Monad.Trans.State
 import           Control.Lens.Operators
-import Debug.Trace (trace, traceM)
 
 -------------------------------------------------------------------------------
 -- Types
@@ -39,19 +38,12 @@ type CamlLA = StateT LA Caml
 -------------------------------------------------------------------------------
 
 interferenceGraph :: AFunDef -> Caml (Map Id (Set Id))
---interferenceGraph f = toG <$> analyzeLifetime f
-interferenceGraph f = do
-  liveOut'' <- analyzeLifetime f
-  ($logDebug) $ "liveoutelem: " <> show' (M.elems liveOut'')
-  traceM $ show $ (aFunName f)
-  return $ toG liveOut''
+interferenceGraph f = toG <$> analyzeLifetime f
   where
     toG :: Map InstId (Set Id, Set Id) -> Map Id (Set Id)
     toG liveOut' = foldl' g M.empty (M.elems liveOut')
     g :: Map Id (Set Id) -> (Set Id, Set Id) -> Map Id (Set Id)
-    g m (s,s_f)
-      | trace (show(s,xs,s_f,xs_f)) False = undefined
-      | otherwise = foldl' h m (xs++xs_f)
+    g m (s,s_f) = foldl' h m (xs++xs_f)
       where
         h :: Map Id (Set Id) -> (Id, Set Id) -> Map Id (Set Id)
         h m' (x',s') = insertAppendSetS x' s' m'
