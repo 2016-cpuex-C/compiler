@@ -14,7 +14,7 @@ import Base
 import BackEnd.Second.Asm
 import BackEnd.Second.Analysis.Base
 
-import           Prelude hiding (log,succ)
+import           Prelude
 import qualified Data.Map as M
 import qualified Data.Set as S
 import           Control.Monad.Trans.State

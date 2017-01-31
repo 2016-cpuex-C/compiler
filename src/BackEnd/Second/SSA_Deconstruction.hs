@@ -9,16 +9,16 @@ import Prelude hiding (log)
 
 import Base
 import BackEnd.Second.Asm
-import BackEnd.Second.RegAlloc.Coloring (Color)
+import BackEnd.Second.RegAlloc.Coloring (Color(..))
 
 import qualified Data.Map as M
-import           Data.List (delete, partition)
+import           Data.List ((\\), delete, partition)
+import           Data.List.Extra (anySame)
 import           Control.Lens.Operators
 import           Control.Monad.Trans.State
-import           Data.List.Extra (anySame)
-import           Control.Arrow (first, second)
+import           Control.Arrow (second)
 import           Control.Monad.Extra (concatMapM)
-
+--import Debug.Trace (trace, traceM)
 
 -------------------------------------------------------------------------------
 -- Types
@@ -180,17 +180,25 @@ deconstruct colMap xvs = do
       varF  = [ ((x,False), (y,b)) | (x, PVVar y t b) <- xvs, t == TFloat ]
               -- memory上にあればTrue, registerにあればFalse
 
-      color  (x,False) = Reg $ lookupMapNote "color" x colMap
-      color  _         = Mem
-      colorF (x,False) = Reg $ lookupMapNote "colorF" x colMap
-      colorF _         = Mem
+      locate  (x,False) = Reg $ lookupMapNote "color" x colMap
+      locate  _         = Mem
 
       insts = concat [
-          map actToInst  $ resolveBy color  var
-        , map actToInstF $ resolveBy colorF varF
+          map actToInst  $ resolveBy locate var
+        , map actToInstF $ resolveBy locate varF
         , map (\(x,i) -> x := ASet  i) int
         , map (\(x,l) -> x := ASetF l) float
         ]
+
+  --traceM $ unlines [
+  --      "===="
+  --    , show var
+  --    , show $ map (both color) var
+  --    , show hoge
+  --    , show varF
+  --    , show $ map (both color) varF
+  --    , show hogeF
+  --    ]
 
   mapM assignInstId insts
 
@@ -198,28 +206,33 @@ deconstruct colMap xvs = do
 -- are
 -------------------------------------------------------------------------------
 
--- TODO PhiLifting (map (classify.snd) vars に重複があるとダメなので必要)
---      本来(Mem,Mem)はsafeCopyだがpermになってしまっている
---      (今のところは左側にMemが来ることはないので大丈夫)
+-- verifierを書こうな
+
+-- TODO + PhiLifting (map (classify.snd) perm に重複があるとダメなので必要)
+--      + 本来(Mem,Mem)はsafeCopyだがpermになってしまっている
+--        (今のところは左側にMemが来ることはないので大丈夫)
 resolveBy :: (Show a, Show b, Eq a, Eq b) => (a -> b)-> [(a,a)] -> [Action a]
 resolveBy classify vars
-  | anySame (rights vars) = errorShow "resolveBy: invalid argument" (vars, map (both classify) vars)
-  | otherwise = concat [nop, mov, rest]
+  | anySame (lefts  vars) = errorShow "resolveBy: regAllocのバグ\n" (vars, map (both classify) vars)
+  | anySame (rights perm) = errorShow "resolveBy: invalid argument" (vars, map (both classify) vars)
+  | otherwise = ans
   where
-    nop  = map Nop identical
+    ans  = concat [nop, mov, rest]
+    nop  = [] --map Nop identical
     mov  = map Move safeCopy
     rest = resolvePerm perm
 
     rights = map (classify.snd)
+    lefts  = map (classify.fst)
 
     (identical, tmp) =
       let f (x,y) = classify x == classify y
       in  partition f vars
-    (safeCopy, perm) =
+    (safeCopy, perm) = -- TODO もっと簡潔にできないものか
       let f (safe,yet) (x,y)
             | classify x `elem` rights yet = (safe, yet)
             | otherwise                    = ((x,y):safe, delete (x,y) yet)
-      in  first reverse $ foldl' f ([],vars) tmp
+      in  bimap reverse (\\identical) $ foldl' f ([],tmp) tmp
 
     resolvePerm [] = []
     resolvePerm ((x,y):xys) =
@@ -246,4 +259,59 @@ actToInstF (Nop  (_,_))              = Do ANop
 actToInstF (Move ((x,_), (y,True)))  = x := AFRestore y
 actToInstF (Move ((x,_), (y,False))) = x := AFMov y
 actToInstF (Swap ((x,_), (y,_)))     = Do (AFSwap x y)
+
+-------------------------------------------------------------------------------
+-- Main
+-------------------------------------------------------------------------------
+
+
+--resolveBy' :: (Show a, Show b, Eq a, Eq b, Ord a) => (a -> b)-> [(a,a)] -> [Action a]
+--resolveBy' :: (Show a, Eq a, Ord a) => (a -> Dest)-> [(a,a)] -> [Action a]
+resolveBy' :: ((Id,Bool) -> Dest)-> [((Id,Bool),(Id,Bool))] -> [Action (Id,Bool)]
+resolveBy' f vars
+  | null err  = result
+  | otherwise = errorShow "resolveBy: bug: " (vars, map (both f) vars,result,m,err)
+  where
+    result = resolveBy f vars
+    m = verify f vars result
+    (_ok,err) = partition (\(x,y) -> lookupMapNote "" (f x) m === f y ) vars
+
+    --err' = map (bimap (\x->lookupMapNote "" x m) f) err
+
+
+    (===) v1 v2 = case (v1,v2) of
+      (Mem,Mem) -> True
+      _ -> v1 == v2
+
+-- ぜんぜんだめ
+--verify :: (Show a, Eq a, Ord a) => (a -> Dest)-> [(a,a)] -> [Action a] -> Map a Dest
+verify :: ((Id,Bool) -> Dest)-> [((Id,Bool),(Id,Bool))] -> [Action (Id,Bool)] -> Map Dest Dest
+verify f vars result =  execState (mapM_ exec result) s0
+  where
+
+    s0 = foldl' g M.empty $ uncurry (++) $ unzip vars
+      where g m x = M.insert (f x) (f x) m
+
+    exec (Move (x,y)) = do
+      vy <- gets $ lookupMapNote "" (f y)
+      modify $ M.insert (f x) vy
+    exec (Swap (x,y)) = do
+      vx <- gets $ lookupMapNote "" (f x)
+      vy <- gets $ lookupMapNote "" (f y)
+      modify $ M.insert (f x) vy
+      modify $ M.insert (f y) vx
+      --traceM $ show (x,y,vx,vy)
+    exec Nop{} = return ()
+
+-- {{{
+--main :: IO ()
+--main = do undefined
+--  let p = [(Reg (F 2),Reg (F 4))
+--          ,(Reg (F 4),Reg (F 0))
+--          ,(Reg (F 0),Reg (F 5))
+--          ,(Reg (F 5),Reg (F 0))
+--          ]
+--      result = resolveBy id p
+--  print $ verify id p result
+-- }}}
 
