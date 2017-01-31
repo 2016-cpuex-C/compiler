@@ -69,6 +69,7 @@ module Base (
   , inOrderSortDFS
   , lookupMapLensM
   , lookupMapLensNoteM
+  , findWithDefaultLensM
   , toList2
   , fromList2
   , union2
@@ -99,6 +100,7 @@ import           Control.Lens.Operators
 import qualified Data.Map                         as M
 import qualified Data.Set                         as S
 import           Data.Tree
+import           Data.Maybe                       (fromMaybe)
 import qualified Data.ByteString.Char8            as S8 (hPutStr)
 import qualified Control.Monad.Trans              as T (MonadTrans,lift)
 import           Control.Monad.Trans.Except
@@ -156,7 +158,9 @@ makeLenses ''S
 
 type Caml = LoggingT (StateT S (ExceptT Error IO))
 data Error = Failure String
-           deriving (Show,Eq,Ord)
+           deriving (Eq,Ord)
+instance Show Error where
+  show (Failure e) = "Failure " ++ e
 
 data Predicate = EQ | NE | LE | GE | LT | GT
                deriving (Show,Eq,Ord,Enum)
@@ -383,6 +387,9 @@ lookupMapLensM x m = uses m (M.lookup x)
 lookupMapLensNoteM :: (Ord k, MonadState s m) => String -> k -> Lens' s (Map k a) -> m a
 lookupMapLensNoteM s x m = fromJustNote msg <$> lookupMapLensM x m
   where msg = "lookupMapLensNoteM: " ++ s
+
+findWithDefaultLensM :: (Ord k, MonadState s m) => a -> k -> Lens' s (Map k a) -> m a
+findWithDefaultLensM d x m = fromMaybe d <$> lookupMapLensM x m
 
 ---------------
 -- (Set,Set) --

@@ -1,8 +1,10 @@
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE OverloadedStrings #-}
 -- remove or simplify virtual instructions
+-- じっけんちゅう
 
 module BackEnd.Second.Virtual where
 
@@ -11,6 +13,8 @@ import Prelude
 import Base
 import BackEnd.Second.Asm
 import BackEnd.Second.Analysis
+import BackEnd.Second.Optimise.Elim
+import BackEnd.Second.RegAlloc.Dominance
 
 import qualified Data.Map as M
 import qualified Data.Set as S
@@ -20,6 +24,7 @@ import           Control.Lens.Operators
 import           Control.Monad.Trans.State
 import           Control.Monad.Extra (concatMapM)
 import           Control.Arrow (second)
+import           Data.Maybe (catMaybes)
 
 -------------------------------------------------------------------------------
 -- Types
@@ -27,14 +32,18 @@ import           Control.Arrow (second)
 
 data RS
   = RS {
-    _blockMap_   :: Map Label ABlock
-  , _liveOutB_   :: Map Label (Set Id, Set Id)
-  , _predMap_    :: Map Label [Label]
-  , _stackInMap_ :: Map Label (Set Id)
-  , _regInMap_   :: Map Label (Set Id)
-  , _regOutMap_  :: Map Label (Set Id)
-  , _regSet_     :: Set Id
-  , _stackSet_   :: Set Id
+    _blockMap_    :: Map Label ABlock
+  , _liveOutB_    :: Map Label (Set Id, Set Id)
+  , _predMap_     :: Map Label [Label]
+  , _stackInMap_  :: Map Label (Set Id)
+  , _regInMap_    :: Map Label (Set Id)
+  , _regOutMap_   :: Map Label (Set Id)
+  , _regSet_      :: Set Id
+  , _stackSet_    :: Set Id
+  , _renameMapIn_ :: Map (Label,Id) Id
+  , _renameMap_   :: Map (Label,Id) Id
+  , _renameCnt_   :: Map Id Int
+  , _currentBlock_:: Label
   }
 makeLenses ''RS
 type CamlRS = StateT RS Caml
@@ -50,12 +59,11 @@ virtual (AProg fundefs) = do
 
 virtualFunDef :: AFunDef -> Caml AFunDef
 virtualFunDef f@(AFunDef _ _ _ blocks _) = do
-  blocks' <- forM blocks $
-                mergePhis >=> calcPtr
+  blocks' <- mapM (mergePhis >=> calcPtr) blocks
   return f{ aBody=blocks' }
 
 -------------------------------------------------------------------------------
--- Vectorise Phi Functions
+-- Vectorise Phi Functions-- {{{
 -------------------------------------------------------------------------------
 
 -- phiのベクトル化 生存解析のために必要
@@ -77,9 +85,10 @@ mergePhis block@(ABlock _ stmts) =
         _ -- end
           | M.null acc -> is'
           | otherwise  -> (id'-1, Do (APhiV (M.toList acc))) : is'
+-- }}}
 
 -------------------------------------------------------------------------------
--- Calculate Pointer Address
+-- Calculate Pointer Address-- {{{
 -------------------------------------------------------------------------------
 
 -- Ptr, PtrGをAddとかにつぶす
@@ -116,13 +125,14 @@ calcPtr block@(ABlock _ insts) = do
             return [(n, ptr := ALd y (C addr)), (m, x := AAdd ptr (C j))]
           _ -> error $ "BackEnd.Second.Virtual: Not Implemented: " ++ show i
         _ -> return [i]
+-- }}}
 
 -------------------------------------------------------------------------------
 -- Save/Restore
 -------------------------------------------------------------------------------
 
 saveAndRestore :: AProg -> Caml AProg
-saveAndRestore (AProg fs) = AProg <$> mapM (insertSave >=> insertRestore) fs
+saveAndRestore (AProg fs) = AProg <$> mapM (insertSave >=> insertRestore >=> elimFun) fs
 
 ----------
 -- Save --
@@ -152,7 +162,9 @@ insertSaveS liveOut' inst@(n,i) = case i of
       ss' <- mapM assignInstId saves
       return $ ss' ++ [inst']
       where
-        saves   = map (Do . ASave) xs ++ map (Do .AFSave) ys
+        mkSave  x = Do (ASave  x x)
+        mkSaveF x = Do (AFSave x x)
+        saves   = map mkSave xs ++ map mkSaveF ys
         (xs,ys) = (S.toList live \\ m ,S.toList liveF \\ mF)
         (m,mF)  = case mx of
                     Just (x,TFloat) -> ([],[x])
@@ -170,17 +182,27 @@ insertRestore fun = do
   regOutMap'  <- regOutMap fun
   liveOutB'   <- analyzeLifetimeB fun
   blocks <- M.elems . view blockMap_ <$>
-    execStateT (mapM_ insertRestoreBlock (aBody fun)) RS {
-      _blockMap_    = blockMap fun
-    , _liveOutB_    = liveOutB'
-    , _predMap_     = predBlockMap fun
-    , _stackInMap_  = stackInMap'
-    , _regInMap_    = regInMap'
-    , _regOutMap_   = regOutMap'
-    , _regSet_      = S.empty
-    , _stackSet_    = S.empty
+    execStateT hoge RS {
+      _blockMap_     = blockMap fun
+    , _liveOutB_     = liveOutB'
+    , _predMap_      = predBlockMap fun
+    , _stackInMap_   = stackInMap'
+    , _regInMap_     = regInMap'
+    , _regOutMap_    = regOutMap'
+    , _regSet_       = S.empty
+    , _stackSet_     = S.empty
+    , _renameMapIn_  = M.empty
+    , _renameMap_    = M.empty
+    , _renameCnt_    = M.empty
+    , _currentBlock_ = undefined
     }
   return fun { aBody = blocks }
+
+  where
+    hoge = do
+      mapM_ insertRestoreBlock (dominatorTree fun)
+      blockMap' <- use blockMap_
+      mapM_ renamePhi (M.elems blockMap')
 
 -- 手続き的だなあ
 insertRestoreBlock :: ABlock -> CamlRS ()
@@ -188,6 +210,8 @@ insertRestoreBlock (ABlock l stmts) = do
   let msg = "insertRestoreBlock: "
 
   -- initialize
+  currentBlock_ .= l
+  setRenameMapIn l
   stackSet_ <~ lookupMapLensNoteM msg l stackInMap_
   regSet_   <~ lookupMapLensNoteM msg l regInMap_
 
@@ -195,10 +219,10 @@ insertRestoreBlock (ABlock l stmts) = do
   Just (stmts',term) <- unsnoc <$> concatMapM insertRestoreStmt stmts
 
   -- restore
-  regOut  <- lookupMapLensNoteM msg l regOutMap_
+  regOut' <- lookupMapLensNoteM msg l regOutMap_
   regSet' <- use regSet_
   (liveOut',liveOutF') <- lookupMapLensNoteM msg l liveOutB_
-  let toBeRestored = regOut S.\\ regSet'
+  let toBeRestored = regOut' S.\\ regSet'
   restores  <- mapM restore  $ S.toList $ liveOut'  `S.intersection` toBeRestored
   restoreFs <- mapM restoreF $ S.toList $ liveOutF' `S.intersection` toBeRestored
 
@@ -208,13 +232,13 @@ insertRestoreBlock (ABlock l stmts) = do
 insertRestoreStmt :: Statement -> CamlRS [Statement]
 insertRestoreStmt s@(id',inst) =
   case inst of
-    Do (ASave x) -> uses stackSet_ (S.member x) >>= \case
+    Do (ASave _ x) -> uses stackSet_ (S.member x) >>= \case
       True  -> return [] -- already saved
-      False -> stackSet_ %= S.insert x >> return [s]
+      False -> stackSet_ %= S.insert x >> renameStmt s <&> (:[])
 
-    Do (AFSave x) -> uses stackSet_ (S.member x) >>= \case
+    Do (AFSave _ x) -> uses stackSet_ (S.member x) >>= \case
       True  -> return [] -- already saved
-      False -> stackSet_ %= S.insert x >> return [s]
+      False -> stackSet_ %= S.insert x >> renameStmt s <&> (:[])
 
     Do (APhiV lvs) -> do
       lvs' <- mapM hogePhiVal lvs
@@ -231,13 +255,20 @@ insertRestoreStmt s@(id',inst) =
         Do ACall{} -> regSet_ .= S.empty
         x := _     -> regSet_ %= S.insert x
         _          -> return ()
-      return $ restores ++ restoreFs ++ [s]
+      s' <- renameStmt s
+      return $ restores ++ restoreFs ++ [s']
 
 restore :: Id -> CamlRS Statement
-restore x  = regSet_ %= S.insert x >> lift (assignInstId $ Do (ARestore x))
+restore x  = do
+  regSet_ %= S.insert x
+  x' <- freshNameUpdate x
+  lift (assignInstId $ x' := ARestore x)
 
 restoreF :: Id -> CamlRS Statement
-restoreF x = regSet_ %= S.insert x >> lift (assignInstId $ Do (AFRestore x))
+restoreF x = do
+  regSet_ %= S.insert x
+  x' <- freshNameUpdate x
+  lift (assignInstId $ x' := AFRestore x)
 
 hogePhiVal :: (Label, [(Id,PhiVal)]) -> CamlRS (Label, [(Id,PhiVal)])
 hogePhiVal (l,xvs) = do
@@ -250,6 +281,159 @@ hogePhiVal (l,xvs) = do
 
 addBlock :: Label -> [Statement] -> CamlRS ()
 addBlock l contents = blockMap_ %= M.insert l (ABlock l contents)
+
+-------------------------------------------------------------------------------
+-- renaming
+-------------------------------------------------------------------------------
+
+setRenameMapIn :: Label -> CamlRS ()
+setRenameMapIn l = lookupMapLensNoteM msg l predMap_ >>= \case
+  l':ls -> do
+    regIn <- lookupMapLensNoteM msg l regInMap_
+    forM_ regIn $ \x -> do
+      x' <- if null ls
+              then findWithDefaultLensM x (l',x) renameMap_
+              else freshName x
+      renameMapIn_ %= M.insert (l,x) x'
+      renameMap_   %= M.insert (l,x) x'
+  [] -> return ()
+  where
+    msg = "renameMapIn:" ++ show l
+
+freshName :: Id -> CamlRS Id
+freshName x = do
+  n <- findWithDefaultLensM 0 x renameCnt_
+  renameCnt_ %= M.insert x (n+1)
+  return $ x++".."++show n
+
+freshNameUpdate :: Id -> CamlRS Id
+freshNameUpdate x = do
+  x' <- freshName x
+  l  <- use currentBlock_
+  renameMap_ %= M.insert (l,x) x'
+  return x'
+
+renameStmt :: Statement -> CamlRS Statement
+renameStmt (id',inst) = do
+  l <- use currentBlock_
+  renameMap' <- use renameMap_
+  let f  x = M.findWithDefault x (l,x) renameMap'
+      f' (C i) = C i
+      f' (V x) = V (f x)
+      g e = case e of-- {{{
+        AMove x     -> AMove (f x)
+        ANeg  x     -> ANeg  (f x)
+        AAdd x y'   -> AAdd  (f x) (f' y')
+        ASub x y'   -> ASub  (f x) (f' y')
+        AMul x y'   -> AMul  (f x) (f' y')
+        ADiv x y'   -> ADiv  (f x) (f' y')
+        ASll x y'   -> ASll  (f x) (f' y')
+        ASrl x y'   -> ASrl  (f x) (f' y')
+        AAnd x y'   -> AAnd  (f x) (f' y')
+        AOr  x y'   -> AOr   (f x) (f' y')
+        AXor x y'   -> AXor  (f x) (f' y')
+        ALd  x y'   -> ALd   (f x) (f' y')
+        ASt  x y z' -> ASt   (f x) (f y) (f' z')
+        ASti x i    -> ASti  (f x) i
+
+        AFMov x      -> AFMov (f x)
+        AFNeg x      -> AFNeg (f x)
+        AFAdd x y    -> AFAdd (f x) (f  y)
+        AFSub x y    -> AFSub (f x) (f  y)
+        AFMul x y    -> AFMul (f x) (f  y)
+        AFDiv x y    -> AFDiv (f x) (f  y)
+        AFLd  x y'   -> AFLd  (f x) (f' y')
+        AFSt  x y z' -> AFSt  (f x) (f y) (f' z')
+        AFSti x i    -> AFSti (f x) i
+
+        ACmp p x y' -> ACmp p (f x) (f' y')
+        AFCmp p x y -> AFCmp p (f x) (f y)
+        ASwap x y   -> ASwap (f x) (f y)
+        AFSwap x y  -> AFSwap (f x) (f y)
+
+        ACall t l' xs ys -> ACall t l' (map f xs) (map f ys)
+        ASelect t x y z  -> ASelect t (f x) (f y) (f z)
+        ASave  x_ x -> ASave  (f x_) x
+        AFSave x_ x -> AFSave (f x_) x
+        -- restoreはオッケー (そもそもここにはこないけど)
+        AStHP x y'  -> AStHP (f x) (f' y')
+        AFStHP x y' -> AFStHP (f x) (f' y')
+        AIncHP x'   -> AIncHP (f' x')
+        ATailCall t l' xs ys -> ATailCall t l' (map f xs) (map f ys)
+        ARet t (Just x') -> ARet t (Just (f' x'))
+        ACBr x lt lf -> ACBr (f x) lt lf
+        ASwitch x ld ils -> ASwitch (f x) ld ils
+        ACmpBr  p x y' lt lf -> ACmpBr  p (f x) (f' y') lt lf
+        AFCmpBr p x y  lt lf -> AFCmpBr p (f x) (f y)   lt lf
+        APrim l' t xs' ys -> APrim l' t (map f' xs') (map f ys)
+        ARestore{}  -> error $ show e
+        AFRestore{} -> error $ show e
+        _ -> e-- }}}
+  case inst of
+    x:=e -> return (id', f x := g e)
+    Do e -> return (id', Do $ g e)
+
+renamePhi :: ABlock -> CamlRS ()
+renamePhi b@(ABlock l stmts) = do
+  currentBlock_ .= l
+  new <- catchError (addPhi b) $ \err -> do
+          ($logError) "renamePhi: addPhi"
+          ($logError) $ "at block " <> show' b
+          ($logError) $ "err message: " <> show' err
+          ($logErrorSH) =<< use liveOutB_
+          throwError $ Failure "_"
+  case head stmts of
+    (id', Do (APhiV are)) -> do
+      are' <- forM are $ \(lp,xvs) -> do
+        xvs' <- forM xvs $ \(x,v) -> case v of
+          PVVar y t False -> do
+            y' <- findWithDefaultLensM y (lp,y) renameMap_
+            return (x,PVVar y' t False)
+          _ -> return (x,v)
+        return (lp,xvs')
+      let are'' = mergePhiBody are' new
+          phi = (id', Do (APhiV are''))
+      addBlock l (phi:tail stmts)
+
+    _ -> do
+      phi <- lift $ assignInstId $ Do (APhiV new)
+      unless (null new) $ addBlock l (phi:stmts)
+
+addPhi :: ABlock -> CamlRS [(Label,[(Id,PhiVal)])]
+addPhi (ABlock l _) = do
+  preds <- lookupMapLensNoteM "addPhi" l predMap_
+  if (length preds > 1) then do
+    regIn <- lookupMapLensNoteM "nnn" l regInMap_
+    forM preds $ \lp -> do
+      xvs <- forM (S.toList regIn) $ \x -> do
+          t   <- typeOf lp x
+          xl  <- lookupMapLensNoteM "mmm" (l, x) renameMapIn_
+          xlp <- findWithDefaultLensM x (lp,x) renameMap_
+          return $ Just (xl,PVVar xlp t False) -- TODO
+        `catchError` \_ ->
+          return Nothing
+          -- なんでこれでいいんだっけ (ちゃんとログ残しとけばか)
+      return (lp, catMaybes xvs)
+  else
+    return []
+
+  where
+    -- 汚い 別の形で情報を持たせたい
+    -- あと勝手にTIntにしていいのかしらという問題も
+    typeOf :: Label -> Id -> CamlRS Type
+    typeOf lp x = do
+      (s,sf) <- lookupMapLensNoteM "addPhi: typeOf" lp liveOutB_
+      if| x `S.member` s  -> return TInt
+        | x `S.member` sf -> return TFloat
+        | otherwise       -> throwError $ Failure $ "addPhi: typeOf" ++ show (x,l,lp,s,sf)
+
+mergePhiBody :: [(Label,[(Id,PhiVal)])]
+             -> [(Label,[(Id,PhiVal)])]
+             -> [(Label,[(Id,PhiVal)])]
+mergePhiBody a [] = a
+mergePhiBody a b  = map f a
+  where
+    f (l,xvs) = (l, lookupJustNote "mergePhiBody" l b++xvs)
 
 -------------------------------------------------------------------------------
 -- Primitives

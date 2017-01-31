@@ -64,7 +64,6 @@ addToQueue e@(Entry _ _ _S) = do
 popQueue :: CamlCS (Maybe Entry)
 popQueue = do
   q <- use entryQ
-  --($logDebug) $ "popQueue" <> show' q
   if null q
     then return Nothing
     else do
@@ -83,33 +82,32 @@ popQueue = do
 --mainRC :: AFunDef -> Caml (Map Id Color)
 --mainRC f = do
 --  colMap' <- colorFun f
-phiOpimise :: AFunDef -> Map Id Color -> Caml (Map Id Color)
-phiOpimise f colMap' = do
+phiOpimise :: AFunDef -> Map Id Color -> Set Id -> Caml (Map Id Color)
+phiOpimise f colMap' prePinned = do
   g <- interferenceGraph f
-  --liveOut <- analyzeLifetime f
   let ous = optimiseUnits f g
 
-  ($logDebug) $ "mainRC: " <> show' (aFunName f)
-  ($logDebugSH) f
-  ($logDebug) $ "interference graph: " <> show' g
+  --($logDebug) $ "mainRC: " <> show' (aFunName f)
+  --($logDebugSH) f
+  --($logDebug) $ "interference graph: " <> show' g
   --($logDebug) $ "liveOut: "            <> show' liveOut
-  ($logDebug) $ "coloring: "           <> show' colMap'
-  --($logDebug) $ "optimise units: "      <> show' ous
+  --($logDebug) $ "coloring: "           <> show' colMap'
+  --($logDebug) $ "optimise units: "     <> show' ous
   r <- runStateT (coalesceSub ous) CS {
           _colMap_       = colMap'
         , _colMapMod_    = M.empty
         , _interferenceG = g
         , _entryQ        = S.empty
-        , _pinned_       = S.fromList $ aArgs f ++ aFArgs f
+        , _pinned_       = S.fromList (aArgs f ++ aFArgs f) `S.union` prePinned
         , _candidate_    = S.empty
         }
 
-  ($logDebugSH) $ snd r ^. colMap_
+  --($logDebugSH) $ snd r ^. colMap_
   return $ snd r ^. colMap_
 
 coalesceSub :: [OptimiseUnit] -> CamlCS ()
 coalesceSub ous = forM_ (reverse ous) $ \ou -> do
-  ($logDebug) $ "coalesceSub: " <> show' ou
+  --($logDebug) $ "coalesceSub: " <> show' ou
   initRC ou
   testRC ou
   applyRC
@@ -117,12 +115,14 @@ coalesceSub ous = forM_ (reverse ous) $ \ou -> do
 
 initRC :: OptimiseUnit -> CamlCS ()
 initRC ou = do
+  --($logDebug) $ "initRC: start: " <> show' ou
   entryQ .= S.empty
-  mapM_ addToQueue =<< createEntries ou
+  ous <- createEntries ou
+  mapM_ addToQueue ous
 
 testRC :: OptimiseUnit -> CamlCS ()
 testRC ou = do
-  ($logDebug) $ "testRC: " <> show' ou
+  --($logDebug) $ "testRC: " <> show' ou
   candidate_ .= S.empty
   (colMapMod_ .=) =<< use colMap_
   popQueue >>= \case
@@ -137,12 +137,12 @@ testRC ou = do
           testRC ou
 
 testSub :: OptimiseUnit -> Entry -> CamlCS (Maybe Graph)
-testSub ou@(OU p as) e@(Entry c g s) = do
-  ($logDebug) $ "testSub:\n        " <> show' ou <> "\n        " <> show' e
+testSub _ou@(OU p as) _e@(Entry c g s) = do
+  --($logDebug) $ "testSub:\n        " <> show' _ou <> "\n        " <> show' _e
   go (filter (`S.member`s) (p:as))
   where
     go us' = do
-      ($logDebug) $ "testSub_go: " <> show' us'
+      --($logDebug) $ "testSub_go: " <> show' us'
       case us' of
         []     -> return Nothing
         (u:us) -> tryColor u Nothing c >>= \case
@@ -153,27 +153,27 @@ testSub ou@(OU p as) e@(Entry c g s) = do
 
 tryColor :: Id -> Maybe Id -> Color -> CamlCS TryResult
 tryColor v mu c = do
-  ($logDebug) $ "tryColor: start" <> show' (v,mu,c)
+  --($logDebug) $ "tryColor: start" <> show' (v,mu,c)
   colMapMod' <- use colMapMod_
   ifG'       <- use interferenceG
   pinned'    <- use pinned_
   candidate' <- use candidate_
   let c_v = lookupMapNote "" v colMapMod'
-  if| c == c_v                -> ($logDebug) ("  tc ok: " <> show' (v,mu,c)) >> return Success
-    | v `S.member` pinned'    -> ($logDebug) ("  tc pn: " <> show' (v,mu,c)) >> return (Pinned v)
-    | v `S.member` candidate' -> ($logDebug) ("  tc ca: " <> show' (v,mu,c)) >> return (Candidate v)
+  if| c == c_v                -> {-($logDebug) ("  tc ok: " <> show' (v,mu,c)) >> -}return Success
+    | v `S.member` pinned'    -> {-($logDebug) ("  tc pn: " <> show' (v,mu,c)) >> -}return (Pinned v)
+    | v `S.member` candidate' -> {-($logDebug) ("  tc ca: " <> show' (v,mu,c)) >> -}return (Candidate v)
     | otherwise ->
-        let p n = Just n /= mu && c == lookupMapNote "p" n colMapMod'
-        in  go c_v $ S.toList $ S.filter p $ lookupMapNote "" v ifG'
+        let p n = Just n /= mu && c == lookupMapNote "tryColor" n colMapMod'
+        in  go c_v $ S.toList $ S.filter p $ lookupMapNote "tryColor" v ifG'
 
   where
     go :: Color -> [Id] -> CamlCS TryResult
     go _ [] = do
-      ($logDebug) $ "tryColor_go: Success: " <> show' (v,c)
+      --($logDebug) $ "tryColor_go: Success: " <> show' (v,c)
       colMapMod_ %= M.insert v c
       return Success
     go c_v (n:ns) = do
-      ($logDebug) $ "tryColor_go: repeat: " <> show' (n:ns)
+      --($logDebug) $ "tryColor_go: repeat: " <> show' (n:ns)
       tryColor n (Just v) c_v >>= \case
         Success -> go c_v ns
         other   -> return other
@@ -190,8 +190,8 @@ applyRC = do
   --($logDebug) "applyRC"
   candidate' <- use candidate_
   when (S.size candidate' > 1) $ do
-    ($logDebug) $ "applying: " <> show' candidate'
-    ($logDebugSH) =<< use colMapMod_
+    --($logDebug) $ "applying: " <> show' candidate'
+    --($logDebugSH) =<< use colMapMod_
     pinned_ %= S.union candidate'
     (colMap_ .=) =<< use colMapMod_
 
@@ -208,15 +208,19 @@ createEntries ou@(OU p _) = do
     F{} -> mapM ((`createEntry` ou) . F) [0..nf-1]
 
 createEntry :: Color -> OptimiseUnit -> CamlCS Entry
-createEntry c (OU p as) = do
+createEntry c _ou@(OU p as) = do
   g <- flip inducedSubGraph (S.fromList (p:as)) <$> use interferenceG
-  return $ Entry c g (maximumStableSet g)
+  let s = maximumStableSet g
+  return $ Entry c g s
 
 optimiseUnits :: AFunDef -> Graph -> [OptimiseUnit]
-optimiseUnits f c = map (ou c) (phiCols f)
+optimiseUnits f c = map ou (phiCols f)
   where
-    ou _C (p,as) = OU p $ filter g as
-      where g x = x `S.notMember` lookupMapNote "optimiseUnits" p _C
+    ou (p,as) = OU p $ filter g as
+      where g x = x /= p && x `S.notMember` M.findWithDefault S.empty p c
+      -- x <- phi (x1,...,xn)  (x==xi for some i)
+      -- みたいなものがありえるので x /= p が必要
+      -- Virtual.setRenameMapIn参照
 
 phiCols :: AFunDef -> [(Id,[Id])]
 phiCols f = g =<< aStatements =<< aBody f
@@ -228,9 +232,13 @@ phiCols f = g =<< aStatements =<< aBody f
     h (PVVar x _ _) = Just x
     h _ = Nothing
 
+-- 指数時間なので辛い
 maximumStableSet :: Graph -> Set Id
-maximumStableSet g = fromJust $ go S.empty (M.keys g)
+maximumStableSet g = fromJust $ go (S.fromList obvious) rest
   where
+    -- これをやらないと時間的に死ぬ(死んだ)
+    (obvious,rest) = both M.keys $ M.partition null g
+
     go :: Set Id -> [Id] -> Maybe (Set Id)
     go xs ys
       | not (stable xs) = Nothing
@@ -244,36 +252,10 @@ maximumStableSet g = fromJust $ go S.empty (M.keys g)
     stable xs = all p xs
       where p x = S.null $ xs `S.intersection` lookupMapNote "" x g
 
+    removeEach :: Eq a => [a] -> [(a,[a])]
+    removeEach xs = zip xs $ map (`delete` xs) xs
+
 inducedSubGraph :: Graph -> Set Id -> Graph
 inducedSubGraph g xs =
   M.filterWithKey (\x _ -> x `S.member` xs) $ M.map (S.intersection xs) g
-
-removeEach :: Eq a => [a] -> [(a,[a])]
-removeEach xs = zip xs $ map (`delete` xs) xs
-
--------------------------------------------------------------------------------
--------------------------------------------------------------------------------
--------------------------------------------------------------------------------
-
-{-
-main :: IO ()
-main = do
-  let hoge = S.fromList [x0,x1,x2,x3,x4]
-      x0 = Entry (R 0) (M.fromList [("n.53",S.fromList []),("n.53.tr",S.fromList [])]) (S.fromList ["n.53","n.53.tr"])
-      x1 = Entry (R 1) (M.fromList [("n.53",S.fromList []),("n.53.tr",S.fromList [])]) (S.fromList ["n.53","n.53.tr"])
-      x2 = Entry (R 2) (M.fromList [("n.53",S.fromList []),("n.53.tr",S.fromList [])]) (S.fromList ["n.53","n.53.tr"])
-      x3 = Entry (R 3) (M.fromList [("n.53",S.fromList []),("n.53.tr",S.fromList [])]) (S.fromList ["n.53","n.53.tr"])
-      x4 = Entry (R 3) (M.fromList [("n.53",S.fromList ["n.53"]),("n.53.tr",S.fromList [])]) (S.fromList ["n.53.tr"])
-      (y0,ys0) = S.deleteFindMax hoge
-      (y1,ys1) = S.deleteFindMax ys0
-      (y2,ys2) = S.deleteFindMax ys1
-      (y3,ys3) = S.deleteFindMax ys2
-      (y4,ys4) = S.deleteFindMax ys3
-  print y0
-  print y1
-  print y2
-  print y3
-  print y4
-  print ys4
--}
 

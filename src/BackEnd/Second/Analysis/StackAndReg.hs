@@ -96,6 +96,7 @@ mustRegInMap fun = do
 regOutMap :: AFunDef -> Caml (Map Label (Set Id))
 regOutMap fun = do
   regInMap' <- mustRegInMap fun
+  liveOutB' <- analyzeLifetimeB fun
   let left l =
         let f acc (_,inst) = case inst of
               Do ACall{} -> defInst' inst
@@ -104,7 +105,9 @@ regOutMap fun = do
         in  foldl' f (regInMap'!l) (aStatements $ (blockMap fun)!l)
       regOut l =
         S.unions $ (left l:) $ map (regInMap'!) $ (succBlockMap fun)!l
-  return $ M.fromList [ (l, regOut l) | ABlock l _ <- aBody fun ]
+      liveOut l =
+        uncurry union $ lookupMapNote "" l liveOutB'
+  return $ M.fromList [ (l, regOut l `union` liveOut l) | ABlock l _ <- aBody fun ]
 
 regInMap :: AFunDef -> Caml (Map Label (Set Id))
 regInMap fun = do
