@@ -109,6 +109,7 @@ defInst = \case
       AFDiv {} -> True
       AFLd  {} -> True
       AFLdi {} -> True
+      AFRestore{} -> True
       ACall TFloat _ _ _ -> True
       ASelect TFloat _ _ _ -> True
       APrim _ (TFun _ TFloat) _ _ -> True
@@ -189,8 +190,8 @@ useInst = \case
       APhiV ps  -> ([ y | PVVar y t _ <- map snd $ concatMap snd ps, t/=TFloat ]
                    ,[ y | PVVar y t _ <- map snd $ concatMap snd ps, t==TFloat ])
       -- TODO
-      ASave x     -> ([x],[])
-      AFSave x    -> ([],[x])
+      ASave  x _  -> ([x],[])
+      AFSave x _  -> ([],[x])
       ARestore{}  -> ([],[])
       AFRestore{} -> ([],[])
       AExit       -> ([],[])
