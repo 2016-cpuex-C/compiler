@@ -93,9 +93,9 @@ data AExpr -- 多相的な命令には型を加える
   | APhi  [(Label,PhiVal)]
 
   | APhiV     [(Label,[(Id,PhiVal)])] -- APhiのベクトル化
-  | APhiS     [(Id,PhiVal)]           -- APhiVの一行版
-  | ASave     Id
-  | AFSave    Id
+  | APhiS     [(Id,PhiVal)]           -- APhiVの一行版 coalescing用
+  | ASave     Id Id -- 第一引数はregister上での名前
+  | AFSave    Id Id -- 第二引数はstack上での名前(こっちがオリジナル)
   | ARestore  Id
   | AFRestore Id
     -- heap

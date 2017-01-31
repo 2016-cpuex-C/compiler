@@ -88,6 +88,10 @@ defInst = \case
     (S.fromList [ x | (x,v) <- xys, not (isFloat v)]
     ,S.fromList [ x | (x,v) <- xys, isFloat v])
   Do{} -> (S.empty, S.empty)
+  x := ARestore x'
+    | x == x'    -> (S.empty, S.empty)
+  x := AFRestore x'
+    | x == x'    -> (S.empty, S.empty)
   x := i
     | retFloat i -> (S.empty, S.singleton x)
     | otherwise  -> (S.singleton x, S.empty)

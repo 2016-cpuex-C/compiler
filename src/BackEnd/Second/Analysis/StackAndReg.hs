@@ -60,9 +60,9 @@ saveOut b in' = in' `union` savedAt b
 
 savedAt :: ABlock -> Set Id
 savedAt b = S.fromList $ mapMaybe h $ aStatements b
-  where h (_,Do (ASave x))  = Just x
-        h (_,Do (AFSave x)) = Just x
-        h _                 = Nothing
+  where h (_,Do (ASave  _ x)) = Just x -- 第二引数 stack上での名前
+        h (_,Do (AFSave _ x)) = Just x
+        h _                   = Nothing
 
 -------------------------------------------------------------------------------
 -- Register

@@ -250,8 +250,8 @@ emitInst = \case
   Do (ACmpBr  p x (V y) lt lf) -> cmpbr  p x y lt lf
   Do (AFCmpBr p x    y  lt lf) -> cmpbrs p x y lt lf
 
-  Do (ASave  x)    -> save x
-  Do (AFSave x)    -> saveF x
+  Do (ASave  x_ x) -> save  x_ x
+  Do (AFSave x_ x) -> saveF x_ x
   Do (ARestore x)  -> restore x x
   Do (AFRestore x) -> restoreF x x
   x := ARestore y  -> restore x y
@@ -508,22 +508,22 @@ setArgs xs ys = do
 push :: Id -> CamlE ()
 push x = stack %= S.insert x
 
-save :: Id -> CamlE ()
-save x = uses stack (S.member x) >>= \case
+save :: Id -> Id -> CamlE ()
+save x_ x = uses stack (S.member x) >>= \case
   True  -> write $ "\t# "++ x ++ " is already saved: "
   False -> do push x
               n <- offset x
-              {-rri' "sw" x regSp n-}
-              rri' "save" x regSp n
+              {-rri' "sw" x_ regSp n-}
+              rri' "save" x_ regSp n
               --write $ "\t\t# save: " ++ x
 
-saveF :: Id -> CamlE ()
-saveF x = uses stack (S.member x) >>= \case
+saveF :: Id -> Id -> CamlE ()
+saveF x_ x = uses stack (S.member x) >>= \case
   True  -> write $ "\t# "++ x ++ " is already saved: "
   False -> do push x
               n <- offset x
               {-fri' "s.s" x regSp n-}
-              fri' "save.s" x regSp n
+              fri' "save.s" x_ regSp n
               --write $ "\t\t# save: " ++ x
 
 restore :: Id -> Id -> CamlE ()
