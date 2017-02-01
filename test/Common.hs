@@ -4,33 +4,29 @@
 module Common where
 
 import Base
-import FrontEnd.Lexer          (lex)
-import FrontEnd.Parser         (parse)
-import FrontEnd.Typing         (typing)
-import MiddleEnd.KNormal       (kNormalize)
-import MiddleEnd.Alpha         (alpha)
-import MiddleEnd.Optimise      (optimise)
-import MiddleEnd.LambdaLifting (lambdaLift)
-import MiddleEnd.Closure       (closureConvert)
---import MiddleEnd.Closure       (closureConvert)
---import BackEnd.First.Virtual   (virtualCode)
---import BackEnd.First.RegAlloc  (regAlloc)
---import BackEnd.First.Simm      (simm)
---import BackEnd.First.Emit      (emit)
+import FrontEnd.Lexer                 (lex)
+import FrontEnd.Parser                (parse)
+import FrontEnd.Typing                (typing)
+import MiddleEnd.KNormal              (kNormalize)
+import MiddleEnd.Alpha                (alpha)
+import MiddleEnd.Optimise             (optimise)
+import MiddleEnd.LambdaLifting        (lambdaLift)
+import MiddleEnd.Closure              (closureConvert)
 
-import MiddleEnd.LLVM.FrontEnd.Prog (toLLVM)
-import MiddleEnd.LLVM.MiddleEnd     (optimiseLLVM)
-import MiddleEnd.LLVM.BackEnd       (toLProg)
-import BackEnd.Second.FromLProg     (toAProg)
-import BackEnd.Second.Virtual       (virtual,saveAndRestore)
-import BackEnd.Second.Optimise      (optimiseA)
-import BackEnd.Second.Emit          (emitProg)
+import MiddleEnd.LLVM.FrontEnd.Prog   (toLLVM)
+import MiddleEnd.LLVM.MiddleEnd       (optimiseLLVM)
+import MiddleEnd.LLVM.BackEnd         (toLProg)
+import BackEnd.Second.FromLProg       (toAProg)
+import BackEnd.Second.Virtual         (virtual)
+import BackEnd.Second.SaveAndRestore  (saveAndRestore)
+import BackEnd.Second.Optimise        (optimiseA)
+import BackEnd.Second.Emit            (emitProg)
 
-import Prelude              hiding (lex)
-import System.IO                   (openFile, withFile, IOMode(..))
+import Prelude                        hiding (lex)
+import System.IO                      (openFile, withFile, IOMode(..))
 import System.Process
-import System.FilePath.Posix       ((<.>))
-import Control.Lens                ((&),(.~))
+import System.FilePath.Posix          ((<.>))
+import Control.Lens                   ((&),(.~))
 
 import           Data.FileEmbed
 import qualified Data.ByteString.Char8 as BC
@@ -42,7 +38,7 @@ compile ml = do
   devnull <- openFile "/dev/null" WriteMode
   withFile (mlToS ml) WriteMode $ \out ->
     (`runCaml` (initialState&logfile.~devnull
-                            &threshold.~0))
+                            &threshold.~50))
     $ lex (libmincamlML ++ s)
       >>= parse
       >>= typing

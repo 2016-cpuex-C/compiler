@@ -71,6 +71,9 @@ library
                      , BackEnd.Second.Optimise.NanjaKore
                      , BackEnd.Second.Optimise.MulAdd
                      , BackEnd.Second.Optimise.Elim
+                     , BackEnd.Second.SaveAndRestore
+                     , BackEnd.Second.SaveAndRestore.Rename
+                     , BackEnd.Second.SaveAndRestore.NoRename
                      , BackEnd.Second.RegAlloc
                      , BackEnd.Second.RegAlloc.Dominance
                      , BackEnd.Second.RegAlloc.Dominance.Pure
