@@ -16,7 +16,7 @@ import BackEnd.Second.Asm
 import BackEnd.Second.RegAlloc.Coloring
 import BackEnd.Second.RegAlloc.Coalescing --as Export
 
-regAlloc :: AFunDef -> Caml (Map Id Color)
+regAlloc :: AFunDef -> Caml (AFunDef,Map Id Color)
 regAlloc f = coalesce f =<< colorFun f
-{-regAlloc f = colorFun f-}
+{-regAlloc f = (f,) <$> colorFun f-}
 

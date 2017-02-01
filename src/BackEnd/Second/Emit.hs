@@ -89,7 +89,7 @@ emitProg :: Handle -> AProg -> Caml ()
 emitProg h prog = do
   ($logInfo) $ pack "generating assembly.."
   let write' = liftIO . hPutStrLn h
-      (main,others) = popMain prog
+      (main_,others) = popMain prog
 
   -- floats
   ----------
@@ -109,7 +109,7 @@ emitProg h prog = do
 
   -- functions
   -------------
-  mapM_ (emitFun h) $ retToExit main : others
+  mapM_ (emitFun h) $ retToExit main_ : others
 
   -- libmincaml
   --------------
@@ -125,15 +125,15 @@ emitProg h prog = do
 emitFun :: Handle -> AFunDef -> Caml ()
 emitFun h f@(AFunDef l _ _ _ _) = do
   ($logInfo) $ pack "EmitFun: " <> show' l
-  colMap <- regAlloc f
+  (f',colMap) <- regAlloc f
   ($logDebugSH) $ f
-  f' <- ssaDeconstruct colMap f
-  --($logDebugSH) $ colMap
-  --($logDebugSH) $ f'
+  f'' <- ssaDeconstruct colMap f'
+  ($logDebugSH) $ colMap
+  ($logDebugSH) $ f''
   liftIO $ hPutStrLn h $ unLabel l ++ ":"
   liftIO $ hPutStrLn h $ "\tsw\t$ra, 0($sp)"
-  stackMap <- stackInMap f'
-  evalStateT (emitBlocks stackMap (sortBlocks f')) ES {
+  stackMap <- stackInMap f''
+  evalStateT (emitBlocks stackMap (sortBlocks f'')) ES {
       _hout          = h
     , _colorMap     = colMap
     , _stack         = S.empty
@@ -467,8 +467,7 @@ ret = do
   write $ printf "\tjr\t%s" regRa
 
 call :: Type -> Maybe Id -> Label -> [Id] -> [Id] -> CamlE ()
-call t mx (Label f) ys zs = do
-  setArgs ys zs
+call t mx (Label f) _ys _zs = do
   ss <- stackSize
   rri  "addi" regSp regSp ss
   write $ "\tjal " ++ f ++ "\t# " ++ show mx
@@ -479,31 +478,9 @@ call t mx (Label f) ys zs = do
            | otherwise   -> move x (regs!0)
 
 tailCall :: Label -> [Id] -> [Id] -> CamlE ()
-tailCall (Label f) ys zs = do
+tailCall (Label f) _ys _zs = do
   rri' "lwr"  regRa regSp 0
-  setArgs ys zs
   write $ "\tj " ++ f
-
-setArgs :: [Id] -> [Id] -> CamlE ()
-setArgs xs ys = do
-  colMap'  <- use colorMap
-  let reg' x  | isReg x = x
-              | otherwise = case M.lookup x colMap' of
-                  Just (R n) -> regs!n
-                  _          -> error "regF'"
-      regF' x | isReg x = x
-              | otherwise = case M.lookup x colMap' of
-                  Just (F n) -> fregs!n
-                  _          -> error "regF'"
-      actToInst'  (Nop  (_,_)) = Do ANop
-      actToInst'  (Move (x,y)) = x := AMove y
-      actToInst'  (Swap (x,y)) = Do (ASwap x y)
-      actToInstF' (Nop  (_,_)) = Do ANop
-      actToInstF' (Move (x,y)) = x := AFMov y
-      actToInstF' (Swap (x,y)) = Do (AFSwap x y)
-      inst'  = map actToInst'  $ resolveBy reg'  $ zip allRegs  xs
-      instF' = map actToInstF' $ resolveBy regF' $ zip allFRegs ys
-  mapM_ emitInst $ inst' ++ instF'
 
 push :: Id -> CamlE ()
 push x = stack %= S.insert x

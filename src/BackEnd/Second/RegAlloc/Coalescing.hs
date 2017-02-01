@@ -1,13 +1,9 @@
-{-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE MultiWayIf #-}
+{-# LANGUAGE LambdaCase #-}{-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module BackEnd.Second.RegAlloc.Coalescing (
-    coalesce
-  , setArgs
-  ) where
+module BackEnd.Second.RegAlloc.Coalescing where
 
 import Base
 import BackEnd.Second.Asm
@@ -21,11 +17,11 @@ import Control.Monad.Extra (concatMapM)
 import Control.Monad.Trans.State
 import Control.Arrow (second)
 
-coalesce :: AFunDef -> Map Id Color -> Caml (Map Id Color)
+coalesce :: AFunDef -> Map Id Color -> Caml (AFunDef,Map Id Color)
 coalesce f colMap = do
   (f', (colMap',pinned)) <- setArgs f colMap -- 関数呼び出しのcoalescing
-  ($logDebug) $ "prePinned: " <> show' pinned
-  phiOpimise f' colMap' pinned
+  colMap'' <- phiOpimise f' colMap' pinned
+  return (f',colMap'')
 
 type CamlArg = StateT (Map Id Color,Set Id) Caml
 
