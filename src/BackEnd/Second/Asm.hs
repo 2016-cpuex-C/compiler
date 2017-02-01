@@ -39,11 +39,11 @@ type InstId = Int
 
 type Inst = Named AExpr
 
-data AExpr -- 多相的な命令には型を加える
+data AExpr
   = ANop
   | ASet   Integer
   | ASetF  Label
-  | ASetL  Label -- closure
+  | ASetL  Label
   | AMove  Id
   | ANeg   Id
   | AAdd   Id IdOrImm
@@ -52,7 +52,7 @@ data AExpr -- 多相的な命令には型を加える
   | ADiv   Id IdOrImm
   | ASll   Id IdOrImm
   | ASrl   Id IdOrImm
-  | ALd    Id IdOrImm -- Idの方は使わなさそう
+  | ALd    Id IdOrImm
   | ASt    Id Id IdOrImm
   | ALdi   Integer
   | ASti   Id Integer
@@ -77,7 +77,7 @@ data AExpr -- 多相的な命令には型を加える
   | ACmp  Predicate Id IdOrImm
   | AFCmp Predicate Id Id
 
-  -- swap -- SSA Deconstruction 以降出現
+  -- SSA Deconstruction
   | ASwap Id Id
   | AFSwap Id Id
 
@@ -94,8 +94,11 @@ data AExpr -- 多相的な命令には型を加える
 
   | APhiV     [(Label,[(Id,PhiVal)])] -- APhiのベクトル化
   | APhiS     [(Id,PhiVal)]           -- APhiVの一行版 coalescing用
-  | ASave     Id Id -- 第一引数はregister上での名前
-  | AFSave    Id Id -- 第二引数はstack上での名前(こっちがオリジナル)
+
+  | ASave     Id Id
+  | AFSave    Id Id
+    -- ^第一引数はregister上での名前
+    -- ^第二引数はstack上での名前(こっちがオリジナル)
   | ARestore  Id
   | AFRestore Id
     -- heap
@@ -125,7 +128,8 @@ data IdOrImm
 
 data PhiVal
   = PVInt   Integer
-  | PVVar   Id Type Bool -- onMemory :: Bool
+  | PVVar   Id Type Bool
+    -- Bool...stack上にあるかどうか
   | PVFloat Label
   deriving (Show,Eq,Ord)
 
@@ -171,7 +175,7 @@ blockMap (AFunDef _ _ _ blocks _) =
 -----------
 
 -- entry.12.32 のような形をしている
--- TODO もっといい方法ないかなあ
+-- もっといい方法ないかなあ
 isEntryBlock :: ABlock -> Bool
 isEntryBlock (ABlock (Label x) _) = x =~ "^entry\\.[0-9]+\\.[0-9]+$"
 
@@ -186,7 +190,7 @@ lastStmt  = last . aStatements
 ----------
 
 freshInstId :: Caml Int
-freshInstId = instCount<+=1
+freshInstId = instCount <+= 1
 
 assignInstId :: Inst -> Caml Statement
 assignInstId i = freshInstId <&> (,i)
@@ -201,10 +205,9 @@ allRegs = concat [
   , [ "$a"++show i | i <- [0..3] :: [Int]]
   , [ "$t"++show i | i <- [0..7] :: [Int]]
   , [ "$s"++show i | i <- [0..7] :: [Int]]
-  , [ "$t"++show i | i <- [8..8] :: [Int]]
-  , [ "$t9" ]
+  , [ "$t"++show i | i <- [8..9] :: [Int]]
   , [ "$k"++show i | i <- [0..1] :: [Int]]
---, [ "$gp" ]                              -- global pointer (base of global data)
+--, [ "$gp" ]                              -- global pointer
 --, [ "$sp" ]                              -- stack pointer
   , [ "$fp" ]
 --, [ "$ra" ]                              -- return address

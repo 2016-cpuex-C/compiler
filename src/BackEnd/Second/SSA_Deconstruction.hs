@@ -9,16 +9,15 @@ import Prelude hiding (log)
 
 import Base
 import BackEnd.Second.Asm
-import BackEnd.Second.RegAlloc.Coloring (Color(..))
+import BackEnd.Second.RegAlloc.Coloring (Color)
 
 import qualified Data.Map as M
-import           Data.List ((\\), delete, partition)
+import           Data.List (delete, partition)
 import           Data.List.Extra (anySame)
 import           Control.Lens.Operators
 import           Control.Monad.Trans.State
-import           Control.Arrow (second)
+import           Control.Arrow (first, second)
 import           Control.Monad.Extra (concatMapM)
---import Debug.Trace (trace, traceM)
 
 -------------------------------------------------------------------------------
 -- Types
@@ -45,7 +44,7 @@ modifyBlock :: Label -> ([Statement] -> [Statement]) -> CamlSSA ()
 modifyBlock l f = addBlock l . f =<< aStatements <$> block l
 
 block :: Label -> CamlSSA ABlock
-block = uses blockMap_ . lookupMapNote "SSA_Deconstruction: block: no block"
+block l = lookupMapLensNoteM "SSA_Deconstruction: block: no block" l blockMap_
 
 -------------------------------------------------------------------------------
 -- Main
@@ -76,6 +75,7 @@ ssaDeconstructSub ls = do
 --    + reg(ai) /= reg(aji') (forall i') なるものをその次に
 --    + 残ったものについてはpermutationを計算して配置
 --  こうして求めた命令列をIとする
+--  Ij: ljからlへの移動時に
 --  ブロックljからlへの遷移が,
 --    + brならばその手前にIを追加する
 --    + cbr _ lj lk ならば
@@ -86,16 +86,15 @@ ssaDeconstructSub ls = do
 --    + 的な
 
 deconstructAPhiV :: Label -> CamlSSA ()
-deconstructAPhiV l = snd . firstStmt <$> block l >>= \case
-  Do (APhiV phis) -> do
+deconstructAPhiV l = firstStmt <$> block l >>= \case
+  (_, Do (APhiV phis)) -> do
     modifyBlock l tail -- APhiVを削除
     mapM_ (deconstructAPhiVSub l) phis
   _ -> return ()
 
 -- lj -> l の合流
--- TODO 抽象化
 deconstructAPhiVSub :: Label -> (Label,[(Id,PhiVal)]) -> CamlSSA ()
-deconstructAPhiVSub l (lj,xvs) = do-- {{{
+deconstructAPhiVSub l (lj,xvs) = do
   colMaps' <- use colorMap_
   dePhiStmts <- lift $ deconstruct colMaps' xvs
   bj@(ABlock _ stmts_j) <- block lj
@@ -104,55 +103,30 @@ deconstructAPhiVSub l (lj,xvs) = do-- {{{
         let stmts_j' = init stmts_j ++ dePhiStmts ++ [s]
         addBlock lj stmts_j'
 
-    (id', Do (ACBr x lt lf)) -> do
+    (id', branch) -> do
         freshId <- lift freshInstId
         let lp = Label $ "phi_" ++ unLabel lj ++ "_" ++ unLabel l
-            newCbr | l == lt   = (id', Do (ACBr x lp lf))
-                   | l == lf   = (id', Do (ACBr x lt lp))
-                   | otherwise = error "impossible"
-            stmts_p  = dePhiStmts ++ [(freshId, Do (ABr l))]
-            stmts_j' = init stmts_j ++ [newCbr]
+            newBranch = case branch of
+              Do (ACBr x lt lf)
+                | l == lt   -> Do (ACBr x lp lf)
+                | l == lf   -> Do (ACBr x lt lp)
+              Do (ACmpBr p x y lt lf)
+                | l == lt   -> Do (ACmpBr p x y lp lf)
+                | l == lf   -> Do (ACmpBr p x y lt lp)
+              Do (AFCmpBr p x y lt lf)
+                | l == lt   -> Do (AFCmpBr p x y lp lf)
+                | l == lf   -> Do (AFCmpBr p x y lt lp)
+              Do (ASwitch x ldef ils)
+                | ldef == l -> Do (ASwitch x lp   ils)
+                | otherwise -> Do (ASwitch x ldef ils')
+                where ils' = map (second f) ils
+                      f l' | l==l'     = lp
+                           | otherwise = l'
+              _ -> error $ "SSA_Deconstruction: Impossible: " ++ show branch
+            stmts_p  = dePhiStmts   ++ [(freshId, Do (ABr l))]
+            stmts_j' = init stmts_j ++ [(id', newBranch)]
         addBlock lj stmts_j'
         addBlock lp stmts_p
-
-    (id', Do (ACmpBr p x y lt lf)) -> do
-        freshId <- lift freshInstId
-        let lp = Label $ "phi_" ++ unLabel lj ++ "_" ++ unLabel l
-            newCbr | l == lt   = (id', Do (ACmpBr p x y lp lf))
-                   | l == lf   = (id', Do (ACmpBr p x y lt lp))
-                   | otherwise = error "impossible"
-            stmts_p  = dePhiStmts ++ [(freshId, Do (ABr l))]
-            stmts_j' = init stmts_j ++ [newCbr]
-        addBlock lj stmts_j'
-        addBlock lp stmts_p
-
-    (id', Do (AFCmpBr p x y lt lf)) -> do
-        freshId <- lift freshInstId
-        let lp = Label $ "phi_" ++ unLabel lj ++ "_" ++ unLabel l
-            newCbr | l == lt   = (id', Do (AFCmpBr p x y lp lf))
-                   | l == lf   = (id', Do (AFCmpBr p x y lt lp))
-                   | otherwise = error "impossible"
-            stmts_p  = dePhiStmts ++ [(freshId, Do (ABr l))]
-            stmts_j' = init stmts_j ++ [newCbr]
-        addBlock lj stmts_j'
-        addBlock lp stmts_p
-
-    (id', Do (ASwitch x ldef ils)) -> do
-        freshId <- lift freshInstId
-        let lp = Label $ "phi_" ++ unLabel lj ++ "_" ++ unLabel l
-            newSwitch
-              | ldef==l   = (id', Do (ASwitch x lp   ils))
-              | otherwise = (id', Do (ASwitch x ldef ils'))
-              where ils' = map (second f) ils
-                    f l' | l==l'     = lp
-                         | otherwise = l'
-            stmts_p = dePhiStmts ++ [(freshId, Do (ABr l))]
-            stmts_j' = init stmts_j ++ [newSwitch]
-        addBlock lj stmts_j'
-        addBlock lp stmts_p
-
-    s -> error $ "SSA_Deconstruction: Impossible: " ++ show s
--- }}}
 
 -------------------------------------------------------------------------------
 -- APhiS
@@ -168,7 +142,7 @@ deconstructAPhiS l = do
   addBlock l =<< lift (concatMapM f stmts)
 
 -------------------------------------------------------------------------------
--- Main?
+-- Main
 -------------------------------------------------------------------------------
 
 deconstruct :: Map Id Color
@@ -184,21 +158,11 @@ deconstruct colMap xvs = do
       locate  _         = Mem
 
       insts = concat [
-          map actToInst  $ resolveBy locate var
-        , map actToInstF $ resolveBy locate varF
+          map actToInst  $ resolveBy' locate var
+        , map actToInstF $ resolveBy' locate varF
         , map (\(x,i) -> x := ASet  i) int
         , map (\(x,l) -> x := ASetF l) float
         ]
-
-  --traceM $ unlines [
-  --      "===="
-  --    , show var
-  --    , show $ map (both color) var
-  --    , show hoge
-  --    , show varF
-  --    , show $ map (both color) varF
-  --    , show hogeF
-  --    ]
 
   mapM assignInstId insts
 
@@ -206,47 +170,87 @@ deconstruct colMap xvs = do
 -- are
 -------------------------------------------------------------------------------
 
--- verifierを書こうな
-
--- TODO + PhiLifting (map (classify.snd) perm に重複があるとダメなので必要)
---      + 本来(Mem,Mem)はsafeCopyだがpermになってしまっている
---        (今のところは左側にMemが来ることはないので大丈夫)
-resolveBy :: (Show a, Show b, Eq a, Eq b) => (a -> b)-> [(a,a)] -> [Action a]
-resolveBy classify vars
-  | anySame (lefts  vars) = errorShow "resolveBy: regAllocのバグ\n" (vars, map (both classify) vars)
-  | anySame (rights perm) = errorShow "resolveBy: invalid argument" (vars, map (both classify) vars)
-  | otherwise = ans
-  where
-    ans  = concat [nop, mov, rest]
-    nop  = [] --map Nop identical
-    mov  = map Move safeCopy
-    rest = resolvePerm perm
-
-    rights = map (classify.snd)
-    lefts  = map (classify.fst)
-
-    (identical, tmp) =
-      let f (x,y) = classify x == classify y
-      in  partition f vars
-    (safeCopy, perm) = -- TODO もっと簡潔にできないものか
-      let f (safe,yet) (x,y)
-            | classify x `elem` rights yet = (safe, yet)
-            | otherwise                    = ((x,y):safe, delete (x,y) yet)
-      in  bimap reverse (\\identical) $ foldl' f ([],tmp) tmp
-
-    resolvePerm [] = []
-    resolvePerm ((x,y):xys) =
-      let f z | classify z == classify x = y
-              | classify z == classify y = x
-              | otherwise                = z
-          xys' = map (second f) xys
-      in  Swap (x,y) : resolveBy classify xys'
-
 data Action a
   = Nop  (a,a)
   | Move (a,a)
   | Swap (a,a)
   deriving (Show,Eq,Ord)
+
+-----------
+-- Check --
+-----------
+
+resolveBy' :: (Show a, Eq a, Ord a) => (a -> Dest)-> [(a,a)] -> [Action a]
+resolveBy' f xys
+  | null err  = result
+  | otherwise = errorShow "resolveBy': bug: " (xys, map (both f) xys,result,m,err)
+  where
+    result  = resolveBy f xys
+    m       = runPerm f xys result
+    p (x,y) = expected === returned
+      where expected = f y
+            returned = lookupMapNote "resolveBy'" (f x) m
+    err     = filter (not.p) xys
+
+    (===) v1 v2 = case (v1,v2) of
+      (Mem,Mem) -> True
+      _ -> v1 == v2
+
+-- 得られた結果(::[Action a])を実際に行ってみる
+runPerm :: (Show a, Eq a, Ord a) => (a -> Dest)-> [(a,a)] -> [Action a] -> Map Dest Dest
+runPerm f xys result =  execState (mapM_ exec result) s0
+  where
+    msg = "runPerm"
+    allVars = uncurry (++) $ unzip xys
+    s0 = foldl' g M.empty allVars
+      where g m x = M.insert (f x) (f x) m
+    exec (Move (x,y)) = do
+      vy <- gets $ lookupMapNote msg (f y)
+      modify $ M.insert (f x) vy
+    exec (Swap (x,y)) = do
+      vx <- gets $ lookupMapNote msg (f x)
+      vy <- gets $ lookupMapNote msg (f y)
+      modify $ M.insert (f x) vy
+      modify $ M.insert (f y) vx
+    exec Nop{} = return ()
+
+-------------------
+-- Main Resolver --
+-------------------
+
+-- TODO + PhiLifting (map (classify.snd) perm に重複があるとダメなので必要)
+--      + 本来(Mem,Mem)はsafeCopyだがpermになってしまっている
+--        (今のところは左側にMemが来ることはないので大丈夫)
+resolveBy :: (Show a, Eq a) => (a -> Dest)-> [(a,a)] -> [Action a]
+resolveBy f vars
+  | anySame (lefts  vars) = errorShow "resolveBy: bug in RegAlloc"  (vars, map (both f) vars)
+  | anySame (rights perm) = errorShow "resolveBy: invalid argument" (vars, map (both f) vars)
+  | otherwise = ans
+  where
+    ans  = concat [nop, mov, rest]
+    nop  = map Nop identical
+    mov  = map Move safeCopy
+    rest = resolvePerm perm
+
+    rights = map (f.snd)
+    lefts  = map (f.fst)
+
+    (identical, tmp) =
+      let g (x,y) = f x == f y
+      in  partition g vars
+    (safeCopy, perm) =
+      let g (safe,yet) (x,y)
+            | f x `elem` rights yet = (safe, yet)
+            | otherwise             = ((x,y):safe, delete (x,y) yet)
+      in  first reverse $ foldl' g ([],tmp) tmp
+
+    resolvePerm [] = []
+    resolvePerm ((x,y):xys) =
+      let g z | f z == f x = y
+              | f z == f y = x
+              | otherwise  = z
+          xys' = map (second g) xys
+      in  Swap (x,y) : resolveBy f xys'
 
 actToInst :: Action (Id,Bool) -> Inst
 actToInst (Nop  (_,_)) = Do ANop
@@ -259,59 +263,4 @@ actToInstF (Nop  (_,_))              = Do ANop
 actToInstF (Move ((x,_), (y,True)))  = x := AFRestore y
 actToInstF (Move ((x,_), (y,False))) = x := AFMov y
 actToInstF (Swap ((x,_), (y,_)))     = Do (AFSwap x y)
-
--------------------------------------------------------------------------------
--- Main
--------------------------------------------------------------------------------
-
-
---resolveBy' :: (Show a, Show b, Eq a, Eq b, Ord a) => (a -> b)-> [(a,a)] -> [Action a]
---resolveBy' :: (Show a, Eq a, Ord a) => (a -> Dest)-> [(a,a)] -> [Action a]
-resolveBy' :: ((Id,Bool) -> Dest)-> [((Id,Bool),(Id,Bool))] -> [Action (Id,Bool)]
-resolveBy' f vars
-  | null err  = result
-  | otherwise = errorShow "resolveBy: bug: " (vars, map (both f) vars,result,m,err)
-  where
-    result = resolveBy f vars
-    m = verify f vars result
-    (_ok,err) = partition (\(x,y) -> lookupMapNote "" (f x) m === f y ) vars
-
-    --err' = map (bimap (\x->lookupMapNote "" x m) f) err
-
-
-    (===) v1 v2 = case (v1,v2) of
-      (Mem,Mem) -> True
-      _ -> v1 == v2
-
--- ぜんぜんだめ
---verify :: (Show a, Eq a, Ord a) => (a -> Dest)-> [(a,a)] -> [Action a] -> Map a Dest
-verify :: ((Id,Bool) -> Dest)-> [((Id,Bool),(Id,Bool))] -> [Action (Id,Bool)] -> Map Dest Dest
-verify f vars result =  execState (mapM_ exec result) s0
-  where
-
-    s0 = foldl' g M.empty $ uncurry (++) $ unzip vars
-      where g m x = M.insert (f x) (f x) m
-
-    exec (Move (x,y)) = do
-      vy <- gets $ lookupMapNote "" (f y)
-      modify $ M.insert (f x) vy
-    exec (Swap (x,y)) = do
-      vx <- gets $ lookupMapNote "" (f x)
-      vy <- gets $ lookupMapNote "" (f y)
-      modify $ M.insert (f x) vy
-      modify $ M.insert (f y) vx
-      --traceM $ show (x,y,vx,vy)
-    exec Nop{} = return ()
-
--- {{{
---main :: IO ()
---main = do undefined
---  let p = [(Reg (F 2),Reg (F 4))
---          ,(Reg (F 4),Reg (F 0))
---          ,(Reg (F 0),Reg (F 5))
---          ,(Reg (F 5),Reg (F 0))
---          ]
---      result = resolveBy id p
---  print $ verify id p result
--- }}}
 
