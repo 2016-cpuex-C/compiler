@@ -222,6 +222,9 @@ emitInst = \case
   x := ACmp  p y (C i)  -> prri "cmpi"  p x y i
   x := AFCmp p y z      -> prff "cmp.s" p x y z
 
+  x := AF2I y           -> rf "cvt.w.s" x y
+  x := AI2F y           -> fr "cvt.s.w" x y
+
   Do (ASwap  x y)       -> swap x y
   Do (AFSwap x y)       -> swaps x y
 
@@ -318,6 +321,14 @@ deleteAndFindFirstMay p (a:as)
 rr :: String -> Id -> Id -> CamlE ()
 rr s x y = write =<<
   printf "\t%s\t%s, %s\t# %s" s <$> reg x <*> reg y <*> return (unwords [s,x,y])
+
+fr :: String -> Id -> Id -> CamlE ()
+fr s x y = write =<<
+  printf "\t%s\t%s, %s\t# %s" s <$> regF x <*> reg y <*> return (unwords [s,x,y])
+
+rf :: String -> Id -> Id -> CamlE ()
+rf s x y = write =<<
+  printf "\t%s\t%s, %s\t# %s" s <$> reg x <*> regF y <*> return (unwords [s,x,y])
 
 rrr :: String -> Id -> Id -> Id -> CamlE ()
 rrr s x y z = write =<<

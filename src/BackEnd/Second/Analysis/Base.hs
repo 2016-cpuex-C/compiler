@@ -109,6 +109,7 @@ defInst = \case
       AFDiv {} -> True
       AFLd  {} -> True
       AFLdi {} -> True
+      AI2F  {} -> True
       AFRestore{} -> True
       ACall TFloat _ _ _ -> True
       ASelect TFloat _ _ _ -> True
@@ -160,6 +161,9 @@ useInst = \case
       AFLd  x y'       -> (x : h y', [])
       ASt   x y z'     -> (x : y : h z', [])
       AFSt  x y z'     -> (y : h z', [x])
+
+      AF2I x           -> ([], [x])
+      AI2F x           -> ([x], [])
 
       ASwap  x y       -> ([x,y],[])
       AFSwap x y       -> ([],[x,y])

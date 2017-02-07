@@ -24,6 +24,8 @@ g env e = case e of
   KVar  x     -> return $ KVar  $ find x env
   KNeg  x     -> return $ KNeg  $ find x env
   KFNeg x     -> return $ KFNeg $ find x env
+  KF2I  x     -> return $ KF2I  $ find x env
+  KI2F  x     -> return $ KI2F  $ find x env
 
   KAdd  x y -> return $ KAdd  (find x env) (find y env)
   KSub  x y -> return $ KSub  (find x env) (find y env)
@@ -32,6 +34,8 @@ g env e = case e of
   KLAnd x y -> return $ KLAnd (find x env) (find y env)
   KLOr  x y -> return $ KLOr  (find x env) (find y env)
   KLXor x y -> return $ KLXor (find x env) (find y env)
+  KSrl  x y -> return $ KSrl  (find x env) (find y env)
+  KSll  x y -> return $ KSll  (find x env) (find y env)
   KFAdd x y -> return $ KFAdd (find x env) (find y env)
   KFSub x y -> return $ KFSub (find x env) (find y env)
   KFMul x y -> return $ KFMul (find x env) (find y env)

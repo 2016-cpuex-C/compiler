@@ -46,6 +46,7 @@ convertExpr e = case e of
     CIfLe x y e1 e2 -> convertIf LE x y e1 e2
 
     CNeg {} -> ret' e TInt
+    CF2I {} -> ret' e TInt
     CAdd {} -> ret' e TInt
     CSub {} -> ret' e TInt
     CMul {} -> ret' e TInt
@@ -53,7 +54,10 @@ convertExpr e = case e of
     CLAnd{} -> ret' e TInt
     CLOr {} -> ret' e TInt
     CLXor{} -> ret' e TInt
+    CSrl {} -> ret' e TInt
+    CSll {} -> ret' e TInt
     CFNeg{} -> ret' e TFloat
+    CI2F {} -> ret' e TFloat
     CFAdd{} -> ret' e TFloat
     CFSub{} -> ret' e TFloat
     CFMul{} -> ret' e TFloat
@@ -112,11 +116,16 @@ bind (x,tx) e = typeEnv %= M.insert x tx >> case e of
     CLAnd y z -> assignInst (Just x) $ and y z
     CLOr  y z -> assignInst (Just x) $ or  y z
     CLXor y z -> assignInst (Just x) $ xor y z
+    CSrl  y z -> assignInst (Just x) $ srl y z
+    CSll  y z -> assignInst (Just x) $ sll y z
     CFNeg y   -> assignInst (Just x) $ fneg y
     CFAdd y z -> assignInst (Just x) $ fadd y z
     CFSub y z -> assignInst (Just x) $ fsub y z
     CFMul y z -> assignInst (Just x) $ fmul y z
     CFDiv y z -> assignInst (Just x) $ fdiv y z
+
+    CF2I y -> bind (x,tx) $ CAppDir (Label "min_caml_f2i") [y]
+    CI2F y -> bind (x,tx) $ CAppDir (Label "min_caml_i2f") [y]
 
     CAppDir (Label f) xs -> do
       t@(TFun ts tret) <- typeOf f

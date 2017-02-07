@@ -28,6 +28,8 @@ llvmProg (CProg fundefs e) = do
     glblArrayEnv <- M.toList <$> lift globalArrayEnv
     mapM_ defExternal    extEnv
     mapM_ defGlobalArray glblArrayEnv
+    {-defExternal ("f2i", TFun [TFloat] TInt)-}
+    {-defExternal ("i2f", TFun [TInt] TFloat)-}
     let glblEnv = extEnv ++ glblArrayEnv ++ glblFunEnv
     mapM_ (llvmFunDef glblEnv) (main':fundefs)
   where

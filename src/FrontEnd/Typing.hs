@@ -130,11 +130,20 @@ infer env e =
     ELAnd e1 e2 -> int2 e1 e2
     ELOr  e1 e2 -> int2 e1 e2
     ELXor e1 e2 -> int2 e1 e2
+    ESrl  e1 e2 -> int2 e1 e2
+    ESll  e1 e2 -> int2 e1 e2
 
     EFAdd e1 e2 -> float2 e1 e2
     EFSub e1 e2 -> float2 e1 e2
     EFMul e1 e2 -> float2 e1 e2
     EFDiv e1 e2 -> float2 e1 e2
+
+    EF2I e' -> do
+        unifyM1 TFloat (infer env e')
+        return TInt
+    EI2F e' -> do
+        unifyM1 TInt (infer env e')
+        return TFloat
 
     EEq e1 e2 -> do
         unifyM2 (infer env e1) (infer env e2)

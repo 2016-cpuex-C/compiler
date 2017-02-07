@@ -98,6 +98,12 @@ toAExpr linst = case linst of
                 | hasFloatArg = Label "min_caml_create_float_array"
                 | otherwise   = Label "min_caml_create_array"
           ACall rett create_array <$> mapM toId ys <*> mapM toId zs
+    | "min_caml_f2i" == fname -> do
+          [x] <- mapM toId xs
+          return $ AF2I x
+    | "min_caml_i2f" == fname -> do
+          [x] <- mapM toId xs
+          return $ AI2F x
 
     | otherwise -> ACall rett l <$> mapM toId ys <*> mapM toId zs
 

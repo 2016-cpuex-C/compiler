@@ -26,38 +26,44 @@ import           Control.Monad.Trans.State.Lazy
 
 import           Data.Maybe (fromMaybe)
 
-data CExpr = CUnit
-           | CInt      Integer
-           | CBool     Bool
-           | CFloat    Float
-           | CNeg      Id
-           | CAdd      Id Id
-           | CSub      Id Id
-           | CMul      Id Id
-           | CDiv      Id Id
-           | CLAnd     Id Id
-           | CLOr      Id Id
-           | CLXor     Id Id
-           | CFNeg     Id
-           | CFAdd     Id Id
-           | CFSub     Id Id
-           | CFMul     Id Id
-           | CFDiv     Id Id
-           | CIfEq     Id Id     CExpr CExpr
-           | CIfLe     Id Id     CExpr CExpr
-           | CLet      (Id,Type) CExpr CExpr
-           | CVar      Id
-           | CMakeCls  (Id,Type) Closure CExpr
-           | CAppCls   Id [Id]
-           | CAppDir   Label [Id]
-           | CTuple    [Id]
-           | CArray    Id Id
-           | CArrayInit Label Id
-           | CLetTuple [(Id,Type)] Id CExpr
-           | CGet      Id Id
-           | CPut      Id Id Id
-           | CExtArray Label
-           deriving Show
+data CExpr
+  = CUnit
+  | CInt      Integer
+  | CBool     Bool
+  | CFloat    Float
+  | CNeg      Id
+  | CF2I      Id
+  | CI2F      Id
+  | CAdd      Id Id
+  | CSub      Id Id
+  | CMul      Id Id
+  | CDiv      Id Id
+  | CLAnd     Id Id
+  | CLOr      Id Id
+  | CLXor     Id Id
+  | CSrl      Id Id
+  | CSll      Id Id
+
+  | CFNeg     Id
+  | CFAdd     Id Id
+  | CFSub     Id Id
+  | CFMul     Id Id
+  | CFDiv     Id Id
+  | CIfEq     Id Id     CExpr CExpr
+  | CIfLe     Id Id     CExpr CExpr
+  | CLet      (Id,Type) CExpr CExpr
+  | CVar      Id
+  | CMakeCls  (Id,Type) Closure CExpr
+  | CAppCls   Id [Id]
+  | CAppDir   Label [Id]
+  | CTuple    [Id]
+  | CArray    Id Id
+  | CArrayInit Label Id
+  | CLetTuple [(Id,Type)] Id CExpr
+  | CGet      Id Id
+  | CPut      Id Id Id
+  | CExtArray Label
+  deriving Show
 data Closure = Closure { _entry    :: Label
                        , _actualFV :: [Id]}
              deriving Show
@@ -93,6 +99,8 @@ fv e_ = do
 
       CNeg  x -> return $ S.singleton x
       CFNeg x -> return $ S.singleton x
+      CF2I  x -> return $ S.singleton x
+      CI2F  x -> return $ S.singleton x
       CVar  x -> return $ S.singleton x
 
       CAdd  x y -> return $ S.fromList [x,y]
@@ -102,6 +110,8 @@ fv e_ = do
       CLAnd x y -> return $ S.fromList [x,y]
       CLOr  x y -> return $ S.fromList [x,y]
       CLXor x y -> return $ S.fromList [x,y]
+      CSrl  x y -> return $ S.fromList [x,y]
+      CSll  x y -> return $ S.fromList [x,y]
       CFAdd x y -> return $ S.fromList [x,y]
       CFSub x y -> return $ S.fromList [x,y]
       CFMul x y -> return $ S.fromList [x,y]
@@ -146,6 +156,8 @@ g env known = \case
 
   KNeg  x -> return $ CNeg x
   KFNeg x -> return $ CFNeg x
+  KF2I  x -> return $ CF2I  x
+  KI2F  x -> return $ CI2F  x
 
   KAdd  x y -> return $ CAdd  x y
   KSub  x y -> return $ CSub  x y
@@ -154,6 +166,8 @@ g env known = \case
   KLAnd x y -> return $ CLAnd x y
   KLOr  x y -> return $ CLOr  x y
   KLXor x y -> return $ CLXor x y
+  KSrl  x y -> return $ CSrl  x y
+  KSll  x y -> return $ CSll  x y
   KFAdd x y -> return $ CFAdd x y
   KFSub x y -> return $ CFSub x y
   KFMul x y -> return $ CFMul x y

@@ -274,6 +274,8 @@ initialExtTyEnv = M.fromList
   , ("create_float_array" , TFun [TInt,TFloat] (TPtr TFloat))
   , ("init_array"         , TFun [TInt,TInt  ] (TPtr TInt  ))
   , ("init_float_array"   , TFun [TInt,TFloat] (TPtr TFloat))
+  , ("f2i"                , TFun [TFloat     ] TInt         )
+  , ("i2f"                , TFun [TInt       ] TFloat       )
   ]
 
 -- logger --

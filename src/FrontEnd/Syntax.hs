@@ -13,6 +13,8 @@ data Expr = EUnit
           | EFloat    Float
           | ENot      Expr
           | ENeg      Expr
+          | EF2I      Expr
+          | EI2F      Expr
           | EAdd      Expr Expr
           | ESub      Expr Expr
           | EMul      Expr Expr
@@ -20,6 +22,8 @@ data Expr = EUnit
           | ELAnd     Expr Expr -- bitwise and
           | ELOr      Expr Expr -- bitwise or
           | ELXor     Expr Expr -- bitwise xor
+          | ESrl      Expr Expr
+          | ESll      Expr Expr
           | EFNeg     Expr
           | EFAdd     Expr Expr
           | EFSub     Expr Expr

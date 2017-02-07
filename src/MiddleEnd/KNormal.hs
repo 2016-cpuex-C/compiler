@@ -20,6 +20,8 @@ data KExpr = KUnit
            | KBool Bool
            | KFloat Float
            | KNeg  Id
+           | KF2I  Id
+           | KI2F  Id
            | KAdd  Id Id
            | KSub  Id Id
            | KMul  Id Id
@@ -27,6 +29,8 @@ data KExpr = KUnit
            | KLAnd Id Id
            | KLOr  Id Id
            | KLXor Id Id
+           | KSrl  Id Id
+           | KSll  Id Id
            | KFNeg Id
            | KFAdd Id Id
            | KFSub Id Id
@@ -61,8 +65,10 @@ fv = \case
   KFloat _ -> S.empty
   KExtArray _ -> S.empty
 
-  KNeg x -> S.singleton x
+  KNeg  x -> S.singleton x
   KFNeg x -> S.singleton x
+  KF2I  x -> S.singleton x
+  KI2F  x -> S.singleton x
 
   KAdd    x y -> S.fromList [x,y]
   KSub    x y -> S.fromList [x,y]
@@ -71,6 +77,8 @@ fv = \case
   KLAnd   x y -> S.fromList [x,y]
   KLOr    x y -> S.fromList [x,y]
   KLXor   x y -> S.fromList [x,y]
+  KSrl    x y -> S.fromList [x,y]
+  KSll    x y -> S.fromList [x,y]
   KFAdd   x y -> S.fromList [x,y]
   KFSub   x y -> S.fromList [x,y]
   KFMul   x y -> S.fromList [x,y]
@@ -126,7 +134,8 @@ g env e = case e of
   ENot e' ->
     g env (EIf e' (EBool False) (EBool True))
 
-  ENeg  e'    -> int1 KNeg e'
+  ENeg  e'    -> int1 KNeg  e'
+  EF2I  e'    -> int1 KF2I e'
   EAdd  e1 e2 -> int2 KAdd  e1 e2
   ESub  e1 e2 -> int2 KSub  e1 e2
   EMul  e1 e2 -> int2 KMul  e1 e2
@@ -134,12 +143,16 @@ g env e = case e of
   ELAnd e1 e2 -> int2 KLAnd e1 e2
   ELOr  e1 e2 -> int2 KLOr  e1 e2
   ELXor e1 e2 -> int2 KLXor e1 e2
+  ESrl  e1 e2 -> int2 KSrl  e1 e2
+  ESll  e1 e2 -> int2 KSll  e1 e2
 
   EFNeg e'    -> float1 KFNeg e'
+  EI2F  e'    -> float1 KI2F e'
   EFAdd e1 e2 -> float2 KFAdd e1 e2
   EFSub e1 e2 -> float2 KFSub e1 e2
   EFMul e1 e2 -> float2 KFMul e1 e2
   EFDiv e1 e2 -> float2 KFDiv e1 e2
+
 
   EEq{} -> g env (EIf e (EBool True) (EBool False))
   ELe{} -> g env (EIf e (EBool True) (EBool False))

@@ -127,7 +127,7 @@ inst e | not (null (metadata e)) = error $ "inst: " ++ show e
   FSub _  x y _ -> LFSub (op x) (op y)
   FMul _  x y _ -> LFMul (op x) (op y)
   FDiv _  x y _ -> LFDiv (op x) (op y)
-  LShr _  x y _ -> LSrl  (op x) (op y) -- TODO
+  LShr _  x y _ -> LSrl  (op x) (op y)
   Shl _ _ x y _ -> LSll  (op x) (op y)
   And     x y _ -> LAnd  (op x) (op y)
   Or      x y _ -> LOr   (op x) (op y)

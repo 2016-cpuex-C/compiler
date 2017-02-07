@@ -33,6 +33,10 @@ import FrontEnd.Syntax
     '&'         { TokenAnd         }
     '|'         { TokenOr          }
     '^'         { TokenXor         }
+    '<<'        { TokenSll         }
+    '>>'        { TokenSrl         }
+    f2i         { TokenF2I         }
+    i2f         { TokenI2F         }
     if          { TokenIf          }
     then        { TokenThen        }
     else        { TokenElse        }
@@ -62,7 +66,7 @@ import FrontEnd.Syntax
 %left  ','
 %left  '=' '<>' '<=' '<' '>' '>='
 %left  '+' '-' '+.' '-.'
-%left  '*' '/' '*.' '/.' '&' '|' '^'
+%left  '*' '/' '*.' '/.' '&' '|' '^' '<<' '>>'
 %left  prec_neg
 %left  prec_app
 %left  '.'
@@ -74,6 +78,8 @@ import FrontEnd.Syntax
 Expr :: { Expr }
     : SimpleExpr                                       { $1                 }
     | not Expr %prec prec_app                          { ENot $2            }
+    | f2i Expr %prec prec_app                          { EF2I $2            }
+    | i2f Expr %prec prec_app                          { EI2F $2            }
     | '-' Expr  %prec prec_neg                         { neg $2             }
     | Expr '+' Expr                                    { EAdd  $1 $3        }
     | Expr '-' Expr                                    { ESub  $1 $3        }
@@ -88,6 +94,8 @@ Expr :: { Expr }
     | Expr '>' Expr                                    { ENot (ELe $1 $3)   }
     | Expr '<=' Expr                                   { ELe $1 $3          }
     | Expr '>=' Expr                                   { ELe $3 $1          }
+    | Expr '<<' Expr                                   { ESll $1 $3          }
+    | Expr '>>' Expr                                   { ESrl $1 $3          }
     | if Expr then Expr else Expr %prec prec_if        { EIf $2 $4 $6       }
     | '-.' Expr %prec prec_neg                         { EFNeg $2           }
     | Expr '+.' Expr                                   { EFAdd $1 $3        }

@@ -80,6 +80,10 @@ data AExpr
   | AOr     Id IdOrImm
   | AXor    Id IdOrImm
 
+  -- convert
+  | AF2I    Id
+  | AI2F    Id
+
   -- compare
   | ACmp  Predicate Id IdOrImm
   | AFCmp Predicate Id Id

@@ -95,13 +95,15 @@ g' oc (dest,exp) =
                       show i ++ " is out of 16bits range\n" ++
                       "devide into " ++ show hi ++ " and " ++ show lo
                     write $ printf "\tli\t%s, %d" x hi
-                    write $ printf "\tsll\t%s, %s, 16" x x
+                    write $ printf "\tslli\t%s, %s, 16" x x
                     write $ printf "\taddi\t%s, %s, %d" x x lo
       ASetF (Label l) -> write $ printf "\tl.sl\t%s, %s" x l
       ASetL (Label y) -> write $ printf "\tla\t%s, %s" x y
 
       AMov y ->  when (x /= y) $ write $ printf "\tmove\t%s, %s" x y
       ANeg y ->  write $ printf "\tneg\t%s, %s" x y
+      AF2I y ->  write $ printf "\tcvt.w.s\t%s, %s" x y
+      AI2F y ->  write $ printf "\tcvt.s.w\t%s, %s" x y
 
       AAdd y (V z) -> write $ printf "\tadd\t%s, %s, %s"   x y z
       ASub y (V z) -> write $ printf "\tsub\t%s, %s, %s"   x y z
@@ -110,6 +112,8 @@ g' oc (dest,exp) =
       AAnd y (V z) -> write $ printf "\tand\t%s, %s, %s"   x y z
       AOr  y (V z) -> write $ printf "\tor\t%s, %s, %s"    x y z
       AXor y (V z) -> write $ printf "\txor\t%s, %s, %s"   x y z
+      ASrl y (V z) -> write $ printf "\tsrl\t%s, %s, %s"   x y z
+      ASll y (V z) -> write $ printf "\tsll\t%s, %s, %s"   x y z
       AAdd y (C i) -> write $ printf "\taddi\t%s, %s, %d"  x y i
       ASub y (C i) -> write $ printf "\tsubi\t%s, %s, %d"  x y i
       AMul y (C i) -> write $ printf "\tmulti\t%s, %s, %d" x y i
@@ -117,10 +121,8 @@ g' oc (dest,exp) =
       AAnd y (C i) -> write $ printf "\tandi\t%s, %s, %d"  x y i
       AOr  y (C i) -> write $ printf "\tori\t%s, %s, %d"   x y i
       AXor y (C i) -> write $ printf "\txori\t%s, %s, %d"  x y i
-
-      ASll y i -- TODO ASrl追加しよう
-        | i >= 0    -> write $ printf "\tsll\t%s, %s, %d" x y i
-        | otherwise -> write $ printf "\tsrl\t%s, %s, %d" x y (-i)
+      ASrl y (C i) -> write $ printf "\tsrli\t%s, %s, %d"  x y i
+      ASll y (C i) -> write $ printf "\tslli\t%s, %s, %d"  x y i
 
       AFMovD y   -> write $ printf "\tmov.s\t%s, %s" x y
       AFNegD y   -> write $ printf "\tneg.s\t%s, %s" x y
@@ -252,6 +254,8 @@ g' oc (dest,exp) =
           g' oc (NonTail tmp, exp)
           ret
 
+      AF2I{}  -> g' oc (NonTail(fregs!0), exp) >> ret
+      AI2F{}  -> g' oc (NonTail(fregs!0), exp) >> ret
       ASet{}  -> g' oc (NonTail (regs!0), exp) >> ret
       ASetL{} -> g' oc (NonTail (regs!0), exp) >> ret
       AMov{}  -> g' oc (NonTail (regs!0), exp) >> ret
@@ -262,7 +266,8 @@ g' oc (dest,exp) =
       AAnd{}  -> g' oc (NonTail (regs!0), exp) >> ret
       AOr {}  -> g' oc (NonTail (regs!0), exp) >> ret
       AXor{}  -> g' oc (NonTail (regs!0), exp) >> ret
-      ADiv{}  -> error "Emit.hs: impossible"
+      ADiv{}  -> g' oc (NonTail (regs!0), exp) >> ret
+      ASrl{}  -> g' oc (NonTail (regs!0), exp) >> ret
       ASll{}  -> g' oc (NonTail (regs!0), exp) >> ret
       ALd{}   -> g' oc (NonTail (regs!0), exp) >> ret
 
