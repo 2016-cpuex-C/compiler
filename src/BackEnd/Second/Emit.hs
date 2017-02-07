@@ -187,12 +187,14 @@ emitInst = \case
   x := AMul y (C i)     -> rri "multi" x y i
   x := ADiv y (V z)     -> rrr "div"   x y z
   x := ADiv y (C i)     -> rri "divi"  x y i
-  x := ASll y (C i)
-    | i >= 0            -> rri "sll" x y i
-    | otherwise         -> rri "srl" x y (-i)
+  x := ASrl y (V z)     -> rrr "srl"   x y z
+  x := ASll y (V z)     -> rrr "sll"   x y z
   x := ASrl y (C i)
-    | i >= 0            -> rri "srl" x y i
-    | otherwise         -> rri "sll" x y (-i)
+    | i >= 0            -> rri "srli" x y i
+    | otherwise         -> rri "slli" x y (-i)
+  x := ASll y (C i)
+    | i >= 0            -> rri "slli" x y i
+    | otherwise         -> rri "srli" x y (-i)
   x := ALd y (C i)      -> rri'"lwr" x y i
   Do (ASt x y (C i))    -> rri'"sw"  x y i
   x := ALdi i           -> rri'"lwr" x regZero i
