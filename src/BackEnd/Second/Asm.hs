@@ -16,28 +16,35 @@ import           Control.Lens ((<+=),(<&>))
 -- Types
 -------------------------------------------------------------------------------
 
+-- |プログラム全体
 data AProg = AProg [AFunDef]
            deriving (Show,Eq,Ord)
 
+-- |関数
 data AFunDef = AFunDef {
-    aFunName :: Label
-  , aArgs    :: [Id]
-  , aFArgs   :: [Id]
-  , aBody    :: [ABlock]
-  , aRet     :: Type
+    aFunName :: Label     -- ^ 関数名
+  , aArgs    :: [Id]      -- ^ 汎用レジスタに置く引数
+  , aFArgs   :: [Id]      -- ^ 不動小数点用レジスタに置く引数
+  , aBody    :: [ABlock]  -- ^ 本体 基本ブロックの集合
+  , aRet     :: Type      -- ^ 返り値の型
   } deriving (Show,Eq,Ord)
 
+-- |基本ブロック
 data ABlock
   = ABlock {
-    aBlockName  :: Label
-  , aStatements :: [Statement]
+    aBlockName  :: Label       -- ^ ブロック名
+  , aStatements :: [Statement] -- ^ 命令列
   } deriving (Show,Eq,Ord)
 
+-- |命令 l: x <- \tau (y1,...,yn)
+--  1節で命令のラベルと呼んでいたものはInstIdという名前になっている
 type Statement = (InstId, Inst)
 
 type InstId = Int
 
+-- |命令本体
 type Inst = Named AExpr
+-- data Named a = Id := a | Do a -- defined in Base module
 
 data AExpr
   = ANop

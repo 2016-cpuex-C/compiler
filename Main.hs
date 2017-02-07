@@ -157,7 +157,7 @@ parseOpt = pure MinCamlOptions
   <*> switch
     $$ short '1'
     <=> long "first"
-    <=> help "use first compiler"
+    <=> help "use first compiler using old instructin set"
   <*> switch
     $$ short 'v'
     <=> long "verbose"

@@ -4,8 +4,6 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE OverloadedStrings #-}
 
--- Spilling, Coloring, Coalescing を統合する予定
-
 module BackEnd.Second.RegAlloc (
     regAlloc
   , Color(..)
@@ -14,9 +12,8 @@ module BackEnd.Second.RegAlloc (
 import Base
 import BackEnd.Second.Asm
 import BackEnd.Second.RegAlloc.Coloring
-import BackEnd.Second.RegAlloc.Coalescing --as Export
+import BackEnd.Second.RegAlloc.Coalescing
 
 regAlloc :: AFunDef -> Caml (AFunDef,Map Id Color)
 regAlloc f = coalesce f =<< colorFun f
-{-regAlloc f = (f,) <$> colorFun f-}
 

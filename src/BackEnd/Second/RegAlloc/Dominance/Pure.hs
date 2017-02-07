@@ -38,7 +38,7 @@ data DS v = DS {
 
     -- union find用
   , _parentsUF :: Map v v        -- UnionFindでの親的なやつ
-  , _mn        :: Map v v        -- sigmaくんのブログのやつ
+  , _mn        :: Map v v
   }
 makeLenses ''DS
 

@@ -54,9 +54,9 @@ interferenceGraph f = toG <$> analyzeLifetime f
 analyzeLifetime :: AFunDef -> Caml (Map InstId (Set Id, Set Id))
 analyzeLifetime f =
   view liveOut_ <$> execStateT analyzeLifetimeSub LA {
-      _instMap_ = instMap f
-    , _succMap_ = succMap f
-    , _liveOut_ = M.empty
+      _instMap_ = instMap f -- 命令のIDから命令本体と所属ブロックを得る
+    , _succMap_ = succMap f -- 命令のIDから後続の命令のIDたちを得る
+    , _liveOut_ = M.empty   -- 求めるもの
   }
 
 -- block単位
@@ -79,13 +79,11 @@ analyzeLifetimeSub = do
 
 update :: InstId -> CamlLA ()
 update n = do
-  Just succs <- uses succMap_ (M.lookup n)
-  new <- next n succs
+  let f m = union2 <$> use' n m
+                   <*> (difference2 <$> out' m <*> def' m)
+  succs <- lookupMapLensNoteM "update" n succMap_
+  new <- unions2 <$> mapM f succs
   liveOut_ %= M.insert n new
-
-next :: InstId -> [InstId] -> CamlLA (Set Id, Set Id)
-next n succs = unions2 <$> mapM f succs
-  where f m = union2 <$> use' n m <*> (difference2 <$> out' m <*> def' m)
 
 -------------------------------------------------------------------------------
 -- Successor Map
@@ -153,9 +151,7 @@ use' n m = uses instMap_ (snd. lookupMapNote msg m) >>= useInst'
       let xvs = case lookup b ps of
                   Just hoge -> hoge
                   Nothing   -> error $ "use': " ++ show (n,b,ps)
-
       return (S.fromList [ y | (_, PVVar y t _) <- xvs, t /= TFloat ]
              ,S.fromList [ y | (_, PVVar y t _) <- xvs, t == TFloat ])
-
     useInst' inst = return $ useInst inst
 

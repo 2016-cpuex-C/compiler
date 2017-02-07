@@ -12,9 +12,7 @@ import qualified MiddleEnd.Alpha as Alpha
 
 import qualified Data.Map as M
 import qualified Data.Set as S
-import Data.List (isPrefixOf)
-
---import Debug.Trace (trace)
+import           Data.List (isPrefixOf)
 
 inline :: KExpr -> Caml KExpr
 inline e = do
@@ -40,9 +38,7 @@ inlineSub _limit = g M.empty
 
       KLet xt e1 e2 -> KLet xt <$> g env e1 <*> g env e2
       KLetRec f@(KFunDef (x,t) yts e1) e2 -> do
-        --($logDebug) $ "sizeof " <> pack x <> ": " <> show' (size e1, isRecursive f)
         let inlining = size e1 < _limit && (not (isRecursive f))
-        {-let inlining = not (isRecursive f)-}
             env' = if not inlining then env else M.insert x (yts,e1) env
         e1' <- g env' e1
         e2' <- g env' e2

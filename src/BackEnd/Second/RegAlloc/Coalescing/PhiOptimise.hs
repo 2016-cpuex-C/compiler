@@ -58,7 +58,6 @@ data OptimiseUnit = OU Id [Id]
 
 addToQueue :: Entry -> CamlCS ()
 addToQueue e@(Entry _ _ _S) = do
-  --($logDebug) $ "addToQueue: " <> show' e
   entryQ %= S.insert e
 
 popQueue :: CamlCS (Maybe Entry)
@@ -69,30 +68,16 @@ popQueue = do
     else do
       let (x,q') = S.deleteFindMax q
       entryQ .= q'
-      --($logDebug) $ "popQueue" <> show' x
       return (Just x)
 
 -------------------------------------------------------------------------------
 -- Main
 -------------------------------------------------------------------------------
 
--- entryQとcandidateはOptimiseUnitごとに初期化
--- pinnedは全体
-
---mainRC :: AFunDef -> Caml (Map Id Color)
---mainRC f = do
---  colMap' <- colorFun f
 phiOpimise :: AFunDef -> Map Id Color -> Set Id -> Caml (Map Id Color)
 phiOpimise f colMap' prePinned = do
   g <- interferenceGraph f
   let ous = optimiseUnits f g
-
-  --($logDebug) $ "mainRC: " <> show' (aFunName f)
-  --($logDebugSH) f
-  --($logDebug) $ "interference graph: " <> show' g
-  --($logDebug) $ "liveOut: "            <> show' liveOut
-  --($logDebug) $ "coloring: "           <> show' colMap'
-  --($logDebug) $ "optimise units: "     <> show' ous
   r <- runStateT (coalesceSub ous) CS {
           _colMap_       = colMap'
         , _colMapMod_    = M.empty
@@ -102,33 +87,27 @@ phiOpimise f colMap' prePinned = do
         , _candidate_    = S.empty
         }
 
-  --($logDebugSH) $ snd r ^. colMap_
   return $ snd r ^. colMap_
 
 coalesceSub :: [OptimiseUnit] -> CamlCS ()
 coalesceSub ous = forM_ (reverse ous) $ \ou -> do
-  --($logDebug) $ "coalesceSub: " <> show' ou
   initRC ou
   testRC ou
   applyRC
-  --($logDebugSH) =<< use colMap_
 
 initRC :: OptimiseUnit -> CamlCS ()
 initRC ou = do
-  --($logDebug) $ "initRC: start: " <> show' ou
   entryQ .= S.empty
   ous <- createEntries ou
   mapM_ addToQueue ous
 
 testRC :: OptimiseUnit -> CamlCS ()
 testRC ou = do
-  --($logDebug) $ "testRC: " <> show' ou
   candidate_ .= S.empty
   (colMapMod_ .=) =<< use colMap_
   popQueue >>= \case
     Nothing -> return ()
     Just e@(Entry c _ _)  -> do
-      --($logDebug) $ "testRC: " <> show' e
       testSub ou e >>= \case
         Nothing -> return ()
         Just g'  -> do
@@ -138,11 +117,9 @@ testRC ou = do
 
 testSub :: OptimiseUnit -> Entry -> CamlCS (Maybe Graph)
 testSub _ou@(OU p as) _e@(Entry c g s) = do
-  --($logDebug) $ "testSub:\n        " <> show' _ou <> "\n        " <> show' _e
   go (filter (`S.member`s) (p:as))
   where
     go us' = do
-      --($logDebug) $ "testSub_go: " <> show' us'
       case us' of
         []     -> return Nothing
         (u:us) -> tryColor u Nothing c >>= \case
@@ -153,15 +130,14 @@ testSub _ou@(OU p as) _e@(Entry c g s) = do
 
 tryColor :: Id -> Maybe Id -> Color -> CamlCS TryResult
 tryColor v mu c = do
-  --($logDebug) $ "tryColor: start" <> show' (v,mu,c)
   colMapMod' <- use colMapMod_
   ifG'       <- use interferenceG
   pinned'    <- use pinned_
   candidate' <- use candidate_
   let c_v = lookupMapNote "" v colMapMod'
-  if| c == c_v                -> {-($logDebug) ("  tc ok: " <> show' (v,mu,c)) >> -}return Success
-    | v `S.member` pinned'    -> {-($logDebug) ("  tc pn: " <> show' (v,mu,c)) >> -}return (Pinned v)
-    | v `S.member` candidate' -> {-($logDebug) ("  tc ca: " <> show' (v,mu,c)) >> -}return (Candidate v)
+  if| c == c_v                -> return Success
+    | v `S.member` pinned'    -> return (Pinned v)
+    | v `S.member` candidate' -> return (Candidate v)
     | otherwise ->
         let p n = Just n /= mu && c == lookupMapNote "tryColor" n colMapMod'
         in  go c_v $ S.toList $ S.filter p $ lookupMapNote "tryColor" v ifG'
@@ -169,11 +145,9 @@ tryColor v mu c = do
   where
     go :: Color -> [Id] -> CamlCS TryResult
     go _ [] = do
-      --($logDebug) $ "tryColor_go: Success: " <> show' (v,c)
       colMapMod_ %= M.insert v c
       return Success
     go c_v (n:ns) = do
-      --($logDebug) $ "tryColor_go: repeat: " <> show' (n:ns)
       tryColor n (Just v) c_v >>= \case
         Success -> go c_v ns
         other   -> return other
@@ -187,11 +161,8 @@ data TryResult
 
 applyRC :: CamlCS ()
 applyRC = do
-  --($logDebug) "applyRC"
   candidate' <- use candidate_
   when (S.size candidate' > 1) $ do
-    --($logDebug) $ "applying: " <> show' candidate'
-    --($logDebugSH) =<< use colMapMod_
     pinned_ %= S.union candidate'
     (colMap_ .=) =<< use colMapMod_
 
@@ -220,7 +191,6 @@ optimiseUnits f c = map ou (phiCols f)
       where g x = x /= p && x `S.notMember` M.findWithDefault S.empty p c
       -- x <- phi (x1,...,xn)  (x==xi for some i)
       -- みたいなものがありえるので x /= p が必要
-      -- Virtual.setRenameMapIn参照
 
 phiCols :: AFunDef -> [(Id,[Id])]
 phiCols f = g =<< aStatements =<< aBody f
