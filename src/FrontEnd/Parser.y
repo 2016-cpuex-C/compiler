@@ -30,6 +30,13 @@ import FrontEnd.Syntax
     '>='        { TokenGe          }
     '<'         { TokenLt          }
     '>'         { TokenGt          }
+    land        { TokenAnd         }
+    lor         { TokenOr          }
+    lxor        { TokenXor         }
+    lsr         { TokenSrl         }
+    lsl         { TokenSll         }
+    f2i         { TokenF2I         }
+    i2f         { TokenI2F         }
     if          { TokenIf          }
     then        { TokenThen        }
     else        { TokenElse        }
@@ -57,7 +64,7 @@ import FrontEnd.Syntax
 %right prec_if
 %right '<-'
 %left  ','
-%left  '=' '<>' '<=' '<' '>' '>='
+%left  '=' '<>' '<=' '<' '>' '>=' land lor lxor lsl lsr
 %left  '+' '-' '+.' '-.'
 %left  '*' '/' '*.' '/.'
 %left  prec_neg
@@ -73,6 +80,8 @@ import FrontEnd.Syntax
 Expr :: { Expr }
     : SimpleExpr                                       { $1                 }
     | not Expr %prec prec_app                          { ENot $2            }
+    | f2i Expr %prec prec_app                          { EF2I $2            }
+    | i2f Expr %prec prec_app                          { EI2F $2            }
     | '-' Expr  %prec prec_neg                         { neg $2             }
     | Expr '+' Expr                                    { EAdd $1 $3         }
     | Expr '-' Expr                                    { ESub $1 $3         }
@@ -84,6 +93,11 @@ Expr :: { Expr }
     | Expr '>' Expr                                    { ENot (ELe $1 $3)   }
     | Expr '<=' Expr                                   { ELe $1 $3          }
     | Expr '>=' Expr                                   { ELe $3 $1          }
+    | Expr land Expr                                   { EAnd $1 $3         }
+    | Expr lor  Expr                                   { EOr  $1 $3         }
+    | Expr lxor Expr                                   { EXor $1 $3         }
+    | Expr lsr  Expr                                   { ESrl $1 $3         }
+    | Expr lsl  Expr                                   { ESll $1 $3         }
     | if Expr then Expr else Expr %prec prec_if        { EIf $2 $4 $6       }
     | '-.' Expr %prec prec_neg                         { EFNeg $2           }
     | Expr '+.' Expr                                   { EFAdd $1 $3        }

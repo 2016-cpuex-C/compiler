@@ -143,6 +143,12 @@ infer env e =
     EFNeg e' -> do
         unifyM1 TFloat (infer env e')
         return TFloat
+    EF2I e' -> do
+        unifyM1 TFloat (infer env e')
+        return TInt
+    EI2F e' -> do
+        unifyM1 TInt (infer env e')
+        return TFloat
 
     EAdd e1 e2 -> do
         unifyM1 TInt (infer env e1)
@@ -157,6 +163,26 @@ infer env e =
         unifyM1 TInt (infer env e2)
         return TInt
     EDiv e1 e2 -> do
+        unifyM1 TInt (infer env e1)
+        unifyM1 TInt (infer env e2)
+        return TInt
+    EAnd e1 e2 -> do
+        unifyM1 TInt (infer env e1)
+        unifyM1 TInt (infer env e2)
+        return TInt
+    EOr e1 e2 -> do
+        unifyM1 TInt (infer env e1)
+        unifyM1 TInt (infer env e2)
+        return TInt
+    EXor e1 e2 -> do
+        unifyM1 TInt (infer env e1)
+        unifyM1 TInt (infer env e2)
+        return TInt
+    ESrl e1 e2 -> do
+        unifyM1 TInt (infer env e1)
+        unifyM1 TInt (infer env e2)
+        return TInt
+    ESll e1 e2 -> do
         unifyM1 TInt (infer env e1)
         unifyM1 TInt (infer env e2)
         return TInt

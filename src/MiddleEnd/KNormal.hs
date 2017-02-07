@@ -23,10 +23,17 @@ data KExpr = KUnit
            | KInt Integer
            | KFloat Float
            | KNeg  Id
+           | KF2I  Id
+           | KI2F  Id
            | KAdd  Id Id
            | KSub  Id Id
            | KMul  Id Id
            | KDiv  Id Id
+           | KAnd  Id Id
+           | KOr   Id Id
+           | KXor  Id Id
+           | KSrl  Id Id
+           | KSll  Id Id
            | KFNeg Id
            | KFAdd Id Id
            | KFSub Id Id
@@ -62,11 +69,18 @@ fv = \case
 
   KNeg x -> S.singleton x
   KFNeg x -> S.singleton x
+  KF2I x  -> S.singleton x
+  KI2F x  -> S.singleton x
 
   KAdd    x y -> S.fromList [x,y]
   KSub    x y -> S.fromList [x,y]
   KMul    x y -> S.fromList [x,y]
   KDiv    x y -> S.fromList [x,y]
+  KAnd    x y -> S.fromList [x,y]
+  KOr     x y -> S.fromList [x,y]
+  KXor    x y -> S.fromList [x,y]
+  KSrl    x y -> S.fromList [x,y]
+  KSll    x y -> S.fromList [x,y]
   KFAdd   x y -> S.fromList [x,y]
   KFSub   x y -> S.fromList [x,y]
   KFMul   x y -> S.fromList [x,y]
@@ -127,6 +141,13 @@ g env e = case e of
     insertLet (g env e') $ \x ->
     return (KNeg x, TInt)
 
+  EF2I e' ->
+    insertLet (g env e') $ \x ->
+    return (KF2I x, TInt)
+  EI2F e' ->
+    insertLet (g env e') $ \x ->
+    return (KI2F x, TFloat)
+
   EAdd e1 e2 ->
     insertLet (g env e1) $ \x ->
     insertLet (g env e2) $ \y ->
@@ -143,6 +164,26 @@ g env e = case e of
     insertLet (g env e1) $ \x ->
     insertLet (g env e2) $ \y ->
     return (KDiv x y, TInt)
+  EAnd e1 e2 ->
+    insertLet (g env e1) $ \x ->
+    insertLet (g env e2) $ \y ->
+    return (KAnd x y, TInt)
+  EOr e1 e2 ->
+    insertLet (g env e1) $ \x ->
+    insertLet (g env e2) $ \y ->
+    return (KOr x y, TInt)
+  EXor e1 e2 ->
+    insertLet (g env e1) $ \x ->
+    insertLet (g env e2) $ \y ->
+    return (KXor x y, TInt)
+  ESrl e1 e2 ->
+    insertLet (g env e1) $ \x ->
+    insertLet (g env e2) $ \y ->
+    return (KSrl x y, TInt)
+  ESll e1 e2 ->
+    insertLet (g env e1) $ \x ->
+    insertLet (g env e2) $ \y ->
+    return (KSll x y, TInt)
 
   EFNeg e' ->
     insertLet (g env e') $ \x ->

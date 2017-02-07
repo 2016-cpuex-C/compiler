@@ -44,10 +44,17 @@ fv e_ = do
       KVar  x         -> return $ S.singleton x
       KNeg  x         -> return $ S.singleton x
       KFNeg x         -> return $ S.singleton x
+      KF2I  x         -> return $ S.singleton x
+      KI2F  x         -> return $ S.singleton x
       KAdd  x y       -> return $ S.fromList [x,y]
       KSub  x y       -> return $ S.fromList [x,y]
       KMul  x y       -> return $ S.fromList [x,y]
       KDiv  x y       -> return $ S.fromList [x,y]
+      KAnd  x y       -> return $ S.fromList [x,y]
+      KOr   x y       -> return $ S.fromList [x,y]
+      KXor  x y       -> return $ S.fromList [x,y]
+      KSrl  x y       -> return $ S.fromList [x,y]
+      KSll  x y       -> return $ S.fromList [x,y]
       KFAdd x y       -> return $ S.fromList [x,y]
       KFSub x y       -> return $ S.fromList [x,y]
       KFMul x y       -> return $ S.fromList [x,y]

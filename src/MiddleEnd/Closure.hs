@@ -30,10 +30,17 @@ data CExpr = CUnit
            | CInt      Integer
            | CFloat    Float
            | CNeg      Id
+           | CF2I      Id
+           | CI2F      Id
            | CAdd      Id Id
            | CSub      Id Id
            | CMul      Id Id
            | CDiv      Id Id
+           | CAnd      Id Id
+           | COr       Id Id
+           | CXor      Id Id
+           | CSrl      Id Id
+           | CSll      Id Id
            | CFNeg     Id
            | CFAdd     Id Id
            | CFSub     Id Id
@@ -88,11 +95,18 @@ fv e_ = do
       CNeg  x -> return $ S.singleton x
       CFNeg x -> return $ S.singleton x
       CVar  x -> return $ S.singleton x
+      CF2I  x -> return $ S.singleton x
+      CI2F  x -> return $ S.singleton x
 
       CAdd  x y -> return $ S.fromList [x,y]
       CSub  x y -> return $ S.fromList [x,y]
       CMul  x y -> return $ S.fromList [x,y]
       CDiv  x y -> return $ S.fromList [x,y]
+      CAnd  x y -> return $ S.fromList [x,y]
+      COr   x y -> return $ S.fromList [x,y]
+      CXor  x y -> return $ S.fromList [x,y]
+      CSrl  x y -> return $ S.fromList [x,y]
+      CSll  x y -> return $ S.fromList [x,y]
       CFAdd x y -> return $ S.fromList [x,y]
       CFSub x y -> return $ S.fromList [x,y]
       CFMul x y -> return $ S.fromList [x,y]
@@ -134,11 +148,18 @@ g env known = \case
 
   KNeg  x -> return $ CNeg x
   KFNeg x -> return $ CFNeg x
+  KF2I  x -> return $ CF2I  x
+  KI2F  x -> return $ CI2F  x
 
   KAdd  x y -> return $ CAdd  x y
   KSub  x y -> return $ CSub  x y
   KMul  x y -> return $ CMul  x y
   KDiv  x y -> return $ CDiv  x y
+  KAnd  x y -> return $ CAnd  x y
+  KOr   x y -> return $ COr   x y
+  KXor  x y -> return $ CXor  x y
+  KSrl  x y -> return $ CSrl  x y
+  KSll  x y -> return $ CSll  x y
   KFAdd x y -> return $ CFAdd x y
   KFSub x y -> return $ CFSub x y
   KFMul x y -> return $ CFMul x y

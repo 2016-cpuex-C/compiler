@@ -160,6 +160,12 @@ g' destt cont regenv exp = case exp of
   ANeg x -> do
       rx <- find x TInt regenv
       return (AsmAns (ANeg rx), regenv)
+  AF2I x -> do
+      rx <- find x TFloat regenv
+      return (AsmAns (AF2I rx), regenv)
+  AI2F x -> do
+      rx <- find x TInt regenv
+      return (AsmAns (AI2F rx), regenv)
 
   AAdd x y' -> do
       rx <- find  x  TInt regenv
@@ -173,10 +179,30 @@ g' destt cont regenv exp = case exp of
       rx <- find  x  TInt regenv
       ry' <- find' y' regenv
       return (AsmAns (AMul rx ry'), regenv)
-  ADiv{} -> error "RegAlloc.hs: impossible"
-  ASll x i -> do
-      rx <- find x TInt   regenv
-      return (AsmAns (ASll rx i), regenv)
+  ADiv x y' -> do
+      rx <- find  x  TInt regenv
+      ry' <- find' y' regenv
+      return (AsmAns (ADiv rx ry'), regenv)
+  AAnd x y' -> do
+      rx <- find  x  TInt regenv
+      ry' <- find' y' regenv
+      return (AsmAns (AAnd rx ry'), regenv)
+  AOr x y' -> do
+      rx <- find  x  TInt regenv
+      ry' <- find' y' regenv
+      return (AsmAns (AOr rx ry'), regenv)
+  AXor x y' -> do
+      rx <- find  x  TInt regenv
+      ry' <- find' y' regenv
+      return (AsmAns (AXor rx ry'), regenv)
+  ASrl x y' -> do
+      rx <- find  x  TInt regenv
+      ry' <- find' y' regenv
+      return (AsmAns (ASrl rx ry'), regenv)
+  ASll x y' -> do
+      rx <- find  x  TInt regenv
+      ry' <- find' y' regenv
+      return (AsmAns (ASll rx ry'), regenv)
 
   ALd x y' -> do
       rx <- find  x  TInt regenv

@@ -30,11 +30,17 @@ data AExpr = ANop
            | ASetL Label
            | AMov Id
            | ANeg Id
+           | AF2I Id
+           | AI2F Id
            | AAdd Id IdOrImm
            | ASub Id IdOrImm
            | AMul Id IdOrImm
            | ADiv Id IdOrImm
-           | ASll Id Int -- shift left logical
+           | AAnd Id IdOrImm
+           | AOr  Id IdOrImm
+           | AXor Id IdOrImm
+           | ASrl Id IdOrImm -- shift right logical
+           | ASll Id IdOrImm -- shift left logical
            | ALd Id IdOrImm
            | ASt Id Id IdOrImm
            | AFMovD Id
@@ -165,15 +171,21 @@ fvAExpr = \case
 
   AMov x    -> [x]
   ANeg x    -> [x]
+  AF2I x    -> [x]
+  AI2F x    -> [x]
   AFMovD x  -> [x]
   AFNegD x  -> [x]
   ASave x _ -> [x]
-  ASll x _  -> [x]
 
   AAdd x y'    -> x : fvOfIdOrImm y'
   ASub x y'    -> x : fvOfIdOrImm y'
   AMul x y'    -> x : fvOfIdOrImm y'
   ADiv x y'    -> x : fvOfIdOrImm y'
+  AAnd x y'    -> x : fvOfIdOrImm y'
+  AOr  x y'    -> x : fvOfIdOrImm y'
+  AXor x y'    -> x : fvOfIdOrImm y'
+  ASrl x y'    -> x : fvOfIdOrImm y'
+  ASll x y'    -> x : fvOfIdOrImm y'
   ALd x y'     -> x : fvOfIdOrImm y'
   ALdDF x y'   -> x : fvOfIdOrImm y'
 

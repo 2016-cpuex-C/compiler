@@ -42,6 +42,7 @@ compile s f = do
   withFile (f -<.> "s") WriteMode $ \h -> do
     m <- (`runCaml` s) $ lex (libmincamlML ++ input)
           >>= parse
+          >>= \e -> log (show e) >> return e
           >>= typing
           >>= kNormalize
           >>= alpha

@@ -107,10 +107,18 @@ g env = \case
     return $ AsmAns (ASetF l)
 
   CNeg x -> return $ AsmAns $ ANeg x
+  CF2I x -> return $ AsmAns $ AF2I x
+  CI2F x -> return $ AsmAns $ AI2F x
+
   CAdd x y -> return $ AsmAns $ AAdd x (V y)
   CSub x y -> return $ AsmAns $ ASub x (V y)
   CMul x y -> return $ AsmAns $ AMul x (V y)
   CDiv x y -> return $ AsmAns $ ADiv x (V y)
+  CAnd x y -> return $ AsmAns $ AAnd x (V y)
+  COr  x y -> return $ AsmAns $ AOr  x (V y)
+  CXor x y -> return $ AsmAns $ AXor x (V y)
+  CSrl x y -> return $ AsmAns $ ASrl x (V y)
+  CSll x y -> return $ AsmAns $ ASll x (V y)
 
   CFNeg x -> return $ AsmAns $ AFNegD x
   CFAdd x y -> return $ AsmAns $ AFAddD x y

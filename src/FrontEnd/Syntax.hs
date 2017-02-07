@@ -14,10 +14,17 @@ data Expr = EUnit
           | EFloat    Float
           | ENot      Expr
           | ENeg      Expr
+          | EF2I      Expr
+          | EI2F      Expr
           | EAdd      Expr Expr
           | ESub      Expr Expr
           | EMul      Expr Expr
           | EDiv      Expr Expr
+          | EAnd      Expr Expr
+          | EOr       Expr Expr
+          | EXor      Expr Expr
+          | ESrl      Expr Expr
+          | ESll      Expr Expr
           | EFNeg     Expr
           | EFAdd     Expr Expr
           | EFSub     Expr Expr

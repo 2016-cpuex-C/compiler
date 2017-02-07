@@ -27,9 +27,9 @@ g env = \case
         let e' = g (M.insert x i env) e
         in if | x `elem` fv e' -> AsmLet (x,t) (ASet i) e'
               | otherwise      -> e'
-  AsmLet xt (ASll y i) e
+  AsmLet xt (ASll y (C i)) e
     | M.member y env ->
-        let e1 = ASet $ fromJust (M.lookup y env) `shift` i
+        let e1 = ASet $ fromJust (M.lookup y env) `shift` fromIntegral i
         in  g env (AsmLet xt e1 e)
   AsmLet xt exp e -> AsmLet xt (g' env exp) (g env e)
 
@@ -42,14 +42,14 @@ g' env = let geti var = lookupJust var env
   ASub x (V y)
     | M.member y env -> AAdd x (C (- geti y))
   AMul x (V y)
-    | M.member y env && geti y == 2 -> ASll x 1
-    | M.member y env && geti y == 4 -> ASll x 2
-    | M.member x env && geti x == 2 -> ASll y 1
-    | M.member x env && geti x == 4 -> ASll y 2
+    | M.member y env && geti y == 2 -> ASll x (C 1)
+    | M.member y env && geti y == 4 -> ASll x (C 2)
+    | M.member x env && geti x == 2 -> ASll y (C 1)
+    | M.member x env && geti x == 4 -> ASll y (C 2)
     -- | otherwise -> error "Simm.hs: impossible"
   --AMul _ (C _) -> e --error "Simm.hs: impossible" -- sinとかでありうる
   ADiv x (V y)
-    | M.member y env && geti y == 2 -> ASll x (-1)
+    | M.member y env && geti y == 2 -> ASll x (C (-1))
     | otherwise -> error "Simm.hs: impossible"
 
   ALd x (V y)
