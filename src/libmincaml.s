@@ -16,10 +16,6 @@ min_caml_print_char: # $v0
 	print_c	$v0
 	jr	$ra
 
-min_caml_print_byte: # $v0
-	print_b	$v0
-	jr	$ra
-
 min_caml_print_float:
 	print_f	$f0
 	jr	$ra
