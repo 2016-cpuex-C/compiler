@@ -290,15 +290,16 @@ sortBlocks f = map toBlock $ reverse $ execState (g (entryBlock f)) []
 
     -- bの直後に出力すると嬉しい
     prefer b = case snd (lastStmt b) of
-      Do (ABr l)               -> [l]
-      Do (ACBr _ lt lf)        -> [lt,lf] -- cbrはどっちでも対応可能
-      Do (ACmpBr  EQ _ _ _ lf) -> [lf]
-      Do (ACmpBr  LT _ _ _ lf) -> [lf]
-      Do (ACmpBr  GT _ _ _ lf) -> [lf]
-      Do (ACmpBr  _  _ _ lt _) -> [lt]    -- emitでflipするため
-      Do (AFCmpBr EQ _ _ _ lf) -> [lf]
-      Do (AFCmpBr LE _ _ _ lf) -> [lf]
-      Do (AFCmpBr LT _ _ _ lf) -> [lf]
+      Do (ABr l)                -> [l]
+      Do (ACBr _ lt lf)         -> [lt,lf] -- cbrはどっちでも対応可能
+      Do (ACmpBr  EQ _ _ lt lf) -> [lt,lf] -- eqとne両方あるので反転可能
+      Do (ACmpBr  NE _ _ lt lf) -> [lt,lf]
+      Do (ACmpBr  LT _ _ _  lf) -> [lf]
+      Do (ACmpBr  GT _ _ _  lf) -> [lf]
+      Do (ACmpBr  _  _ _ lt  _) -> [lt]    -- emitでflipするため
+      Do (AFCmpBr EQ _ _ _  lf) -> [lf]
+      Do (AFCmpBr LE _ _ _  lf) -> [lf]
+      Do (AFCmpBr LT _ _ _  lf) -> [lf]
       Do (AFCmpBr _  _ _ lt _) -> [lt]    -- 同上
       Do (ASwitch _ l _)       -> [l]
       _                        -> []
@@ -445,22 +446,36 @@ cbr b lt lf = use nextBlockName >>= \case
   _ -> branch "beqi" (reg b) (return "0") lf lt
 
 cmpbr  :: Predicate -> Id -> Id -> Label -> Label -> CamlE ()
-cmpbr NE x y lt lf = cmpbr EQ x y lf lt
 cmpbr LE x y lt lf = cmpbr GT x y lf lt
 cmpbr GE x y lt lf = cmpbr LT x y lf lt
-cmpbr p x y lt lf = branch ("b"++showPred p) (reg x) (reg y) lt lf
+cmpbr NE x y lt lf = use nextBlockName >>= \case
+  Just l
+    | l == lt   -> branch ("beq") (reg x) (reg y) lf lt
+  _             -> branch ("bne") (reg x) (reg y) lt lf
+cmpbr EQ x y lt lf = use nextBlockName >>= \case
+  Just l
+    | l == lt   -> branch ("bne") (reg x) (reg y) lf lt
+  _             -> branch ("beq") (reg x) (reg y) lt lf
+cmpbr  p x y lt lf = branch ("b"++showPred p) (reg x) (reg y) lt lf
 
 cmpbri :: Predicate -> Id -> Integer -> Label -> Label -> CamlE ()
-cmpbri NE x i lt lf = cmpbri EQ x i lf lt
 cmpbri LE x i lt lf = cmpbri GT x i lf lt
 cmpbri GE x i lt lf = cmpbri LT x i lf lt
-cmpbri p x i lt lf = branch ("b"++showPred p++"i") (reg x) (return (show i)) lt lf
+cmpbri NE x i lt lf = use nextBlockName >>= \case
+  Just l
+    | l == lt   -> branch ("beqi") (reg x) (return (show i)) lf lt
+  _             -> branch ("bnei") (reg x) (return (show i)) lt lf
+cmpbri EQ x i lt lf = use nextBlockName >>= \case
+  Just l
+    | l == lt   -> branch ("bnei") (reg x) (return (show i)) lf lt
+  _             -> branch ("beqi") (reg x) (return (show i)) lt lf
+cmpbri  p x i lt lf = branch ("b"++showPred p++"i") (reg x) (return (show i)) lt lf
 
 cmpbrs :: Predicate -> Id -> Id -> Label -> Label -> CamlE ()
 cmpbrs NE x y lt lf = cmpbrs EQ x y lf lt
 cmpbrs GE x y lt lf = cmpbrs LT x y lf lt
 cmpbrs GT x y lt lf = cmpbrs LE x y lf lt
-cmpbrs p x y lt lf = branch ("c."++showPred p++".s") (regF x) (regF y) lt lf
+cmpbrs  p x y lt lf = branch ("c."++showPred p++".s") (regF x) (regF y) lt lf
 
 branch :: String       -- 命令
        -> CamlE String -- operand1
