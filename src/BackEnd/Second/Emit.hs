@@ -160,8 +160,6 @@ emitInst :: Inst -> CamlE ()
 emitInst = \case
   Do ANop -> return ()-- {{{
   x := ASet i
-      -- TODO 65535くらいの値を入れると変
-      --      分解するときWord16にしてるっぽい
     | fromIntegral (minBound::Int16) <= i &&
       i <= fromIntegral (maxBound::Int16) ->
         write =<< printf "\tli\t%s, %d" <$> reg x <*> return i
@@ -171,7 +169,7 @@ emitInst = \case
           show i <> " is out of 16bits range\n" <>
           "devide into " <> show hi <> " and " <> show lo
         write =<< printf "\tli\t%s, %d"       <$> reg x <*> return hi
-        write =<< printf "\tsll\t%s, %s, 16"  <$> reg x <*> reg x
+        write =<< printf "\tslli\t%s, %s, 16" <$> reg x <*> reg x
         write =<< printf "\taddi\t%s, %s, %d" <$> reg x <*> reg x <*> return lo
 
   x := ASetF (Label l) ->
