@@ -13,7 +13,7 @@ module BackEnd.Second.Optimise.NanjaKore where
 
 import Base
 import BackEnd.Second.Asm
-import BackEnd.Second.Analysis
+--import BackEnd.Second.Analysis
 
 import qualified Data.Map as M
 import           Data.Maybe (catMaybes)
@@ -45,11 +45,7 @@ nanjaKoreBlock dic b = b { aStatements = map g (aStatements b) }
 
 hogeMap :: AFunDef -> Map Id (Id,Integer)
 hogeMap f =
-  let h x = length $ M.findWithDefault [] x (useSiteMap f)
-      g (_,x := AAdd y (C i))
-        | h x < 2 = Just (x,(y,i))
-        -- 一箇所でしか使われないという制限を付ける
-        -- 条件が緩いとspillが起きる
+  let g (_,x := AAdd y (C i)) = Just (x,(y,i))
       g _ = Nothing
       stmts = concatMap aStatements $ aBody f
   in M.fromList $ catMaybes $ map g stmts
