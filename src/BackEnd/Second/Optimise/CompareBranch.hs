@@ -30,11 +30,11 @@ compareBranchBlock defMap useMap b@(ABlock _ stmts) = case lastStmt b of
       Just def_x@(_, _ := ACmp  p y z') ->
         let lst' = (n, Do (ACmpBr p y z' lt lf))
             stmts' = delete def_x (delete lst stmts) ++ [lst']
-        in b { aStatements = stmts' }
+        in  b { aStatements = stmts' }
       Just def_x@(_, _ := AFCmp p y z ) ->
         let lst' = (n, Do (AFCmpBr p y z lt lf))
             stmts' = delete def_x (delete lst stmts) ++ [lst']
-        in b { aStatements = stmts' }
+        in  b { aStatements = stmts' }
       _ -> b
     _ -> b
   _ -> b

@@ -1,4 +1,4 @@
-{-# LANGUAGE LambdaCase #-} 
+{-# LANGUAGE LambdaCase #-}
 module MiddleEnd.LLVM.MiddleEnd where
 
 import Base (Caml, liftIO)
@@ -14,11 +14,12 @@ import LLVM.General.Transforms
 optimiseLLVM :: AST.Module -> Caml AST.Module
 optimiseLLVM ast = liftIO $ do
   m <- withContext $ \ctx ->
-    runExceptT $ withModuleFromAST ctx ast $ \m -> do
+    runExceptT $ withModuleFromAST ctx ast $ \m ->
       runExceptT (verify m) >>= \case
         Left e -> error $ "LLVM.MiddleEnd.optimise: verify: " ++ e
         Right _ ->
           withPassManager passSpec $ \pm -> do
+          {-withPassManager passes $ \pm -> do-}
             void $ runPassManager pm m
             writeFile "result.ll" =<< moduleLLVMAssembly m
             moduleAST m

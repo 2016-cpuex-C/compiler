@@ -54,7 +54,7 @@ main = execParser (info (helper <*> parseOpt) fullDesc) >>= \opts ->
       compiler
         | first opts = compile1
         | otherwise  = compile2
-  in withLogFile $ \h -> mapM_ (compiler s{_logfile=h}) (args opts)
+  in  withLogFile $ \h -> mapM_ (compiler s{_logfile=h}) (args opts)
 
 -------------------------------------------------------------------------------
 -- compile method

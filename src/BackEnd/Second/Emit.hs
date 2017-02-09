@@ -126,10 +126,10 @@ emitFun :: Handle -> AFunDef -> Caml ()
 emitFun h f@(AFunDef l _ _ _ _) = do
   ($logInfo) $ pack "EmitFun: " <> show' l
   (f',colMap) <- regAlloc f
-  ($logDebugSH) $ f
+  --($logDebugSH) $ f
   f'' <- ssaDeconstruct colMap f'
-  ($logDebugSH) $ colMap
-  ($logDebugSH) $ f''
+  --($logDebugSH) $ colMap
+  --($logDebugSH) $ f''
   liftIO $ hPutStrLn h $ unLabel l ++ ":"
   liftIO $ hPutStrLn h $ "\tsw\t$ra, 0($sp)"
   stackMap <- stackInMap f''
@@ -180,7 +180,7 @@ emitInst = \case
   x := AAdd y (V z)     -> rrr "add"   x y z
   x := AAdd y (C i)     -> rri "addi"  x y i
   x := ASub y (V z)     -> rrr "sub"   x y z
-  x := ASub y (C i)     -> rri "subi"  x y i
+  x := ASub y (C i)     -> rri "addi"  x y (-i)
   x := AMul y (V z)     -> rrr "mult"  x y z
   x := AMul y (C i)     -> rri "multi" x y i
   x := ADiv y (V z)     -> rrr "div"   x y z
@@ -300,9 +300,9 @@ sortBlocks f = map toBlock $ reverse $ execState (g (entryBlock f)) []
       Do (AFCmpBr EQ _ _ _  lf) -> [lf]
       Do (AFCmpBr LE _ _ _  lf) -> [lf]
       Do (AFCmpBr LT _ _ _  lf) -> [lf]
-      Do (AFCmpBr _  _ _ lt _) -> [lt]    -- 同上
-      Do (ASwitch _ l _)       -> [l]
-      _                        -> []
+      Do (AFCmpBr _  _ _ lt _)  -> [lt]    -- 同上
+      Do (ASwitch _ l _)        -> [l]
+      _                         -> []
 
     toBlock l = lookupMapNote "sortBlocks" l (blockMap f)
 
@@ -516,32 +516,32 @@ save x_ x = uses stack (S.member x) >>= \case
   True  -> write $ "\t# "++ x ++ " is already saved: "
   False -> do push x
               n <- offset x
-              {-rri' "sw" x_ regSp n-}
-              rri' "save" x_ regSp n
-              --write $ "\t\t# save: " ++ x
+              rri' "sw" x_ regSp n
+              {-rri' "save" x_ regSp n-}
+              write $ "\t\t# save: " ++ x
 
 saveF :: Id -> Id -> CamlE ()
 saveF x_ x = uses stack (S.member x) >>= \case
   True  -> write $ "\t# "++ x ++ " is already saved: "
   False -> do push x
               n <- offset x
-              {-fri' "s.s" x regSp n-}
-              fri' "save.s" x_ regSp n
-              --write $ "\t\t# save: " ++ x
+              fri' "s.s" x_ regSp n
+              {-fri' "save.s" x_ regSp n-}
+              write $ "\t\t# save: " ++ x
 
 restore :: Id -> Id -> CamlE ()
 restore x y = do
   n <- offset y
-  {-rri' "lwr" x regSp n-}
-  rri' "restore" x regSp n
-  --write $ "\t\t# restore: " ++ x ++ "<-" ++ y
+  rri' "lwr" x regSp n
+  {-rri' "restore" x regSp n-}
+  write $ "\t\t# restore: " ++ x ++ "<-" ++ y
 
 restoreF :: Id -> Id -> CamlE ()
 restoreF x y = do
   n <- offset y
-  {-fri' "l.sr" x regSp n-}
-  fri' "restore.s" x regSp n
-  --write $ "\t\t# restore: " ++ x ++ "<-" ++ y
+  fri' "l.sr" x regSp n
+  {-fri' "restore.s" x regSp n-}
+  write $ "\t\t# restore: " ++ x ++ "<-" ++ y
 
 showPred :: Predicate -> String
 showPred = map toLower . show

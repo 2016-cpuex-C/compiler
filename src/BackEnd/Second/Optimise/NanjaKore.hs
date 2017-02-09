@@ -13,7 +13,6 @@ module BackEnd.Second.Optimise.NanjaKore where
 
 import Base
 import BackEnd.Second.Asm
---import BackEnd.Second.Analysis
 
 import qualified Data.Map as M
 import           Data.Maybe (catMaybes)
@@ -23,7 +22,7 @@ nanjaKore (AProg fs) = AProg $ map nanjaKoreFun fs
 
 nanjaKoreFun :: AFunDef -> AFunDef
 nanjaKoreFun f = f { aBody = map g (aBody f) }
-  where g = nanjaKoreBlock (hogeMap f)
+  where g = nanjaKoreBlock (addiMap f)
 
 nanjaKoreBlock :: Map Id (Id,Integer) -> ABlock -> ABlock
 nanjaKoreBlock dic b = b { aStatements = map g (aStatements b) }
@@ -43,18 +42,10 @@ nanjaKoreBlock dic b = b { aStatements = map g (aStatements b) }
         Nothing -> s
       _ -> s
 
-hogeMap :: AFunDef -> Map Id (Id,Integer)
-hogeMap f =
+addiMap :: AFunDef -> Map Id (Id,Integer)
+addiMap f =
   let g (_,x := AAdd y (C i)) = Just (x,(y,i))
       g _ = Nothing
       stmts = concatMap aStatements $ aBody f
   in M.fromList $ catMaybes $ map g stmts
-
--- こっちのほうが性能悪かった
-hogeMapB :: ABlock -> Map Id (Id,Integer)
-hogeMapB b =
-  let g (_,x := AAdd y (C i)) = Just (x,(y,i))
-      g _ = Nothing
-  in M.fromList $ catMaybes $ map g (aStatements b)
-
 
