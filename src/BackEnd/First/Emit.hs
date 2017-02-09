@@ -390,7 +390,6 @@ emit' handle (AProg fdata fundefs e) = do
 
   -- main routine
   write $ printf ".text"
-  write $ printf ".globl\tmain"
   write $ printf "main:"
 
   -- gp
