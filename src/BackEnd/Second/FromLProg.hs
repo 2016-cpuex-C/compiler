@@ -29,15 +29,19 @@ toAFundef :: LFunDef -> Caml AFunDef
 toAFundef (LFunDef ~(x,TFun _ rett) yts' blocks) = do
   let (yts,zts) = splitIdTys yts'
   fid <- genId ""
-  blocks' <- mapM (toABlock fid) blocks
+  blocks'' <- mapM (toABlock fid) blocks
+  -- XXX ad hoc
+  let blocks' = case blocks'' of
+        [ABlock _ stmts] -> [ABlock (Label "entry" `addFID` fid) stmts]
+        _                -> blocks''
   return $ AFunDef x (map fst yts) (map fst zts) blocks' rett
 
 toABlock :: FuncId -> LBlock -> Caml ABlock
-toABlock fid (LBlock b nlinsts lterminator) = do
+toABlock fid (LBlock l nlinsts lterminator) = do
   s <- flip execStateT ([],fid) $ do
     mapM_ toStatements nlinsts
     toATerminator lterminator
-  return $ ABlock (addFID b fid) (reverse (fst s))
+  return $ ABlock (l `addFID` fid) (reverse (fst s))
 
 -------------------------------------------------------------------------------
 -- 中くらい

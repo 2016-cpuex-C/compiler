@@ -168,7 +168,6 @@ isEmptyFun :: AFunDef -> Bool
 isEmptyFun = null . aBody
 
 entryBlock :: AFunDef -> ABlock
-entryBlock (AFunDef _ _ _ [block] _) = block
 entryBlock (AFunDef l _ _ blocks _) =
   case partition isEntryBlock blocks of
     ([eb],_) -> eb
@@ -188,7 +187,7 @@ blockMap (AFunDef _ _ _ blocks _) =
 -- entry.12.32 のような形をしている
 -- もっといい方法ないかなあ
 isEntryBlock :: ABlock -> Bool
-isEntryBlock (ABlock (Label x) _) = x =~ "^entry\\.[0-9]+\\.[0-9]+$"
+isEntryBlock (ABlock (Label x) _) = x =~ "^entry(\\.[0-9]+)+$"
 
 firstStmt :: ABlock -> Statement
 firstStmt = head . aStatements
