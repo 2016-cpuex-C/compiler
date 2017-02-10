@@ -22,6 +22,7 @@ import BackEnd.Second.FromLProg         (toAProg)
 import BackEnd.Second.Virtual           (virtual)
 import BackEnd.Second.SaveAndRestore    (saveAndRestore)
 import BackEnd.Second.Optimise          (optimiseA)
+import BackEnd.Second.SplitInt          (splitInt)
 import BackEnd.Second.Emit              (emitProg)
 
 import BackEnd.First.Virtual            (virtualCode)
@@ -82,6 +83,7 @@ compile2 s f = do
       >>= toAProg
       >>= virtual
       >>= optimiseA
+      >>= splitInt
       >>= (($logDebug) "optimiseA end" $>)
       >>= saveAndRestore
       >>= (($logDebug) "saveAndRestore end" $>)
