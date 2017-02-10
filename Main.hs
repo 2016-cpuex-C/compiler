@@ -2,6 +2,7 @@
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module Main where
 
@@ -34,6 +35,7 @@ import           System.IO              (stdout, withFile, IOMode(..))
 import           Data.FileEmbed         (embedFile)
 import qualified Data.ByteString.Char8  as BC
 import           Control.Lens.Operators
+import           Control.Exception      (catch,SomeException)
 import           Options.Applicative
 import           System.FilePath.Posix  ((-<.>))
 
@@ -65,13 +67,13 @@ compile2 :: S -> FilePath -> IO ()
 compile2 s f = do
   input <- readFile f
   withFile (f -<.> "s") WriteMode $ \h -> do
-    m <- flip runCaml s $ lex (libmincamlML ++ input)
+    m <-
+      flip runCaml s $ lex (libmincamlML ++ input)
       >>= parse
       >>= typing
       >>= kNormalize
       >>= alpha
       >>= optimise
-      >>= ((use globalHeap >>= ($logDebugSH)) $>)
       >>= lambdaLift
       >>= closureConvert
       >>= toLLVM
@@ -83,12 +85,15 @@ compile2 s f = do
       >>= (($logDebug) "optimiseA end" $>)
       >>= saveAndRestore
       >>= (($logDebug) "saveAndRestore end" $>)
-      -- >>= \e -> ($logDebugSH) e >> return e
       >>= ((use constFloats >>= ($logDebugSH)) $>)
       >>= emitProg h
     case m of
-      Right _  -> return()
-      Left err -> error $ f ++ ": " ++ show err
+      Right{} -> return ()
+      Left e  -> error $ show e
+  `catch` \(e::SomeException) -> do
+    putStrLn $ "error occurred: " ++ show e
+    putStrLn $ "retry with old compiler"
+    compile1 s f
 
 -- 1st compiler
 compile1 :: S -> FilePath -> IO ()-- {{{

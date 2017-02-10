@@ -76,7 +76,7 @@ colorFun f@(AFunDef l xs ys _ _) = do
       ($logErrorSH) (s^.colorMapF_)
       ($logErrorSH) f
       error "RegAlloc: Congratulations! You've found a new bug!"
-    ($logDebug)   $ "chromatic number: " <> show' (l,x,y)
+    ($logDebug)   $ "used registers: " <> show' (l,x,y)
     return colMap
  `catchError` \(Failure e) ->
     error $ e ++ " at " ++ show l
@@ -137,7 +137,7 @@ assign x = use free >>= \case
             used      %= M.insert x c
             colorMap_ %= M.insert x c
             -- $logDebug $ "    assign: " <> show' (x,c)
-  [] -> throwError $ Failure "color tarinai"
+  [] -> throwError $ Failure "register tarinai"
 
 assignF :: Id -> CamlCS ()
 assignF x = use freeF >>= \case
@@ -145,7 +145,7 @@ assignF x = use freeF >>= \case
             usedF      %= M.insert x c
             colorMapF_ %= M.insert x c
             -- $logDebug $ "    assign: " <> show' (x,c)
-  [] -> throwError $ Failure "color tarinai"
+  [] -> throwError $ Failure "register tarinai"
 
 remove :: Id -> CamlCS ()
 remove x = uses used (M.lookup x) >>= \case

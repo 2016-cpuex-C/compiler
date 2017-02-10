@@ -18,5 +18,6 @@ import Prelude hiding (log)
 optimiseA :: AProg -> Caml AProg
 optimiseA p = do
   ($logInfo) "optimiseA"
-  elim $ mulAdd $ nanjaKore $ compareBranch $ tailCallOptimise p
+  {-elim $ mulAdd $ nanjaKore $ compareBranch $ tailCallOptimise p-}
+  elim $ nanjaKore $ compareBranch $ tailCallOptimise p
 

@@ -1,7 +1,7 @@
 
 module BackEnd.Decode where
 
-import           Data.Int  (Int32)
+import           Data.Int  (Int16,Int32)
 import           Data.Word (Word16,Word32)
 import qualified Data.ByteString.Char8 as BCS
 import           Data.ByteString.Lazy.Builder
@@ -17,10 +17,12 @@ decodeFloatLE = decodeU32LE . BCS.pack . BCL.unpack . toLazyByteString . floatLE
 decodeFloatBE :: Float -> Word32
 decodeFloatBE = decodeU32 . BCS.pack . BCL.unpack . toLazyByteString . floatLE
 
+splitInteger :: Integer -> (Word16, Word16)
+splitInteger = devideInteger
+
 devideInteger :: Integer -> (Word16, Word16)
 devideInteger n
-  |  n < fromIntegral(minBound::Int32) ||
-     fromIntegral (maxBound::Int32) <  n =
+  |  not (whithin32 n) =
       error $ "Integer " ++ show n ++ " is out of range of Int32"
   | otherwise =
       let (hi,lo) = splitAt 16 $ int32ToBits $ fromIntegral n
@@ -31,6 +33,16 @@ readBits = fst . head . readInt 2 (`elem` "01") digitToInt
 
 int32ToBits :: Int32 -> String
 int32ToBits n = reverse [ if testBit n i then '1' else '0' | i <- [0..31]]
+
+whithin16 :: Integer -> Bool
+whithin16 i =
+  fromIntegral (minBound::Int16) <= i &&
+  i <= fromIntegral (maxBound::Int16)
+
+whithin32 :: Integer -> Bool
+whithin32 i =
+  fromIntegral (minBound::Int32) <= i &&
+  i <= fromIntegral (maxBound::Int32)
 
 -- `BCS.pack . BCL.unpack` is inevitable because
 -- Data.BitSyntax uses strict ByteString (Data.ByteString.Internal) while
