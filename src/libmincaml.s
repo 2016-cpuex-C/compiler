@@ -88,9 +88,10 @@ min_caml_create_float_array_cont:
 ### use virtual instructions ##
 ###############################
 
-#min_caml_sqrt: # f0 -> f0
-#	sqrt	$f0, $f0
-#	jr	$ra
+min_caml_sqrt: # f0 -> f0
+	sqrt	$f0, $f0
+	jr	$ra
+
 #min_caml_truncate:
 #	j	min_caml_int_of_float
 #min_caml_int_of_float: # f0 -> v0
