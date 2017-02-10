@@ -2,6 +2,7 @@
 {-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 -- 大きなIntegerを分割
 
@@ -13,7 +14,11 @@ import BackEnd.Second.Asm
 import Control.Monad.Extra (concatMapM)
 
 splitInt :: AProg -> Caml AProg
-splitInt (AProg fs) = AProg <$> mapM splitIntF fs
+splitInt p@(AProg fs) = do
+  $logDebug $ "splitInt: before" <> show' p
+  p' <- AProg <$> mapM splitIntF fs
+  $logDebug $ "splitInt: after" <> show' p'
+  return p'
 
 splitIntF :: AFunDef -> Caml AFunDef
 splitIntF f = do
@@ -27,10 +32,7 @@ splitIntB b = do
 
 splitIntStmt :: Statement -> Caml [Statement]
 splitIntStmt s@(_,inst) = case inst of
-  x := ASet i | not (whithin16 i) -> do
-    (ss,v) <- setBigInt i
-    s' <- assignInstId $ x := AMove v
-    return (ss++[s'])
+  x := ASet i | not (whithin16 i) -> hoge (\v -> x := AMove v) i
 
     --hoge f i x y v = do
   x := AAdd y (C i) | not (whithin16 i) -> hoge (\v -> x := AAdd y (V v)) i
@@ -46,13 +48,12 @@ splitIntStmt s@(_,inst) = case inst of
   x := ALd  y (C i) | not (whithin16 i) -> hoge (\v -> x := ASrl y (V v)) i
   x := AFLd y (C i) | not (whithin16 i) -> hoge (\v -> x := ASrl y (V v)) i
 
-
   x := ASt    y z (C i) | not (whithin16 i) -> hoge (\v -> x := ASt  y z (V v)) i
   x := AStHP  y   (C i) | not (whithin16 i) -> hoge (\v -> x := AStHP  y (V v)) i
   x := AFStHP y   (C i) | not (whithin16 i) -> hoge (\v -> x := AFStHP y (V v)) i
 
   x := ACmp   p y (C i)       | not (whithin5 i) -> fuga (\v -> x := ACmp p y (V v)) i
-  x := ACmpBr p y (C i) lt lf | not (whithin5 i) -> fuga (\v -> x := ACmpBr p y (V v) lt lf) i
+  Do (ACmpBr p y (C i) lt lf) | not (whithin5 i) -> fuga (\v -> Do (ACmpBr p y (V v) lt lf)) i
 
   _ -> return [s]
 
