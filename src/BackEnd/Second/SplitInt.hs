@@ -32,32 +32,42 @@ splitIntStmt s@(_,inst) = case inst of
     s' <- assignInstId $ x := AMove v
     return (ss++[s'])
 
-  x := AAdd y (C i) | not (whithin16 i) -> do
-    (ss,v) <- setBigInt i
-    s' <- assignInstId $ x := AAdd y (V v)
-    return (ss++[s'])
-  x := ASub y (C i) | not (whithin16 i) -> do
-    (ss,v) <- setBigInt i
-    s' <- assignInstId $ x := ASub y (V v)
-    return (ss++[s'])
-  x := AMul y (C i) | not (whithin16 i) -> do
-    (ss,v) <- setBigInt i
-    s' <- assignInstId $ x := AMul y (V v)
-    return (ss++[s'])
-  x := ADiv y (C i) | not (whithin16 i) -> do
-    (ss,v) <- setBigInt i
-    s' <- assignInstId $ x := ADiv y (V v)
-    return (ss++[s'])
-  x := ASll y (C i) | not (whithin16 i) -> do
-    (ss,v) <- setBigInt i
-    s' <- assignInstId $ x := ASll y (V v)
-    return (ss++[s'])
-  x := ASrl y (C i) | not (whithin16 i) -> do
-    (ss,v) <- setBigInt i
-    s' <- assignInstId $ x := ASrl y (V v)
-    return (ss++[s'])
+    --hoge f i x y v = do
+  x := AAdd y (C i) | not (whithin16 i) -> hoge (\v -> x := AAdd y (V v)) i
+  x := ASub y (C i) | not (whithin16 i) -> hoge (\v -> x := ASub y (V v)) i
+  x := AMul y (C i) | not (whithin16 i) -> hoge (\v -> x := AMul y (V v)) i
+  x := ADiv y (C i) | not (whithin16 i) -> hoge (\v -> x := ADiv y (V v)) i
+  x := ASll y (C i) | not (whithin16 i) -> hoge (\v -> x := ASll y (V v)) i
+  x := ASrl y (C i) | not (whithin16 i) -> hoge (\v -> x := ASrl y (V v)) i
+  x := ASrl y (C i) | not (whithin16 i) -> hoge (\v -> x := ASrl y (V v)) i
+  x := AAnd y (C i) | not (whithin16 i) -> hoge (\v -> x := AAnd y (V v)) i
+  x := AOr  y (C i) | not (whithin16 i) -> hoge (\v -> x := AOr  y (V v)) i
+  x := AXor y (C i) | not (whithin16 i) -> hoge (\v -> x := AXor y (V v)) i
+  x := ALd  y (C i) | not (whithin16 i) -> hoge (\v -> x := ASrl y (V v)) i
+  x := AFLd y (C i) | not (whithin16 i) -> hoge (\v -> x := ASrl y (V v)) i
+
+
+  x := ASt    y z (C i) | not (whithin16 i) -> hoge (\v -> x := ASt  y z (V v)) i
+  x := AStHP  y   (C i) | not (whithin16 i) -> hoge (\v -> x := AStHP  y (V v)) i
+  x := AFStHP y   (C i) | not (whithin16 i) -> hoge (\v -> x := AFStHP y (V v)) i
+
+  x := ACmp   p y (C i)       | not (whithin5 i) -> fuga (\v -> x := ACmp p y (V v)) i
+  x := ACmpBr p y (C i) lt lf | not (whithin5 i) -> fuga (\v -> x := ACmpBr p y (V v) lt lf) i
 
   _ -> return [s]
+
+  where
+    hoge f i = do
+      (ss,v) <- setBigInt i
+      s' <- assignInstId $ f v
+      return (ss++[s'])
+    fuga f i
+      | not (whithin16 i) = hoge f i
+      | otherwise = do
+          v  <- genId "bigger5"
+          sv <- assignInstId $ v := ASet i
+          s' <- assignInstId $ f v
+          return [sv,s']
 
 setBigInt :: Integer -> Caml ([Statement],Id)
 setBigInt i = do

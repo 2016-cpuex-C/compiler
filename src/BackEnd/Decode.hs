@@ -34,6 +34,9 @@ readBits = fst . head . readInt 2 (`elem` "01") digitToInt
 int32ToBits :: Int32 -> String
 int32ToBits n = reverse [ if testBit n i then '1' else '0' | i <- [0..31]]
 
+whithin5 :: Integer -> Bool
+whithin5 i = -16 <= i && i <= 15
+
 whithin16 :: Integer -> Bool
 whithin16 i =
   fromIntegral (minBound::Int16) <= i &&
