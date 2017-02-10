@@ -249,7 +249,6 @@ in
 *)
 
 (*
-*)
 (* E班の {{{ *)
 let rec fflag a =
   if (a >= 0.0) then 1
@@ -441,8 +440,10 @@ let rec atan a =
     else
       addflag (1.570796326 -. (atan_kernel (1.0 /. (fabs a)))) (fflag a) in
 (*}}}*)
+*)
 
 (*
+*)
 (*{{{ 進藤君*)
 let rec sub1_red2pi p x =
      if x >= p then
@@ -650,6 +651,4 @@ in
 let rec truncate x = int_of_float x
 in
 (*}}}*)
-*)
-
 
