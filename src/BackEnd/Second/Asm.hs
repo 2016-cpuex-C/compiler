@@ -49,6 +49,7 @@ type Inst = Named AExpr
 data AExpr
   = ANop
   | ASet   Integer
+  | ASetBI Label   -- Big Integer
   | ASetF  Label
   | ASetL  Label
   | AMove  Id
@@ -216,7 +217,7 @@ allRegs = concat [
   , [ "$t"++show i | i <- [0..7] :: [Int]]
   , [ "$s"++show i | i <- [0..7] :: [Int]]
   , [ "$t"++show i | i <- [8..9] :: [Int]]
-  , [ "$k"++show i | i <- [0..1] :: [Int]]
+  , [ "$k"++show i | i <- [0..0] :: [Int]]
 --, [ "$gp" ]                              -- global pointer
 --, [ "$sp" ]                              -- stack pointer
   , [ "$fp" ]
@@ -259,6 +260,9 @@ regHp = "$gp"
 -- return address
 regRa :: Register
 regRa = "$ra"
+
+regTmp :: Register
+regTmp = "$k1"
 
 isReg :: Id -> Bool
 isReg = ('$'==) . head

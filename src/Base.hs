@@ -26,6 +26,7 @@ module Base (
   , optimiseLimit
   , extTyEnv
   , constFloats
+  , bigIntegers
   , globalHeap
   , startGP
   , logfile
@@ -44,6 +45,8 @@ module Base (
   , externalEnv
   , floatLabel
   , labelFloat
+  , bigIntLabel
+  , labelBigInt
   , initialState
   , maxArgs
   , runCaml
@@ -139,17 +142,18 @@ instance Show TV where
 instance Ord TV where
   compare (TV n _) (TV m _) = compare n m
 
-data S = S { _idCount       :: Int             -- for Id module
-           , _tvCount       :: Int             -- for Typing module
-           , _threshold     :: Int             -- max inline size
-           , _optimiseLimit :: Int             -- max number of optimise iter
-           , _extTyEnv      :: TyEnv           -- type of ext functions
-           , _constFloats   :: [(Label,Float)] -- floating constant
+data S = S { _idCount       :: Int              -- for Id module
+           , _tvCount       :: Int              -- for Typing module
+           , _threshold     :: Int              -- max inline size
+           , _optimiseLimit :: Int              -- max number of optimise iter
+           , _extTyEnv      :: TyEnv            -- type of ext functions
+           , _constFloats   :: [(Label,Float)]  -- floating constant
+           , _bigIntegers   :: [(Label,Integer)]
            , _globalHeap    :: Map Id (Integer,Integer,Type)
-                                               -- global array and its address
-                                               -- (address,size,type)
-           , _startGP       :: Integer         -- sum of global array size
-           , _logfile       :: Handle          -- file to log to
+                                                -- global array and its address
+                                                -- (address,size,type)
+           , _startGP       :: Integer          -- sum of global array size
+           , _logfile       :: Handle           -- file to log to
            , _instCount     :: Int
            , _verbosity     :: LogLevel
            }
@@ -238,20 +242,38 @@ labelFloat l =
     Nothing -> error "Base: labelFloat: Not Found"
     Just f  -> return f
 
+-- big integer --
+bigIntLabel :: Integer -> Caml Label
+bigIntLabel n = 
+  uses bigIntegers (lookupRev n) >>= \case
+    Nothing -> do
+      l <- Label <$> genId "l"
+      bigIntegers %= ((l,n):)
+      return l
+    Just l -> return l
+
+labelBigInt :: Label -> Caml Integer
+labelBigInt l =
+  uses bigIntegers (lookup l) >>= \case
+    Nothing -> error "Base: labelBigInt: Not Found"
+    Just n  -> return n
+
 -- Caml initialState --
 initialState :: S
-initialState = S { _idCount       = 0
-                 , _tvCount       = 0
-                 , _extTyEnv      = initialExtTyEnv
-                 , _threshold     = 0
-                 , _constFloats   = []
-                 , _globalHeap    = M.empty
-                 , _startGP       = 10000 -- !! stackの最大値を超えないように
-                 , _optimiseLimit = 100
-                 , _logfile       = stdout
-                 , _instCount     = 0
-                 , _verbosity     = LevelInfo
-                 }
+initialState = S {
+    _idCount       = 0
+  , _tvCount       = 0
+  , _extTyEnv      = initialExtTyEnv
+  , _threshold     = 0
+  , _constFloats   = []
+  , _bigIntegers   = []
+  , _globalHeap    = M.empty
+  , _startGP       = 10000 -- !! stackの最大値を超えないように
+  , _optimiseLimit = 100
+  , _logfile       = stdout
+  , _instCount     = 0
+  , _verbosity     = LevelInfo
+  }
 maxArgs :: Int
 maxArgs = 25
 

@@ -13,8 +13,10 @@ import BackEnd.Second.Asm
 import BackEnd.Second.Analysis
 import BackEnd.Second.RegAlloc
 import BackEnd.Second.SSA_Deconstruction
+import BackEnd.Second.BigInteger        (bigIntImm)
 
-import           Data.Int                   (Int16)
+--import           Data.Int                   (Int16)
+import           Data.Word                  (Word32)
 import qualified Data.Map                   as M
 import qualified Data.Set                   as S
 import           Data.List                  ((\\))
@@ -91,13 +93,17 @@ emitProg h prog = do
   let write' = liftIO . hPutStrLn h
       (main_,others) = popMain prog
 
-  -- floats
-  ----------
+  -- floats && big integers
+  -------------------------
   write' ".data"
   fdata <- use constFloats
+  idata <- use bigIntegers
   forM_ fdata $ \(Label x,d) -> do
-      write' $ printf "%s:\t# %.6f" x d
-      write' $ printf "\t.word\t0x%08lx" (decodeFloatLE d)
+    write' $ printf "%s:\t# %.6f" x d
+    write' $ printf "\t.word\t0x%08lx" (decodeFloatLE d)
+  forM_ idata $ \(Label x,n) -> do
+    write' $ printf "%s:\t# %d" x n
+    write' $ printf "\t.word\t0x%08lx" (fromIntegral n :: Word32)
 
   -- main header
   ---------------
@@ -127,7 +133,7 @@ emitFun h f@(AFunDef l _ _ _ _) = do
   ($logInfo) $ pack "EmitFun: " <> show' l
   (f',colMap) <- regAlloc f
   --($logDebugSH) $ f
-  f'' <- ssaDeconstruct colMap f'
+  f'' <- bigIntImm =<< ssaDeconstruct colMap f'
   --($logDebugSH) $ colMap
   --($logDebugSH) $ f''
   liftIO $ hPutStrLn h $ unLabel l ++ ":"
@@ -159,21 +165,25 @@ emitBlock s (ABlock l stmts) = do
 emitInst :: Inst -> CamlE ()
 emitInst = \case
   Do ANop -> return ()-- {{{
-  x := ASet i
-    | fromIntegral (minBound::Int16) <= i &&
-      i <= fromIntegral (maxBound::Int16) ->
-        write =<< printf "\tli\t%s, %d" <$> reg x <*> return i
-    | otherwise -> do
-        let (hi,lo) = devideInteger i
-        lift.($logInfo).pack $
-          show i <> " is out of 16bits range\n" <>
-          "devide into " <> show hi <> " and " <> show lo
-        write =<< printf "\tli\t%s, %d"       <$> reg x <*> return hi
-        write =<< printf "\tslli\t%s, %s, 16" <$> reg x <*> reg x
-        write =<< printf "\taddi\t%s, %s, %d" <$> reg x <*> reg x <*> return lo
+  x := ASet i -> write =<< printf "\tli\t%s, %d" <$> reg x <*> return i
+    -- | fromIntegral (minBound::Int16) <= i &&
+    --   i <= fromIntegral (maxBound::Int16) ->
+    --     write =<< printf "\tli\t%s, %d" <$> reg x <*> return i
+    -- -- | i > 65535 -> do
+    -- --    let (hi,lo) = devideInteger i
+    -- --    lift.($logInfo).pack $
+    -- --      show i <> " is out of 16bits range\n" <>
+    -- --      "devide into " <> show hi <> " and " <> show lo
+    -- --    write =<< printf "\tli\t%s, %d"       <$> reg x <*> return hi
+    -- --    write =<< printf "\tslli\t%s, %s, 16" <$> reg x <*> reg x
+    -- --    write =<< printf "\taddi\t%s, %s, %d" <$> reg x <*> reg x <*> return lo
+    -- | otherwise -> errorShow "tsurai..." (x:=ASet i)
 
-  x := ASetF (Label l) ->
-        write =<< printf "\tl.sl\t%s, %s" <$> regF x <*> return l
+  x := ASetBI l ->
+        write =<< printf "\tlwl\t%s, %s" <$> reg x <*> return (unLabel l)
+
+  x := ASetF l ->
+        write =<< printf "\tl.sl\t%s, %s" <$> regF x <*> return (unLabel l)
 
   x := AMove y          -> move x y
   x := ANeg  y          -> rr  "neg"   x y

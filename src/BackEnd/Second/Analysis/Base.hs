@@ -128,6 +128,7 @@ useInst = \case
     g i = case i of
       ANop             -> ([],[])
       ASet{}           -> ([],[])
+      ASetBI{}         -> ([],[])
       ASetF{}          -> ([],[])
       ASetL{}          -> ([],[])
       ALdi{}           -> ([],[])
