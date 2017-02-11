@@ -38,9 +38,10 @@ inlineSub _limit = g M.empty
 
       KLet xt e1 e2 -> KLet xt <$> g env e1 <*> g env e2
       KLetRec f@(KFunDef (x,t) yts e1) e2 -> do
-        let inlining = not (isRecursive f)
-        {-let inlining = size e1 < _limit && (not (isRecursive f))-}
+        {-let inlining = not (isRecursive f)-}
+        let inlining = size e1 < _limit && (not (isRecursive f))
             env' = if not inlining then env else M.insert x (yts,e1) env
+        when inlining $ ($logInfo) $ pack x <> " is inlinable"
         e1' <- g env' e1
         e2' <- g env' e2
         return $ KLetRec (KFunDef (x,t) yts e1') e2'
@@ -76,8 +77,11 @@ inlineRecSub limit = g' Nothing M.empty
         let inlining = size e1 < limit
                     && not ("read_net_item"   `isPrefixOf` x)
                     && not ("read_or_network" `isPrefixOf` x)
-                    -- 350でcolort tarinai 他のは1500いける
+                    && not ("print_int_sub"   `isPrefixOf` x)
+                    -- 350でcolor tarinai 他のは1500いける
             env' = if not inlining then env else M.insert x (yts,e1) env
+        when inlining $ ($logInfo) $ pack x <> " is inlinable"
+
         e1' <- g' (Just x) env' e1
         e2' <- g env' e2
         return $ KLetRec (KFunDef (x,t) yts e1') e2'
