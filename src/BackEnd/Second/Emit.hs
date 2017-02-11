@@ -256,7 +256,10 @@ emitInst = \case
   Do (ABr l)                    -> br l
   Do (ACBr b lt lf)             -> cbr b lt lf
   Do (ASwitch x ldef nls) -> do
-    mapM_ (\(n,l) -> ril "beqi" x n l) nls
+    forM_ nls $ \case
+      (n,l) | within5 n -> ril "beqi" x n l
+            | otherwise -> write (printf "\tli\t%s, %d" regTmp n)
+                        >> rrl "beq"  x regTmp l
     br ldef
 
   Do (ACmpBr  p x (C i) lt lf) -> cmpbri p x i lt lf
@@ -398,6 +401,10 @@ ffff s x y z w = write =<<
 ril :: String -> Id -> Integer -> Label -> CamlE ()
 ril s x i (Label l) = write =<<
   printf "\t%s\t%s, %d, %s" s <$> reg x <*> return i <*> return l
+
+rrl :: String -> Id -> Id -> Label -> CamlE ()
+rrl s x y (Label l) = write =<<
+  printf "\t%s\t%s, %s, %s" s <$> reg x <*> reg y <*> return l
 
 prrr :: Id -> Predicate -> Id -> Id -> Id -> CamlE ()
 prrr s p x y z = write =<<

@@ -22,7 +22,7 @@ splitInteger = devideInteger
 
 devideInteger :: Integer -> (Word16, Word16)
 devideInteger n
-  |  not (whithin32 n) =
+  |  not (within32 n) =
       error $ "Integer " ++ show n ++ " is out of range of Int32"
   | otherwise =
       let (hi,lo) = splitAt 16 $ int32ToBits $ fromIntegral n
@@ -34,16 +34,16 @@ readBits = fst . head . readInt 2 (`elem` "01") digitToInt
 int32ToBits :: Int32 -> String
 int32ToBits n = reverse [ if testBit n i then '1' else '0' | i <- [0..31]]
 
-whithin5 :: Integer -> Bool
-whithin5 i = -16 <= i && i <= 15
+within5 :: Integer -> Bool
+within5 i = -16 <= i && i <= 15
 
-whithin16 :: Integer -> Bool
-whithin16 i =
+within16 :: Integer -> Bool
+within16 i =
   fromIntegral (minBound::Int16) <= i &&
   i <= fromIntegral (maxBound::Int16)
 
-whithin32 :: Integer -> Bool
-whithin32 i =
+within32 :: Integer -> Bool
+within32 i =
   fromIntegral (minBound::Int32) <= i &&
   i <= fromIntegral (maxBound::Int32)
 
