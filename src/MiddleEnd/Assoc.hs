@@ -21,6 +21,6 @@ g = \case
           e -> KLet xt e (g e2)
     in  insert (g e1)
   KLetTuple xts y e -> KLetTuple xts y (g e)
-  KLetRec (KFunDef xt yts e1) e2 -> KLetRec (KFunDef xt yts (g e1)) (g e2)
+  KLetRec (KFunDef xt yts e1 b) e2 -> KLetRec (KFunDef xt yts (g e1) b) (g e2)
   e -> e
 

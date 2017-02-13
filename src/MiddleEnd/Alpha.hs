@@ -54,7 +54,7 @@ g env e = case e of
     --うわあ
     return $ KLet (x',t) e1' e2'
 
-  KLetRec (KFunDef (x,t) yts e1) e2 -> do
+  KLetRec (KFunDef (x,t) yts e1 b) e2 -> do
     x' <- genId x
     let (ys,ts) = unzip yts
     ys' <- mapM genId ys
@@ -62,7 +62,7 @@ g env e = case e of
         env'' = insertList (zip ys ys') env'
     e1' <- g env'' e1
     e2' <- g env'  e2
-    return $ KLetRec (KFunDef (x',t) (zip ys' ts) e1') e2'
+    return $ KLetRec (KFunDef (x',t) (zip ys' ts) e1' b) e2'
 
   KLetTuple xts y e' -> do
     let (xs,ts) = unzip xts

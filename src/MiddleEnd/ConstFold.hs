@@ -78,8 +78,8 @@ g env e = case e of
           e2' = g (M.insert x e1' env) e2
       in  KLet (x,t) e1' e2'
 
-  KLetRec (KFunDef xt yts e1) e2 ->
-      KLetRec (KFunDef xt yts (g env e1)) (g env e2)
+  KLetRec (KFunDef xt yts e1 b) e2 ->
+      KLetRec (KFunDef xt yts (g env e1) b) (g env e2)
 
   KLetTuple xts y e'
     | memberT y env -> let f e'' (xt,z) = KLet xt (KVar z) e''

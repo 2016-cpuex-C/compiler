@@ -62,10 +62,10 @@ g env e = case e of
           e2' <- g env e2
           return $ KLet (x,t) e1' e2'
 
-  KLetRec (KFunDef (x,t) yts e1) e2 -> do
+  KLetRec (KFunDef (x,t) yts e1 b) e2 -> do
       e1' <- g env e1
       e2' <- g env e2
-      return $ KLetRec (KFunDef (x,t) yts e1') e2'
+      return $ KLetRec (KFunDef (x,t) yts e1' b) e2'
 
   KLetTuple xts y e' ->
       KLetTuple xts (find y env) <$> g env e'

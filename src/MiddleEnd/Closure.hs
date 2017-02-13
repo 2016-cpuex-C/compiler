@@ -180,7 +180,7 @@ g env known = \case
 
   KVar x -> return $ CVar x
 
-  KLetRec (KFunDef (x,t) yts e1) e2 -> do
+  KLetRec (KFunDef (x,t) yts e1 _) e2 -> do
     -- xは自由変数を持たないと仮定してとりあえずやってみる
     -- だめだったらやり直す
     toplevelBackup <- get

@@ -54,6 +54,7 @@ data KExpr = KUnit
 data KFunDef = KFunDef { kname ::  (Id,Type)
                        , kargs :: [(Id,Type)]
                        , kbody :: KExpr
+                       , kInlinable :: Bool
                        }
               deriving (Show, Eq, Ord)
 
@@ -94,7 +95,7 @@ fv = \case
 
   KVar x -> S.singleton x
 
-  KLetRec (KFunDef (x,_t) yts e1) e2 ->
+  KLetRec (KFunDef (x,_t) yts e1 _) e2 ->
     let zs = S.difference (fv e1) (S.fromList $ map fst yts)
     in  S.difference (S.union zs (fv e2)) (S.singleton x) -- deleteじゃダメなの？
 
@@ -189,11 +190,11 @@ g env e = case e of
       --  Just t@(TArray _) -> return (KExtArray x, t)
       --  _ -> throwError $ Failure ("external variable " ++ x ++" does not have an array type")
 
-  ELetRec (EFunDef (x,t) yts e1) e2 -> do
+  ELetRec (EFunDef (x,t) yts e1 b) e2 -> do
     let env' = M.insert x t env
     (e2', t2) <- g env' e2
     (e1',_t1) <- g (insertList yts env') e1
-    return (KLetRec (KFunDef (x,t) yts e1') e2', t2)
+    return (KLetRec (KFunDef (x,t) yts e1' b) e2', t2)
 
   EApp (EVar f) e2s
     | M.notMember f env -> uses extTyEnv (M.lookup f) >>= \case

@@ -46,6 +46,7 @@ data Expr = EUnit
 data EFunDef = EFunDef { _ename :: (Id, Type)
                        , _eargs :: [(Id,Type)]
                        , _ebody :: Expr
+                       , _eInlinable :: Bool
                        }
             deriving (Show, Eq)
 makeLenses ''EFunDef

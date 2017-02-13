@@ -74,8 +74,8 @@ derefIdType :: (Id, Type) -> CamlT (Id, Type)
 derefIdType (x,t) = (x,) <$> derefType t
 
 derefFundef :: EFunDef -> CamlT EFunDef
-derefFundef (EFunDef xt args e) =
-  EFunDef <$> derefIdType xt <*> mapM derefIdType args <*> derefExpr e
+derefFundef (EFunDef xt args e b) =
+  EFunDef <$> derefIdType xt <*> mapM derefIdType args <*> derefExpr e <*> return b
 
 derefExpr :: Expr -> CamlT Expr
 derefExpr = \case
@@ -174,7 +174,7 @@ infer env e =
         unifyM1 t (infer env e1)
         infer (M.insert x t env) e2
 
-    ELetRec (EFunDef (x,t) yts e1) e2 -> do
+    ELetRec (EFunDef (x,t) yts e1 _) e2 -> do
       let env' = M.insert x t env
       let argtys = map snd yts
       t' <- infer (insertList yts env') e1

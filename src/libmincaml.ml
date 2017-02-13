@@ -41,7 +41,7 @@ let rec xor x y =
 in
 
 let rec print_int a =
-  let rec print_int_sub a =
+  let rec NOINLINE print_int_sub a =
     if a < 10 then
       print_char (a + 48)
     else
@@ -85,7 +85,7 @@ let rec kernel_cos x =
    1.0 -. (0.499998521812 *. x2) +. (0.041668949132*.x4) -. (0.001386642456*.x6)
 in
 
-let rec sin a =
+let rec NOINLINE sin a =
    if a >= 0.0 then
      if a > 6.28318548202514 then
        sin (a -. 6.28318548202514)
@@ -117,7 +117,7 @@ let rec sin a =
       0.0 -. sin (0.0 -. a)
 in
 
-let rec cos a =
+let rec NOINLINE cos a =
    if a >= 0.0 then
      if a > 6.28318548202514 then
        cos (a -. 6.28318548202514)
@@ -163,7 +163,7 @@ let rec kernel_atan x =
   x -. (0.333333 *. x3) +. (0.2 *. x5) -. (0.142857142 *. x7) +. (0.111111104 *. x9) -. (0.08976446 *. x11) +. (0.060035485 *. x13)
 in
 
-let rec atan x =
+let rec NOINLINE atan x =
    if and (x >= -0.4375) (x <= 0.4375) then
      kernel_atan x
    else
@@ -202,7 +202,7 @@ let rec int_of_float f =
      -rval
 in
 *)
-let rec iaf_mul x n =
+let rec NOINLINE iaf_mul x n =
    (*int * float -> float を足し算でやる、nは最大256 *)
   if n=1 then
     x
@@ -210,7 +210,7 @@ let rec iaf_mul x n =
     iaf_mul (x+.8388608.0) (n-1)
 in
 
-let rec sub_ftoi ax m =
+let rec NOINLINE sub_ftoi ax m =
    (* 最高256回　再帰される *)
    if ax < 8388608.0 then
      m
@@ -218,7 +218,7 @@ let rec sub_ftoi ax m =
      sub_ftoi (ax -. 8388608.0) (m+1)
 in
 
-let rec int_of_float x =
+let rec NOINLINE int_of_float x =
    let ax = if x < 0.0 then -.x else x in
    if ax >= 2147483648.0 then
      2147483647
@@ -241,14 +241,14 @@ in
 (****************
  * float_of_int *
  ****************)
-let rec sub1_mod m x =
+let rec NOINLINE sub1_mod m x =
      if x >= m then
        sub1_mod (2*m) x
      else
        m
 in
 
-let rec sub2_mod p m x =
+let rec NOINLINE sub2_mod p m x =
    if x >= m then
      if x >= p then
        sub2_mod (p/2) m (x-p)
@@ -258,12 +258,12 @@ let rec sub2_mod p m x =
      x
 in
 
-let rec modulo m x =
+let rec NOINLINE modulo m x =
    let p = sub1_mod m x in
    sub2_mod p m x
 in
 
-let rec float_of_int i =
+let rec NOINLINE float_of_int i =
    let ai = if i < 0 then -i else i in
    if ai < 8388608 then
      let fi = i2f (ai + 1258291200) in

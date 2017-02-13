@@ -29,7 +29,7 @@ f mname env e = case e of
 
   KLetTuple xts y e' -> KLetTuple xts y <$> f mname env e'
 
-  KLetRec (KFunDef (x,t) yts e1) e2 -> KLetRec (KFunDef (x,t) yts e1) <$> f mname env e2
+  KLetRec (KFunDef (x,t) yts e1 b) e2 -> KLetRec (KFunDef (x,t) yts e1 b) <$> f mname env e2
     -- recursiveだとまずいので関数内は走査しない.
     -- TODO recursiveでなければ同じ所にallocしてよさげ
 

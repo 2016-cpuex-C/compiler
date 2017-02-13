@@ -113,7 +113,7 @@ cElim e = do
             KIfEq x y <$> cElim e1 <*> cElim e2
           KIfLe x y e1 e2 ->
             KIfLe x y <$> cElim e1 <*> cElim e2
-          KLetRec f@(KFunDef _ _ e1) e2 -> do
+          KLetRec f@(KFunDef _ _ e1 _) e2 -> do
             e1' <- cElim e1
             e2' <- cElim e2
             return $ KLetRec f{kbody=e1'} e2'

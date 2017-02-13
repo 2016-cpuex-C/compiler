@@ -58,6 +58,7 @@ import FrontEnd.Syntax
     fispos      { TokenFIsPos      }
     fisneg      { TokenFIsNeg      }
     fiszero     { TokenFIsZero     }
+    NOINLINE    { TokenNOINLINE    }
 
 %right prec_let
 %right ';'
@@ -132,7 +133,8 @@ ID :: { Id }
     | wild {% genTmp TUnit }
 
 FunDef :: { EFunDef }
-    : ID FormalArgs '=' Expr {% efundef $1 $2 $4 }
+    : ID FormalArgs '=' Expr {% efundef $1 $2 $4 True }
+    | NOINLINE ID FormalArgs '=' Expr {% efundef $2 $3 $5 False }
 
 FormalArgs :: { [(Id,Type)] }
     : ID FormalArgs {% fmap (:$2)     (addType $1) }
@@ -174,10 +176,10 @@ eseq e1 e2 = do
     s <- genTmp TUnit
     return $ ELet (s,TUnit) e1 e2
 
-efundef :: Id -> [(Id,Type)] -> Expr -> Caml EFunDef
-efundef x args body = do
+efundef :: Id -> [(Id,Type)] -> Expr -> Bool -> Caml EFunDef
+efundef x args body b = do
     ty <- genType
-    return $ EFunDef (x,ty) args body
+    return $ EFunDef (x,ty) args body b
 
 singleton :: a -> [a]
 singleton x = [x]

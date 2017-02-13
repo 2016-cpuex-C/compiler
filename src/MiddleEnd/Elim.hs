@@ -36,13 +36,12 @@ elim = \case
        then return $ KLet (x,t) e1' e2'
        else return e2'
        {-else ($logInfo) ("eliminating variable " <> pack x) >> return e2'-}
-  KLetRec (KFunDef (x,t) yts e1) e2 -> do
+  KLetRec (KFunDef (x,t) yts e1 b) e2 -> do
     e1' <- elim e1
     e2' <- elim e2
     if S.member x (fv e2')
-       then return $ KLetRec (KFunDef (x,t) yts e1') e2'
-       else return e2'
-       {-else ($logInfo) ("eliminating variable " <> pack x) >> return e2'-}
+       then return $ KLetRec (KFunDef (x,t) yts e1' b) e2'
+       else ($logInfo) ("eliminating function " <> pack x) >> return e2'
   KLetTuple xts y e -> do
     e' <- elim e
     let xs = map fst xts
@@ -50,7 +49,7 @@ elim = \case
     if any live xs
        then return $ KLetTuple xts y e'
        else return e'
-       {-else ($logInfo) ("eliminating variable " <> pack (ppList xs)) >> return e'-}
+       {-else ($logInfo) ("eliminating variables " <> pack (ppList xs)) >> return e'-}
   e -> return e
 
 

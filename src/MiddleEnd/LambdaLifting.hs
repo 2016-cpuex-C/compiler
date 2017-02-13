@@ -68,7 +68,7 @@ fv e_ = do
       KIfLe x y e1 e2 ->
         S.insert x . S.insert y <$> (S.union <$> fv' ign e1 <*> fv' ign e2)
       KLet (x,_t) e1 e2 -> S.union <$> fv' ign e1 <*> (S.delete x <$> fv' ign e2)
-      KLetRec (KFunDef (x,_t) yts e1) e2 ->
+      KLetRec (KFunDef (x,_t) yts e1 _) e2 ->
         let ys = S.fromList $ map fst yts
         in  S.delete x <$> (S.union <$> ((\\ ys) <$> fv' ign e1) <*> fv' ign e2)
       KLetTuple xts y e' -> S.insert y . (\\ S.fromList (map fst xts)) <$> fv' ign e'
@@ -94,7 +94,7 @@ f env e = case e of
   KLet (x,t) e1 e2 -> KLet (x,t) <$> f env e1 <*> f (M.insert x t env) e2
   KLetTuple xts y e' -> KLetTuple xts y <$> f (insertList xts env) e'
 
-  KLetRec fundef@(KFunDef (x,t) yts e1) e2 -> do
+  KLetRec fundef@(KFunDef (x,t) yts e1 _) e2 -> do
     let ys = map fst yts
         envE2  = M.insert x t env
         envE1  = insertList yts envE2
@@ -139,10 +139,10 @@ f env e = case e of
   _ -> return e
 
 liftFun :: KFunDef -> [Id] -> [Type] -> KExpr -> KFunDef
-liftFun (KFunDef (x,t) yts _) fvs ts e =
+liftFun (KFunDef (x,t) yts _ b) fvs ts e =
   let t' = liftTy t ts
       yts' = zip fvs ts ++ yts
-  in  KFunDef (liftName x,t') yts' e
+  in  KFunDef (liftName x,t') yts' e b
 
 -- "_"で始まる名前は無いのでこれでOK(see FrontEnd.Lexer)
 liftName :: Id -> Id

@@ -58,6 +58,7 @@ tokens :-
   <0> let           { tk $ TokenLet         }
   <0> in            { tk $ TokenIn          }
   <0> rec           { tk $ TokenRec         }
+  <0> NOINLINE      { tk $ TokenNOINLINE    }
   <0> ","           { tk $ TokenComma       }
   <0> "_"           { tk $ TokenWild        }
   <0> Array\.create { tk $ TokenArrayCreate }
@@ -125,6 +126,7 @@ data Token = TokenBool Bool
            | TokenFIsPos
            | TokenFIsNeg
            | TokenFIsZero
+           | TokenNOINLINE
            deriving (Eq,Show)
 
 lex :: String -> Caml [Token]

@@ -21,11 +21,11 @@ inline e = do
 
 size :: KExpr -> Int
 size = \case
-  KIfEq _ _ e1 e2             -> 1 + size e1 + size e2
-  KIfLe _ _ e1 e2             -> 1 + size e1 + size e2
-  KLet _ e1 e2                -> 1 + size e1 + size e2
-  KLetRec (KFunDef _ _ e1) e2 -> 1 + size e1 + size e2
-  KLetTuple _ _ e             -> 1 + size e
+  KIfEq _ _ e1 e2               -> 1 + size e1 + size e2
+  KIfLe _ _ e1 e2               -> 1 + size e1 + size e2
+  KLet _ e1 e2                  -> 1 + size e1 + size e2
+  KLetRec (KFunDef _ _ e1 _) e2 -> 1 + size e1 + size e2
+  KLetTuple _ _ e               -> 1 + size e
   _ -> 1
 
 inlineSub :: Int -> KExpr -> Caml KExpr
@@ -37,14 +37,14 @@ inlineSub _limit = g M.empty
       KIfLe x y e1 e2 -> KIfLe x y <$> g env e1 <*> g env e2
 
       KLet xt e1 e2 -> KLet xt <$> g env e1 <*> g env e2
-      KLetRec f@(KFunDef (x,t) yts e1) e2 -> do
-        {-let inlining = not (isRecursive f)-}
-        let inlining = size e1 < _limit && (not (isRecursive f))
-            env' = if not inlining then env else M.insert x (yts,e1) env
-        when inlining $ ($logInfo) $ pack x <> " is inlinable"
+      KLetRec f@(KFunDef (x,t) yts e1 b) e2 -> do
+        let inlinable = not (isRecursive f) && kInlinable f
+        {-let inlinable = size e1 < _limit && (not (isRecursive f)) && kInlinable f-}
+            env' = if not inlinable then env else M.insert x (yts,e1) env
+        when inlinable $ ($logInfo) $ "  " <> pack x <> " is inlinable"
         e1' <- g env' e1
         e2' <- g env' e2
-        return $ KLetRec (KFunDef (x,t) yts e1') e2'
+        return $ KLetRec (KFunDef (x,t) yts e1' b) e2'
       KApp x ys ->
         case M.lookup x env of
           Just (zts,e') -> do
@@ -73,18 +73,18 @@ inlineRecSub limit = g' Nothing M.empty
       KIfLe x y e1 e2 -> KIfLe x y <$> g env e1 <*> g env e2
 
       KLet xt e1 e2 -> KLet xt <$> g env e1 <*> g env e2
-      KLetRec (KFunDef (x,t) yts e1) e2 -> do
-        let inlining = size e1 < limit
-                    && not ("read_net_item"   `isPrefixOf` x)
-                    && not ("read_or_network" `isPrefixOf` x)
-                    && not ("print_int_sub"   `isPrefixOf` x)
+      KLetRec f@(KFunDef (x,t) yts e1 b) e2 -> do
+        let inlinable = size e1 < limit
+                      && not ("read_net_item"   `isPrefixOf` x)
+                      && not ("read_or_network" `isPrefixOf` x)
+                      && kInlinable f
                     -- 350でcolor tarinai 他のは1500いける
-            env' = if not inlining then env else M.insert x (yts,e1) env
-        when inlining $ ($logInfo) $ pack x <> " is inlinable"
+            env' = if not inlinable then env else M.insert x (yts,e1) env
+        when inlinable $ ($logInfo) $ "  " <> pack x <> " is inlinable"
 
         e1' <- g' (Just x) env' e1
         e2' <- g env' e2
-        return $ KLetRec (KFunDef (x,t) yts e1') e2'
+        return $ KLetRec (KFunDef (x,t) yts e1' b) e2'
       KApp x ys ->
         case (target,M.lookup x env) of
           (Just x', Just (zts,e')) | x==x' -> do
@@ -98,5 +98,5 @@ inlineRecSub limit = g' Nothing M.empty
 -- even-oddみたいな相互再帰には対応していない
 -- レイトレにはないのでまあ
 isRecursive :: KFunDef -> Bool
-isRecursive (KFunDef (x,_) _ e) = x `S.member` fv e
+isRecursive (KFunDef (x,_) _ e _) = x `S.member` fv e
 
