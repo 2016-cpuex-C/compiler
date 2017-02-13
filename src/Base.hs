@@ -1,27 +1,125 @@
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE FlexibleContexts #-}
 
-module Base where
+module Base (
+  --{{{
+  -- Data Types
+  -------------
+    Id
+  , Label(..)
+  , Type(..)
+  , TyEnv
+  , TV(..)
+  , Error(..) -- TODO これ使ってないなあ
+  , Predicate(..)
+  , Named(..)
+  , Caml
+  , S(..) -- TODO 名前変更
 
-import                Data.IORef
-import                Control.Lens
-import                Data.Map                       (Map)
-import qualified      Data.Map as M
-import                Control.Monad.Trans.Except
-import                Control.Monad.Trans.State.Lazy
-import qualified      Control.Monad.IO.Class as IOC
-import                Control.Monad.Except           (throwError, catchError)
-import                Control.Monad.Error.Class      (MonadError)
-import                System.IO                      (Handle, stdout, hPutStrLn)
-import {-# SOURCE #-} FrontEnd.Syntax                (Expr)
+  -- Lenses
+  ---------
+  , idCount
+  , tvCount
+  , threshold
+  , optimiseLimit
+  , extTyEnv
+  , constFloats
+  , bigIntegers
+  , globalHeap
+  , startGP
+  , logfile
+  , instCount
+  , verbosity
 
------------
--- Types --
------------
+  --
+  -----------
+  , unLabel
+  , genType
+  , genTmp
+  , genId
+  , ppList
+  , toGlobalId
+  , globalArrayEnv
+  , externalEnv
+  , floatLabel
+  , labelFloat
+  , bigIntLabel
+  , labelBigInt
+  , initialState
+  , maxArgs
+  , runCaml
+  , runCamlDefault
+  , lift
+  , liftIO
+  , errorShow
+  , withoutLogging
+
+  -- Util
+  -----------
+  , lookupRev
+  , both
+  , lookupMapNote
+  , insertList
+  , insertAppend
+  , insertAppendS
+  , insertAppendList
+  , insertAppendSetS
+  , flipMap
+  , mapToTree
+  , dfsMap
+  , inOrderSortDFS
+  , lookupMapLensM
+  , lookupMapLensNoteM
+  , findWithDefaultLensM
+  , toList2
+  , fromList2
+  , union2
+  , unions2
+  , difference2
+  , both2
+  , show'
+
+    -- export
+  , module Export
+  --}}}
+) where
+
+import           Safe                             as Export
+import           Data.Map                         as Export (Map)
+import           Data.Set                         as Export (Set)
+import           Data.List                        as Export (foldl')
+import           Data.Text                        as Export (Text,pack)
+import           Data.Monoid                      as Export
+import           Control.Lens                     as Export (makeLenses,use,uses,view,bimap)
+import           Control.Monad                    as Export (join,when,unless,forM_,forM,(>=>))
+import           Control.Monad.Except             as Export (throwError,catchError)
+import           Control.Monad.Logger             as Export
+
+import           Data.IORef
+import           Control.Lens                     (Lens')
+import           Control.Lens.Operators
+import qualified Data.Map                         as M
+import qualified Data.Set                         as S
+import           Data.Tree
+import           Data.Maybe                       (fromMaybe)
+import qualified Data.ByteString.Char8            as S8 (hPutStr)
+import qualified Control.Monad.Trans              as T (MonadTrans,lift)
+import           Control.Monad.Trans.Except
+import           Control.Monad.Trans.State.Strict
+import           Control.Monad.State.Class        (MonadState)
+import qualified Control.Monad.IO.Class           as IOC (MonadIO,liftIO)
+import           System.IO                        (Handle,stdout)
+import           System.Log.FastLogger
+
+-------------------------------------------------------------------------------
+-- Types
+-------------------------------------------------------------------------------
+
 type Id = String
 newtype Label = Label String
-              deriving Show
+              deriving (Show,Eq,Ord)
 
 data Type = TUnit
           | TBool
@@ -29,9 +127,11 @@ data Type = TUnit
           | TFloat
           | TFun   [Type] Type
           | TTuple [Type]
-          | TArray Type
+          | TArray Integer Type
+          | TPtr   Type
           | TVar   TV
           deriving (Show, Eq, Ord)
+
 type TyEnv = Map Id Type
 
 data TV = TV Int (IORef (Maybe Type))
@@ -42,29 +142,43 @@ instance Show TV where
 instance Ord TV where
   compare (TV n _) (TV m _) = compare n m
 
-data S = S { _idCount       :: Int                    -- for Id module
-           , _tvCount       :: Int                    -- for Typing module
-           , _threshold     :: Int                    -- max inline size
-           , _optimiseLimit :: Int                    -- max number of optimise iteration
-           , _extTyEnv      :: TyEnv                  -- type of ext functions
-           , _constFloats   :: [(Label,Float)]        -- floating constant
-           , _globalHeap    :: Map Id (Integer,Type)  -- global array and its address
-           , _startGP       :: Integer                -- sum of global array size
-           , _logfile       :: Handle
+data S = S { _idCount       :: Int              -- for Id module
+           , _tvCount       :: Int              -- for Typing module
+           , _threshold     :: Int              -- max inline size
+           , _optimiseLimit :: Int              -- max number of optimise iter
+           , _extTyEnv      :: TyEnv            -- type of ext functions
+           , _constFloats   :: [(Label,Float)]  -- floating constant
+           , _bigIntegers   :: [(Label,Integer)]
+           , _globalHeap    :: Map Id (Integer,Integer,Type)
+                                                -- global array and its address
+                                                -- (address,size,type)
+           , _startGP       :: Integer          -- sum of global array size
+           , _logfile       :: Handle           -- file to log to
+           , _instCount     :: Int
+           , _verbosity     :: LogLevel
            }
-           deriving Show
+           deriving (Show,Eq)
 makeLenses ''S
 
-type Caml = StateT S (ExceptT Error IO)
+type Caml = LoggingT (StateT S (ExceptT Error IO))
 data Error = Failure String
-           | Unify Type Type
-           | Typing Expr Type Type
-           | NoReg Id Type
-           deriving Show
+           deriving (Eq,Ord)
+instance Show Error where
+  show (Failure e) = "Failure " ++ e
 
----------------
--- functions --
----------------
+data Predicate = EQ | NE | LE | GE | LT | GT
+               deriving (Show,Eq,Ord,Enum)
+
+data Named a = Id := a | Do a
+    deriving (Show,Eq,Ord)
+
+-------------------------------------------------------------------------------
+-- Functions
+-------------------------------------------------------------------------------
+
+-- Label --
+unLabel :: Label -> String
+unLabel (Label x) = x
 
 -- Type --
 genType :: Caml Type
@@ -72,12 +186,6 @@ genType = do
   ref <- liftIO $ newIORef Nothing
   n   <- tvCount <+= 1
   return $ TVar $ TV n ref
-
-readType :: TV -> Caml (Maybe Type)
-readType (TV _ ref) = liftIO $ readIORef ref
-
-writeType :: TV -> Type -> Caml ()
-writeType (TV _ ref) t = liftIO $ writeIORef ref (Just t)
 
 -- Id --
 ppList :: [Id] -> Id
@@ -98,48 +206,234 @@ genTmp ty = do
 
 idOfType :: Type -> String
 idOfType = \case
-  TUnit    -> "u"
-  TBool    -> "b"
-  TInt     -> "i"
-  TFloat   -> "d"
-  TFun _ _ -> "f"
-  TTuple _ -> "t"
-  TArray _ -> "a"
-  TVar _   -> error "idOfType: TVar"
+  TUnit      -> "u"
+  TBool      -> "b"
+  TInt       -> "i"
+  TFloat     -> "d"
+  TFun _ _   -> "f"
+  TTuple _   -> "t"
+  TArray n _ -> "a" ++ show n
+  TPtr _     -> "p"
+  TVar _     -> error "idOfType: TVar"
 
--- Caml
+toGlobalId :: Id -> Id
+toGlobalId = ("G"++)
+
+-- env --
+globalArrayEnv :: Caml TyEnv
+globalArrayEnv = uses globalHeap $ M.map (\(_,_,t) -> t)
+
+externalEnv :: Caml TyEnv
+externalEnv = uses extTyEnv $ M.mapKeys ("min_caml_"++)
+
+-- float --
+floatLabel :: Float -> Caml Label
+floatLabel f =
+  uses constFloats (lookupRev f) >>= \case
+    Nothing -> do
+      l <- Label <$> genId "l"
+      constFloats %= ((l,f):)
+      return l
+    Just l -> return l
+
+labelFloat :: Label -> Caml Float
+labelFloat l =
+  uses constFloats (lookup l) >>= \case
+    Nothing -> error "Base: labelFloat: Not Found"
+    Just f  -> return f
+
+-- big integer --
+bigIntLabel :: Integer -> Caml Label
+bigIntLabel n = 
+  uses bigIntegers (lookupRev n) >>= \case
+    Nothing -> do
+      l <- Label <$> genId "l"
+      bigIntegers %= ((l,n):)
+      return l
+    Just l -> return l
+
+labelBigInt :: Label -> Caml Integer
+labelBigInt l =
+  uses bigIntegers (lookup l) >>= \case
+    Nothing -> error "Base: labelBigInt: Not Found"
+    Just n  -> return n
+
+-- Caml initialState --
 initialState :: S
-initialState = S { _idCount       = 0
-                 , _tvCount       = 0
-                 , _extTyEnv      = M.empty
-                 , _threshold     = 0
-                 , _constFloats   = []
-                 , _globalHeap    = M.empty
-                 , _startGP       = 10000 -- !! stackの最大値を超えないように
-                 , _optimiseLimit = 100
-                 , _logfile       = stdout
-                 }
+initialState = S {
+    _idCount       = 0
+  , _tvCount       = 0
+  , _extTyEnv      = initialExtTyEnv
+  , _threshold     = 0
+  , _constFloats   = []
+  , _bigIntegers   = []
+  , _globalHeap    = M.empty
+  , _startGP       = 10000 -- !! stackの最大値を超えないように
+  , _optimiseLimit = 100
+  , _logfile       = stdout
+  , _instCount     = 0
+  , _verbosity     = LevelInfo
+  }
 maxArgs :: Int
 maxArgs = 25
+
+initialExtTyEnv :: TyEnv
+initialExtTyEnv = M.fromList
+  [ ("sqrt"               , TFun [TFloat     ] TFloat       )
+  , ("floor"              , TFun [TFloat     ] TFloat       )
+  , ("cos"                , TFun [TFloat     ] TFloat       )
+  , ("sin"                , TFun [TFloat     ] TFloat       )
+  , ("atan"               , TFun [TFloat     ] TFloat       )
+  , ("read_int"           , TFun [TUnit      ] TInt         )
+  , ("read_float"         , TFun [TUnit      ] TFloat       )
+  , ("print_int"          , TFun [TInt       ] TUnit        )
+  , ("print_float"        , TFun [TFloat     ] TUnit        )
+  , ("print_char"         , TFun [TInt       ] TUnit        )
+  , ("print_newline"      , TFun [TUnit      ] TUnit        )
+  , ("int_of_float"       , TFun [TFloat     ] TInt         )
+  , ("float_of_int"       , TFun [TInt       ] TFloat       )
+  , ("create_array"       , TFun [TInt,TInt  ] (TPtr TInt  ))
+  , ("create_float_array" , TFun [TInt,TFloat] (TPtr TFloat))
+  , ("init_array"         , TFun [TInt,TInt  ] (TPtr TInt  ))
+  , ("init_float_array"   , TFun [TInt,TFloat] (TPtr TFloat))
+  , ("f2i"                , TFun [TFloat     ] TInt         )
+  , ("i2f"                , TFun [TInt       ] TFloat       )
+  ]
+
+-- logger --
+
+withoutLogging :: Caml a -> Caml a
+withoutLogging = filterLogger (const (const False))
+
+show' :: Show a => a -> Text
+show' = pack . show
+
+-- runner --
+
+runCaml :: Caml a -> S -> IO (Either Error a)
+runCaml c s = runExceptT $ evalStateT (runHLoggingT h v c) s
+  where
+    h = s^.logfile
+    v = s^.verbosity
+
+runCamlDefault :: Caml a -> IO (Either Error a)
+runCamlDefault c = runCaml c initialState
+
+runHLoggingT :: IOC.MonadIO m => Handle -> LogLevel -> LoggingT m a -> m a
+runHLoggingT h v c = runLoggingT (filterLogger p c) (defaultOutput h)
+  where p _ v' = v <= v'
+    -- v以上のもののみ出力
+
+defaultOutput :: Handle -> Loc -> LogSource -> LogLevel -> LogStr -> IO ()
+defaultOutput h a b c d =
+  let s = fromLogStr $ defaultLogStr a b c d
+  in  S8.hPutStr h s
+
+-------------------------------------------------------------------------------
+-- Util
+-------------------------------------------------------------------------------
+
+lift :: (T.MonadTrans t, Monad m) => m a -> t m a
+lift = T.lift
 
 liftIO :: IOC.MonadIO m => IO a -> m a
 liftIO = IOC.liftIO
 
--- NOTE: m中の状態変化はなかったことになる 気をつけて使う
-catch :: MonadError Error m => m a -> (Error -> m a) -> m a
-catch = catchError
+errorShow :: Show a => String -> a -> b
+errorShow s x = error $ s ++ show x
 
-throw :: MonadError Error m => Error -> m a
-throw = throwError
+lookupRev :: Eq a => a -> [(b,a)] -> Maybe b
+lookupRev i = let f (p,q) = (q,p) in lookup i . map f
 
-log :: String -> Caml ()
-log s = do
-  l <- use logfile
-  liftIO $ hPutStrLn l s
+both :: (a -> b) -> (a,a) -> (b,b)
+both f = bimap f f
 
-runCamlDefault :: Caml a -> IO (Either Error a)
-runCamlDefault c = runExceptT $ evalStateT c initialState
+---------
+-- Map --
+---------
 
-runCaml :: Caml a -> S -> IO (Either Error a)
-runCaml c s = runExceptT $ evalStateT c s
+lookupMapNote :: (Ord k) => String -> k -> Map k a -> a
+lookupMapNote s k m = fromJustNote msg $ M.lookup k m
+  where msg = "lookupMapNote: " ++ s
+
+insertList :: Ord key => [(key,a)] -> Map key a -> Map key a
+insertList = M.union . M.fromList
+
+insertAppend :: Ord a => a -> b -> Map a [b] -> Map a [b]
+insertAppend x y = M.alter f x
+  where f Nothing   = Just [y]
+        f (Just ys) = Just (y:ys)
+
+insertAppendS :: (Ord a, Ord b) => a -> b -> Map a (Set b) -> Map a (Set b)
+insertAppendS x y = M.alter f x
+  where f Nothing   = Just (S.singleton y)
+        f (Just ys) = Just (S.insert y ys)
+
+insertAppendList :: Ord a => a -> [b] -> Map a [b] -> Map a [b]
+insertAppendList x ys = M.alter f x
+  where f Nothing   = Just ys
+        f (Just ys') = Just (ys++ys')
+
+insertAppendSetS :: (Ord a, Ord b) => a -> Set b -> Map a (Set b) -> Map a (Set b)
+insertAppendSetS x ys = M.alter f x
+  where f Nothing   = Just ys
+        f (Just ys') = Just (S.union ys ys')
+
+flipMap :: (Ord a, Ord b) => Map a b -> Map b [a]
+flipMap = M.foldlWithKey f M.empty
+  where f m x y = insertAppend y x m
+
+-- 後退辺があると無限ループする
+-- ある場合はdfsMapを使う
+mapToTree :: Ord a => a -> Map a [a] -> Tree a
+mapToTree root m = f root
+  where f n = case M.lookup n m of
+          Just es -> Node n (map f es)
+          Nothing -> Node n []
+
+dfsMap :: Ord a => a -> Map a [a] -> Tree a
+dfsMap root m = evalState (f root) S.empty
+  where
+    f n = case M.lookup n m of
+      Just es -> do
+        modify $ S.insert n
+        reached <- get
+        let es' = filter (`S.notMember` reached) es
+        Node n <$> mapM f es'
+      Nothing -> return $ Node n []
+
+inOrderSortDFS :: Tree a -> [a]
+inOrderSortDFS (Node n ns) = n : concatMap inOrderSortDFS ns
+
+lookupMapLensM :: (Ord k, MonadState s m) => k -> Lens' s (Map k a) -> m (Maybe a)
+lookupMapLensM x m = uses m (M.lookup x)
+
+lookupMapLensNoteM :: (Ord k, MonadState s m) => String -> k -> Lens' s (Map k a) -> m a
+lookupMapLensNoteM s x m = fromJustNote msg <$> lookupMapLensM x m
+  where msg = "lookupMapLensNoteM: " ++ s
+
+findWithDefaultLensM :: (Ord k, MonadState s m) => a -> k -> Lens' s (Map k a) -> m a
+findWithDefaultLensM d x m = fromMaybe d <$> lookupMapLensM x m
+
+---------------
+-- (Set,Set) --
+---------------
+
+toList2 :: (Set Id, Set Id) -> ([Id], [Id])
+toList2 = both S.toList
+
+fromList2 :: ([Id], [Id]) -> (Set Id, Set Id)
+fromList2 = both S.fromList
+
+unions2 :: [(Set Id, Set Id)] -> (Set Id, Set Id)
+unions2 = both S.unions . unzip
+
+union2 :: (Set Id, Set Id) -> (Set Id, Set Id) -> (Set Id, Set Id)
+union2 = both2 S.union
+
+difference2 :: (Set Id, Set Id) -> (Set Id, Set Id) -> (Set Id, Set Id)
+difference2 = both2 S.difference
+
+both2 :: (a -> b -> c) -> (a, a) -> (b, b) -> (c, c)
+both2 f (x1,x2) (y1,y2) = (f x1 y1, f x2 y2)
 

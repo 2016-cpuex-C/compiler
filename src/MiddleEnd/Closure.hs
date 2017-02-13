@@ -1,4 +1,7 @@
-{-# LANGUAGE LambdaCase #-}{-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE NoImplicitPrelude #-}
 {- KExpr -> CExpr -}
 
 module MiddleEnd.Closure (
@@ -12,53 +15,55 @@ module MiddleEnd.Closure (
 
 import Prelude hiding (log)
 
-import Base              hiding (liftIO)
+import Base
 import MiddleEnd.KNormal hiding (fv)
 
-import           Data.Map       (Map)
 import qualified Data.Map as M
-import           Data.Set       (Set, toList, fromList, (\\))
+import           Data.Set       (toList, fromList, (\\))
 import qualified Data.Set as S
 import qualified Data.List as L
-import           Control.Lens
 import           Control.Monad.Trans.State.Lazy
-import           Control.Monad.Trans.Class (lift)
 
 import           Data.Maybe (fromMaybe)
 
-data CExpr = CUnit
-           | CInt      Integer
-           | CFloat    Float
-           | CNeg      Id
-           | CF2I      Id
-           | CI2F      Id
-           | CAdd      Id Id
-           | CSub      Id Id
-           | CMul      Id Id
-           | CDiv      Id Id
-           | CAnd      Id Id
-           | COr       Id Id
-           | CXor      Id Id
-           | CSrl      Id Id
-           | CSll      Id Id
-           | CFNeg     Id
-           | CFAdd     Id Id
-           | CFSub     Id Id
-           | CFMul     Id Id
-           | CFDiv     Id Id
-           | CIfEq     Id Id     CExpr CExpr
-           | CIfLe     Id Id     CExpr CExpr
-           | CLet      (Id,Type) CExpr CExpr
-           | CVar      Id
-           | CMakeCls  (Id,Type) Closure CExpr
-           | CAppCls   Id [Id]
-           | CAppDir   Label [Id]
-           | CTuple    [Id]
-           | CLetTuple [(Id,Type)] Id CExpr
-           | CGet      Id Id
-           | CPut      Id Id Id
-           | CExtArray Label
-           deriving Show
+data CExpr
+  = CUnit
+  | CInt      Integer
+  | CBool     Bool
+  | CFloat    Float
+  | CNeg      Id
+  | CF2I      Id
+  | CI2F      Id
+  | CAdd      Id Id
+  | CSub      Id Id
+  | CMul      Id Id
+  | CDiv      Id Id
+  | CLAnd     Id Id
+  | CLOr      Id Id
+  | CLXor     Id Id
+  | CSrl      Id Id
+  | CSll      Id Id
+
+  | CFNeg     Id
+  | CFAdd     Id Id
+  | CFSub     Id Id
+  | CFMul     Id Id
+  | CFDiv     Id Id
+  | CIfEq     Id Id     CExpr CExpr
+  | CIfLe     Id Id     CExpr CExpr
+  | CLet      (Id,Type) CExpr CExpr
+  | CVar      Id
+  | CMakeCls  (Id,Type) Closure CExpr
+  | CAppCls   Id [Id]
+  | CAppDir   Label [Id]
+  | CTuple    [Id]
+  | CArray    Id Id
+  | CArrayInit Label Id
+  | CLetTuple [(Id,Type)] Id CExpr
+  | CGet      Id Id
+  | CPut      Id Id Id
+  | CExtArray Label
+  deriving Show
 data Closure = Closure { _entry    :: Label
                        , _actualFV :: [Id]}
              deriving Show
@@ -69,7 +74,6 @@ data CFunDef = CFunDef { _cname     :: (Label,Type)
                        , _cFormalFV :: [(Id,Type)]
                        , _cbody     :: CExpr}
               deriving Show
-{-makeLenses ''CFunDef-}
 type CamlCls = StateT [CFunDef] Caml
 
 closureConvert :: KExpr -> Caml CProg
@@ -89,22 +93,23 @@ fv e_ = do
     fv' ign e = case e of
       CUnit       -> return S.empty
       CInt{}      -> return S.empty
+      CBool{}     -> return S.empty
       CFloat{}    -> return S.empty
       CExtArray{} -> return S.empty
 
       CNeg  x -> return $ S.singleton x
       CFNeg x -> return $ S.singleton x
-      CVar  x -> return $ S.singleton x
       CF2I  x -> return $ S.singleton x
       CI2F  x -> return $ S.singleton x
+      CVar  x -> return $ S.singleton x
 
       CAdd  x y -> return $ S.fromList [x,y]
       CSub  x y -> return $ S.fromList [x,y]
       CMul  x y -> return $ S.fromList [x,y]
       CDiv  x y -> return $ S.fromList [x,y]
-      CAnd  x y -> return $ S.fromList [x,y]
-      COr   x y -> return $ S.fromList [x,y]
-      CXor  x y -> return $ S.fromList [x,y]
+      CLAnd x y -> return $ S.fromList [x,y]
+      CLOr  x y -> return $ S.fromList [x,y]
+      CLXor x y -> return $ S.fromList [x,y]
       CSrl  x y -> return $ S.fromList [x,y]
       CSll  x y -> return $ S.fromList [x,y]
       CFAdd x y -> return $ S.fromList [x,y]
@@ -120,6 +125,9 @@ fv e_ = do
       CLet (x,_t) e1 e2 ->
         S.union <$> fv' ign e1 <*> (S.delete x <$> fv' ign e2)
 
+      CLetTuple xts y e' ->
+        S.insert y . (S.\\ S.fromList (map fst xts)) <$> fv' ign e'
+
       CMakeCls (x,_t) (Closure _l ys) e' ->
         S.delete x . S.union (S.fromList ys) <$> fv' ign e'
 
@@ -127,15 +135,14 @@ fv e_ = do
       CAppDir _ xs -> return $ S.fromList xs
 
       CTuple xs -> return $ S.fromList xs
-
-      CLetTuple xts y e' ->
-        S.insert y . (S.\\ S.fromList (map fst xts)) <$> fv' ign e'
+      CArray x y -> return $ S.fromList [x,y]
+      CArrayInit _ x -> return $ S.singleton x
 
       CGet x y
-        | x `elem` ign -> return $ S.singleton y
+        | toGlobalId x `elem` ign -> return $ S.singleton y
         | otherwise    -> return $ S.fromList [x,y]
       CPut x y z
-        | x `elem` ign -> return $ S.fromList [y,z]
+        | toGlobalId x `elem` ign -> return $ S.fromList [y,z]
         | otherwise    -> return $ S.fromList [x,y,z]
 
 
@@ -144,6 +151,7 @@ g :: Map Id Type -> Set Id -> KExpr -> CamlCls CExpr
 g env known = \case
   KUnit    -> return $ CUnit
   KInt i   -> return $ CInt i
+  KBool b  -> return $ CBool b
   KFloat d -> return $ CFloat d
 
   KNeg  x -> return $ CNeg x
@@ -155,9 +163,9 @@ g env known = \case
   KSub  x y -> return $ CSub  x y
   KMul  x y -> return $ CMul  x y
   KDiv  x y -> return $ CDiv  x y
-  KAnd  x y -> return $ CAnd  x y
-  KOr   x y -> return $ COr   x y
-  KXor  x y -> return $ CXor  x y
+  KLAnd x y -> return $ CLAnd x y
+  KLOr  x y -> return $ CLOr  x y
+  KLXor x y -> return $ CLXor x y
   KSrl  x y -> return $ CSrl  x y
   KSll  x y -> return $ CSll  x y
   KFAdd x y -> return $ CFAdd x y
@@ -177,7 +185,7 @@ g env known = \case
     -- だめだったらやり直す
     toplevelBackup <- get
     let env'     = M.insert x t env
-        env''    = M.union (M.fromList yts) env'
+        env''    = insertList yts env'
         known'   = S.insert x known
         (ys,_ts) = unzip yts
     e1' <- g env'' known' e1
@@ -185,7 +193,7 @@ g env known = \case
     fve1' <- lift $ fv e1'
     (known'', e1'') <- case toList $ fve1' \\ fromList ys of
         [] -> return (known', e1')   -- OK
-        zs -> do lift.log $
+        zs -> do lift.($logWarn).pack $
                       "free variable(s) " ++ ppList zs ++ " " ++
                       "found in function " ++ x ++ "\n" ++
                       "function " ++ x ++ " cannot be directly applied in fact"
@@ -198,27 +206,27 @@ g env known = \case
     modify (CFunDef (Label x, t) yts zts' e1'' :) -- 追加
     e2' <- g env' known'' e2
     fve2' <- lift $ fv e2'
-    if S.member x fve2' then -- やや賢い->賢い
+    if S.member x fve2' then do -- やや賢い->賢い
+        lift.($logWarn) $ "make closure(s) " <> pack x
         return $ CMakeCls (x,t) (Closure (Label x) zs') e2'
-    else do
-        lift.log $ "eliminating closure(s) " ++ x
+    else
         return e2'
 
   KApp x ys
-    | S.member x known -> do
-        lift.log $ "directly applying " ++ x
+    | S.member x known ->
         return $ CAppDir (Label x) ys
     | otherwise ->
-        return $ CAppCls x ys
+        error "closure"
+        --return $ CAppCls x ys
 
   KTuple xs -> return $ CTuple xs
-  KArray x y -> return $ CAppDir (Label "min_caml_create_array") [x,y]
-  KFArray x y -> return $ CAppDir (Label "min_caml_create_float_array") [x,y]
+  KArray x y -> return $ CArray x y
+  KArrayInit l x -> return $ CArrayInit l x
 
-  KLetTuple xts y e -> CLetTuple xts y <$> g (M.union (M.fromList xts) env) known e
+  KLetTuple xts y e -> CLetTuple xts y <$> g (insertList xts env) known e
 
   KGet x y        -> return $ CGet x y
   KPut x y z      -> return $ CPut x y z
   KExtArray x     -> return $ CExtArray (Label x)
-  KExtFunApp x ys -> return $ CAppDir   (Label ("min_caml_" ++ x)) ys
+  KExtFunApp x ys -> return $ CAppDir   (Label $ "min_caml_"++x) ys
 

@@ -1,18 +1,16 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiWayIf #-}
 
-module BackEnd.FirstArch.Virtual where
+module BackEnd.First.Virtual where
 {- CProg -> AProg -}
 
 import Base
 import MiddleEnd.Closure
-import BackEnd.FirstArch.Asm hiding (fv)
+import BackEnd.First.Asm hiding (fv)
 
-import           Data.Map (Map)
 import qualified Data.Map as M
 import qualified Data.Set as S
 import           Control.Lens
-import           Data.List (foldl')
 import           Data.Maybe (fromJust)
 import           Data.Foldable (foldlM)
 
@@ -20,7 +18,8 @@ virtualCode :: CProg -> Caml AProg
 virtualCode (CProg fundefs e) = do
   constFloats .= []
   fundefs' <- mapM h fundefs
-  e' <- g M.empty e
+  glblArrayEnv <- globalArrayEnv
+  e' <- g glblArrayEnv e
   fdata <- use constFloats
   return $ AProg fdata fundefs' e'
 
@@ -97,6 +96,7 @@ g :: Map Id Type -> CExpr -> Caml Asm
 g env = \case
   CUnit -> return $ AsmAns ANop
   CInt i -> return $ AsmAns $ ASet i
+  CBool b -> return $ AsmAns $ ASet (if b then 1 else 0)
   CFloat d -> do
     fdata <- use constFloats
     l <- case lookupRev d fdata of
@@ -106,19 +106,18 @@ g env = \case
                    return l
     return $ AsmAns (ASetF l)
 
-  CNeg x -> return $ AsmAns $ ANeg x
-  CF2I x -> return $ AsmAns $ AF2I x
-  CI2F x -> return $ AsmAns $ AI2F x
-
-  CAdd x y -> return $ AsmAns $ AAdd x (V y)
-  CSub x y -> return $ AsmAns $ ASub x (V y)
-  CMul x y -> return $ AsmAns $ AMul x (V y)
-  CDiv x y -> return $ AsmAns $ ADiv x (V y)
-  CAnd x y -> return $ AsmAns $ AAnd x (V y)
-  COr  x y -> return $ AsmAns $ AOr  x (V y)
-  CXor x y -> return $ AsmAns $ AXor x (V y)
-  CSrl x y -> return $ AsmAns $ ASrl x (V y)
-  CSll x y -> return $ AsmAns $ ASll x (V y)
+  CNeg  x   -> return $ AsmAns $ ANeg x
+  CF2I  x   -> return $ AsmAns $ AF2I x
+  CI2F  x   -> return $ AsmAns $ AI2F x
+  CAdd  x y -> return $ AsmAns $ AAdd x (V y)
+  CSub  x y -> return $ AsmAns $ ASub x (V y)
+  CMul  x y -> return $ AsmAns $ AMul x (V y)
+  CDiv  x y -> return $ AsmAns $ ADiv x (V y)
+  CLAnd x y -> return $ AsmAns $ AAnd x (V y)
+  CLOr  x y -> return $ AsmAns $ AOr  x (V y)
+  CLXor x y -> return $ AsmAns $ AXor x (V y)
+  CSrl  x y -> return $ AsmAns $ ASrl x (V y)
+  CSll  x y -> return $ AsmAns $ ASll x (V y)
 
   CFNeg x -> return $ AsmAns $ AFNegD x
   CFAdd x y -> return $ AsmAns $ AFAddD x y
@@ -130,12 +129,12 @@ g env = \case
     Just TBool ->  AsmAns <$> (AIfEq  x (V y) <$> g env e1 <*> g env e2)
     Just TInt  ->  AsmAns <$> (AIfEq  x (V y) <$> g env e1 <*> g env e2)
     Just TFloat -> AsmAns <$> (AIfFEq x    y  <$> g env e1 <*> g env e2)
-    _ -> throw $ Failure "equality supported only for int, and float"
+    _ -> throwError $ Failure "equality supported only for int, and float"
   CIfLe x y e1 e2 -> case M.lookup x env of
     Just TBool ->  AsmAns <$> (AIfEq  x (V y) <$> g env e1 <*> g env e2)
     Just TInt  ->  AsmAns <$> (AIfLe  x (V y) <$> g env e1 <*> g env e2)
     Just TFloat -> AsmAns <$> (AIfFLe x    y  <$> g env e1 <*> g env e2)
-    _ -> throw $ Failure "equality supported only for int, and float"
+    _ -> throwError $ Failure "equality supported only for int, and float"
 
   CLet (x,t1) e1 e2 -> do
     e1' <- g env e1
@@ -172,11 +171,27 @@ g env = \case
     y <- genId "t"
     let ts = [fromJust (M.lookup x env) | x <- xs]
     (offset,store) <-
-        let addf x   offset store = seq' (AStDF x y (C offset), store)
-            addi x _ offset store = seq' (ASt   x y (C offset), store)
+        let addf x   offset k = seq' (AStDF x y (C offset), k)
+            addi x _ offset k = seq' (ASt   x y (C offset), k)
         in expandM (zip xs ts) (0,AsmAns (AMov y)) addf addi
     return $ AsmLet (y,TTuple ts) (AMov regHp)
               (AsmLet (regHp,TInt) (AAdd regHp (C $ align offset)) store)
+  CArray x y -> do
+    case M.lookup y env of
+      Just TFloat -> g env (CAppDir (Label "min_caml_create_float_array") [x,y])
+      _           -> g env (CAppDir (Label "min_caml_create_array") [x,y])
+
+  CArrayInit (Label x) y -> do
+    vaddr <- genId "addr"
+    vsize <- genId "size"
+    Just (addr,size,TArray _ te) <- uses globalHeap (M.lookup x)
+    let array_init = case te of TFloat -> "min_caml_float_array_init"
+                                _      -> "min_caml_array_init"
+    g env $
+      CLet (vaddr,TInt) (CInt addr) $
+        CLet (vsize,TInt) (CInt size) $
+          CAppDir (Label array_init) [vaddr,vsize,y]
+
 
   CLetTuple xts y e2 -> do
     s <- fv e2
@@ -193,36 +208,25 @@ g env = \case
 
   CGet x y -> do
     heap <- use globalHeap
-    case M.lookup x heap of
-      Just (addr, TArray TFloat) -> return $ AsmAns (ALdDF y (C addr))
-      Just (addr, _)             -> return $ AsmAns (ALd   y (C addr))
+    case M.lookup (toGlobalId x) heap of
+      Just (addr, _, TArray _ TFloat) -> return $ AsmAns (ALdDF y (C addr))
+      Just (addr, _, _)               -> return $ AsmAns (ALd   y (C addr))
       Nothing -> case M.lookup x env of
-        Just (TArray TUnit)  -> return $ AsmAns ANop
-        Just (TArray TFloat) -> return $ AsmAns (ALdDF x (V y))
-        Just (TArray _)      -> return $ AsmAns (ALd x (V y))
+        Just (TPtr TUnit)  -> return $ AsmAns ANop
+        Just (TPtr TFloat) -> return $ AsmAns (ALdDF x (V y))
+        Just (TPtr _)      -> return $ AsmAns (ALd x (V y))
         e -> error $ "Virtual.g CGet: " ++ x ++ ": " ++ show e
 
   CPut x y z -> do
     heap <- use globalHeap
-    case M.lookup x heap of
-      Just (addr, TArray TFloat) -> return $ AsmAns (AStDF z y (C addr))
-      Just (addr, _)             -> return $ AsmAns (ASt   z y (C addr))
+    case M.lookup (toGlobalId x) heap of
+      Just (addr, _, TArray _ TFloat) -> return $ AsmAns (AStDF z y (C addr))
+      Just (addr, _, _)               -> return $ AsmAns (ASt   z y (C addr))
       Nothing -> case M.lookup x env of
-        Just (TArray TUnit)  -> return $ AsmAns ANop
-        Just (TArray TFloat) -> return $ AsmAns (AStDF z x (V y))
-        Just (TArray _)      -> return $ AsmAns (ASt z x (V y))
+        Just (TPtr TUnit)  -> return $ AsmAns ANop
+        Just (TPtr TFloat) -> return $ AsmAns (AStDF z x (V y))
+        Just (TPtr _)      -> return $ AsmAns (ASt z x (V y))
         e -> error $ "Virtual.g CPut: " ++ x ++ ": " ++ show e
 
-  CExtArray (Label x) -> return $ AsmAns $ ASetL $ Label $ "min_caml_" ++ x
-
-----------
--- Util --
-----------
-
-insertList :: Ord key => [(key,a)] -> Map key a -> Map key a
-insertList xts = M.union (M.fromList xts)
-
--- Prelude.lookupと比べて a,b が逆
-lookupRev :: (Eq a) => a -> [(b,a)] -> Maybe b
-lookupRev i = let f (p,q) = (q,p) in lookup i . map f
+  CExtArray (Label _x) -> error "no ext array" --return $ AsmAns $ ASetL $ Label $ "min_caml_" ++ x
 

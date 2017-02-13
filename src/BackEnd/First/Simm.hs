@@ -3,17 +3,15 @@
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
-module BackEnd.FirstArch.Simm where
+module BackEnd.First.Simm where
 
 import Prelude hiding (exp)
 
 import Base
-import BackEnd.FirstArch.Asm
+import BackEnd.First.Asm
 
-import           Data.Map (Map)
 import qualified Data.Map as M
 import           Data.Bits (shift)
---import           Data.Maybe (fromJust)
 
 import           Data.Maybe (fromMaybe)
 fromJust :: Maybe a -> a
@@ -34,7 +32,7 @@ g env = \case
   AsmLet xt exp e -> AsmLet xt (g' env exp) (g env e)
 
 g' :: Map Id Integer -> AExpr -> AExpr
-g' env = let geti var = lookupJust var env
+g' env = let geti var = lookupMapNote "Simm" var env
              get  var = C (geti var) in \case
   AAdd x (V y)
     | M.member y env -> AAdd x (get y)
@@ -48,6 +46,15 @@ g' env = let geti var = lookupJust var env
     | M.member x env && geti x == 4 -> ASll y (C 2)
   ADiv x (V y)
     | M.member y env && geti y == 2 -> ASll x (C (-1))
+  AAnd x (V y)
+    | M.member y env -> AAnd x (get y)
+    | M.member x env -> AAnd y (get x)
+  AOr x (V y)
+    | M.member y env -> AOr x (get y)
+    | M.member x env -> AOr y (get x)
+  AXor x (V y)
+    | M.member y env -> AXor x (get y)
+    | M.member x env -> AXor y (get x)
 
   ALd x (V y)
     | M.member y env -> ALd x (get y)

@@ -30,11 +30,19 @@ import FrontEnd.Syntax
     '>='        { TokenGe          }
     '<'         { TokenLt          }
     '>'         { TokenGt          }
+<<<<<<< HEAD
     land        { TokenAnd         }
     lor         { TokenOr          }
     lxor        { TokenXor         }
     lsr         { TokenSrl         }
     lsl         { TokenSll         }
+=======
+    '&'         { TokenAnd         }
+    '|'         { TokenOr          }
+    '^'         { TokenXor         }
+    '<<'        { TokenSll         }
+    '>>'        { TokenSrl         }
+>>>>>>> LLVM
     f2i         { TokenF2I         }
     i2f         { TokenI2F         }
     if          { TokenIf          }
@@ -66,14 +74,12 @@ import FrontEnd.Syntax
 %left  ','
 %left  '=' '<>' '<=' '<' '>' '>=' land lor lxor lsl lsr
 %left  '+' '-' '+.' '-.'
-%left  '*' '/' '*.' '/.'
+%left  '*' '/' '*.' '/.' '&' '|' '^' '<<' '>>'
 %left  prec_neg
 %left  prec_app
 %left  '.'
 
 %nonassoc '>' '<'
-%left '+' '-'
-%left '*' '/'
 
 %%
 
@@ -83,21 +89,29 @@ Expr :: { Expr }
     | f2i Expr %prec prec_app                          { EF2I $2            }
     | i2f Expr %prec prec_app                          { EI2F $2            }
     | '-' Expr  %prec prec_neg                         { neg $2             }
-    | Expr '+' Expr                                    { EAdd $1 $3         }
-    | Expr '-' Expr                                    { ESub $1 $3         }
-    | Expr '*' Expr                                    { EMul $1 $3         }
-    | Expr '/' Expr                                    { EDiv $1 $3         }
-    | Expr '=' Expr                                    { EEq  $1 $3         }
+    | Expr '+' Expr                                    { EAdd  $1 $3        }
+    | Expr '-' Expr                                    { ESub  $1 $3        }
+    | Expr '*' Expr                                    { EMul  $1 $3        }
+    | Expr '/' Expr                                    { EDiv  $1 $3        }
+    | Expr '&' Expr                                    { ELAnd $1 $3        }
+    | Expr '|' Expr                                    { ELOr  $1 $3        }
+    | Expr '^' Expr                                    { ELXor $1 $3        }
+    | Expr '=' Expr                                    { EEq   $1 $3        }
     | Expr '<>' Expr                                   { ENot (EEq $1 $3)   }
     | Expr '<' Expr                                    { ENot (ELe $3 $1)   }
     | Expr '>' Expr                                    { ENot (ELe $1 $3)   }
     | Expr '<=' Expr                                   { ELe $1 $3          }
     | Expr '>=' Expr                                   { ELe $3 $1          }
+<<<<<<< HEAD
     | Expr land Expr                                   { EAnd $1 $3         }
     | Expr lor  Expr                                   { EOr  $1 $3         }
     | Expr lxor Expr                                   { EXor $1 $3         }
     | Expr lsr  Expr                                   { ESrl $1 $3         }
     | Expr lsl  Expr                                   { ESll $1 $3         }
+=======
+    | Expr '<<' Expr                                   { ESll $1 $3          }
+    | Expr '>>' Expr                                   { ESrl $1 $3          }
+>>>>>>> LLVM
     | if Expr then Expr else Expr %prec prec_if        { EIf $2 $4 $6       }
     | '-.' Expr %prec prec_neg                         { EFNeg $2           }
     | Expr '+.' Expr                                   { EFAdd $1 $3        }
@@ -113,12 +127,12 @@ Expr :: { Expr }
     | Expr ';' Expr                                    { % eseq $1 $3       }
     | ArrayCreate SimpleExpr SimpleExpr %prec prec_app { EArray $2 $3       }
     -- ad hoc
-    | fless   Expr Expr                                { ELe $2 $3          }
-    | fispos  Expr                                     { ELe (EFloat 0) $2  }
-    | fisneg  Expr                                     { ELe $2 (EFloat 0)  }
-    | fiszero Expr                                     { EEq $2 (EFloat 0)  }
+    | fless   Expr Expr                                { ENot (ELe $3 $2)         }
+    | fispos  Expr                                     { ENot (ELe $2 (EFloat 0)) }
+    | fisneg  Expr                                     { ENot (ELe (EFloat 0) $2) }
+    | fiszero Expr                                     { EEq $2 (EFloat 0)        }
 
-    | error                                            { % parseError []    }
+    | error                                            { % parseError []          }
 
 SimpleExpr :: { Expr }
     : '(' Expr ')'                { $2         }
@@ -155,7 +169,7 @@ Pat :: { [(Id,Type)] }
 {
 
 parseError :: [Token] -> Caml a
-parseError tks = throw $ Failure "Parse Error"
+parseError tks = throwError $ Failure "Parse Error"
 
 addType :: Id -> Caml (Id, Type)
 addType x = do

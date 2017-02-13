@@ -5,20 +5,30 @@ extra-source-files:  src/FrontEnd/Parser.y
                      src/FrontEnd/Lexer.x
 cabal-version:       >=1.10
 
+
 library
   hs-source-dirs:      src
   ghc-options:         -O3 -Wall
   build-depends:       base
+                     , llvm-general
+                     , llvm-general-pure
                      , mtl
+                     , safe
                      , lens
                      , text
                      , array
+                     , extra
                      , vector
+                     , xformat
+                     , BitSyntax
                      , bytestring
                      , containers
                      , file-embed
+                     , regex-tdfa
+                     , fast-logger
+                     , monad-logger
                      , transformers
-                     , BitSyntax
+                     , template-haskell
   exposed-modules:     Base
                      , FrontEnd.Syntax
                      , FrontEnd.Lexer
@@ -36,12 +46,45 @@ library
                      , MiddleEnd.LambdaLifting
                      , MiddleEnd.StaticAlloc
                      , MiddleEnd.Closure
+                     , MiddleEnd.LLVM.FrontEnd.Base
+                     , MiddleEnd.LLVM.FrontEnd.Expr
+                     , MiddleEnd.LLVM.FrontEnd.Prog
+                     , MiddleEnd.LLVM.MiddleEnd
+                     , MiddleEnd.LLVM.BackEnd
                      , BackEnd.Decode
-                     , BackEnd.FirstArch.Asm
-                     , BackEnd.FirstArch.Virtual
-                     , BackEnd.FirstArch.RegAlloc
-                     , BackEnd.FirstArch.Simm
-                     , BackEnd.FirstArch.Emit
+                     , BackEnd.First.Asm
+                     , BackEnd.First.Virtual
+                     , BackEnd.First.RegAlloc
+                     , BackEnd.First.Simm
+                     , BackEnd.First.Emit
+                     , BackEnd.Second.Asm
+                     , BackEnd.Second.FromLProg
+                     , BackEnd.Second.Analysis
+                     , BackEnd.Second.Analysis.Base
+                     , BackEnd.Second.Analysis.StackAndReg
+                     , BackEnd.Second.Analysis.Lifetime
+                     , BackEnd.Second.Virtual
+                     , BackEnd.Second.Optimise
+                     , BackEnd.Second.Optimise.ConstFold
+                     , BackEnd.Second.Optimise.TailCall
+                     , BackEnd.Second.Optimise.CompareBranch
+                     , BackEnd.Second.Optimise.NanjaKore
+                     , BackEnd.Second.Optimise.MulAdd
+                     , BackEnd.Second.Optimise.Elim
+                     , BackEnd.Second.SaveAndRestore
+                     , BackEnd.Second.SaveAndRestore.Rename
+                     , BackEnd.Second.SaveAndRestore.NoRename
+                     , BackEnd.Second.RegAlloc
+                     , BackEnd.Second.RegAlloc.Dominance
+                     , BackEnd.Second.RegAlloc.Dominance.Pure
+                     , BackEnd.Second.RegAlloc.Coloring
+                     , BackEnd.Second.RegAlloc.Coalescing
+                     , BackEnd.Second.RegAlloc.Coalescing.PhiOptimise
+                     , BackEnd.Second.RegAlloc.PhiLifting
+                     , BackEnd.Second.RegAlloc.Spilling
+                     , BackEnd.Second.SSA_Deconstruction
+                     , BackEnd.Second.BigInteger
+                     , BackEnd.Second.Emit
   build-tools:         happy, alex
   default-language:    Haskell2010
 
@@ -56,6 +99,8 @@ executable min-caml
                      , file-embed
                      , containers
                      , optparse-applicative
+                     , llvm-general
+                     , llvm-general-pure
   default-language:    Haskell2010
 
 test-suite min-caml-test

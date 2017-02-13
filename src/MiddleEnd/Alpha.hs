@@ -5,10 +5,8 @@ module MiddleEnd.Alpha where
 import Base
 import MiddleEnd.KNormal
 
-import           Data.Map (Map)
 import qualified Data.Map as M
 import           Data.Maybe (fromMaybe)
-import           Control.Lens
 
 alpha :: KExpr -> Caml KExpr
 alpha = g M.empty
@@ -20,6 +18,7 @@ g :: Map Id Id -> KExpr -> Caml KExpr
 g env e = case e of
   KUnit    -> return e
   KInt{}   -> return e
+  KBool{}  -> return e
   KFloat{} -> return e
 
   KVar  x     -> return $ KVar  $ find x env
@@ -32,12 +31,11 @@ g env e = case e of
   KSub  x y -> return $ KSub  (find x env) (find y env)
   KMul  x y -> return $ KMul  (find x env) (find y env)
   KDiv  x y -> return $ KDiv  (find x env) (find y env)
-  KAnd  x y -> return $ KAnd  (find x env) (find y env)
-  KOr   x y -> return $ KOr   (find x env) (find y env)
-  KXor  x y -> return $ KXor  (find x env) (find y env)
+  KLAnd x y -> return $ KLAnd (find x env) (find y env)
+  KLOr  x y -> return $ KLOr  (find x env) (find y env)
+  KLXor x y -> return $ KLXor (find x env) (find y env)
   KSrl  x y -> return $ KSrl  (find x env) (find y env)
   KSll  x y -> return $ KSll  (find x env) (find y env)
-
   KFAdd x y -> return $ KFAdd (find x env) (find y env)
   KFSub x y -> return $ KFSub (find x env) (find y env)
   KFMul x y -> return $ KFMul (find x env) (find y env)
@@ -52,7 +50,8 @@ g env e = case e of
     x' <- genId x
     e1' <- g env e1
     e2' <- g (M.insert x x' env) e2
-    globalHeap %= M.mapKeys (\y -> if x==y then x' else y)
+    --globalHeap %= M.mapKeys (\y -> if x==y then x' else y)
+    --うわあ
     return $ KLet (x',t) e1' e2'
 
   KLetRec (KFunDef (x,t) yts e1) e2 -> do
@@ -60,7 +59,7 @@ g env e = case e of
     let (ys,ts) = unzip yts
     ys' <- mapM genId ys
     let env'  = M.insert x x' env
-        env'' = M.union (M.fromList (zip ys ys')) env'
+        env'' = insertList (zip ys ys') env'
     e1' <- g env'' e1
     e2' <- g env'  e2
     return $ KLetRec (KFunDef (x',t) (zip ys' ts) e1') e2'
@@ -68,11 +67,11 @@ g env e = case e of
   KLetTuple xts y e' -> do
     let (xs,ts) = unzip xts
     xs' <- mapM genId xs
-    let env' = M.union (M.fromList (zip xs xs')) env
+    let env' = insertList (zip xs xs') env
     KLetTuple (zip xs' ts) (find y env) <$> g env' e'
 
   KArray x y -> return $ KArray (find x env) (find y env)
-  KFArray x y -> return $ KFArray (find x env) (find y env)
+  KArrayInit (Label x) y -> return $ KArrayInit (Label $ find x env) (find y env)
 
   KApp x ys -> return $ KApp (find x env) (map (`find` env) ys)
   KExtArray x -> return $ KExtArray x

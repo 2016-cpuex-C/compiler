@@ -1,95 +1,143 @@
+{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module Main where
 
 import Base
-import FrontEnd.Lexer             (lex)
-import FrontEnd.Parser            (parse)
-import FrontEnd.Typing            (typing)
-import MiddleEnd.KNormal          (kNormalize)
-import MiddleEnd.Alpha            (alpha)
-import MiddleEnd.Optimise         (optimise)
-import MiddleEnd.Closure          (closureConvert)
-import MiddleEnd.LambdaLifting    (lambdaLift)
-import BackEnd.FirstArch.Virtual  (virtualCode)
-import BackEnd.FirstArch.RegAlloc (regAlloc)
-import BackEnd.FirstArch.Simm     (simm)
-import BackEnd.FirstArch.Emit     (emit)
+import FrontEnd.Lexer                   (lex)
+import FrontEnd.Parser                  (parse)
+import FrontEnd.Typing                  (typing)
+import MiddleEnd.KNormal                (kNormalize)
+import MiddleEnd.Alpha                  (alpha)
+import MiddleEnd.Optimise               (optimise)
+import MiddleEnd.Closure                (closureConvert)
+import MiddleEnd.LambdaLifting          (lambdaLift)
+import MiddleEnd.LLVM.FrontEnd.Prog     (toLLVM)
+import MiddleEnd.LLVM.MiddleEnd         (optimiseLLVM)
+import MiddleEnd.LLVM.BackEnd           (toLProg)
+import BackEnd.Second.FromLProg         (toAProg)
+import BackEnd.Second.Virtual           (virtual)
+import BackEnd.Second.SaveAndRestore    (saveAndRestore)
+import BackEnd.Second.Optimise          (optimiseA)
+import BackEnd.Second.Emit              (emitProg)
 
-import           Prelude hiding        (lex, log)
-import           System.IO             (stdout, withFile, IOMode(..))
-import qualified Data.Map as M
-import           Data.FileEmbed
-import qualified Data.ByteString.Char8 as BC
-import           Control.Lens          (use)
+import BackEnd.First.Virtual            (virtualCode)
+import BackEnd.First.RegAlloc           (regAlloc)
+import BackEnd.First.Simm               (simm)
+import BackEnd.First.Emit               (emit)
+
+import           Prelude hiding         (lex, log)
+import           Data.Functor           (($>))
+import           System.IO              (stdout, withFile, IOMode(..))
+import           Data.FileEmbed         (embedFile)
+import qualified Data.ByteString.Char8  as BC
+import           Control.Lens.Operators
+import           Control.Exception      (catch,SomeException)
 import           Options.Applicative
-import           System.FilePath.Posix ((-<.>))
+import           System.FilePath.Posix  ((-<.>))
+
+-------------------------------------------------------------------------------
+-- main
+-------------------------------------------------------------------------------
 
 main :: IO ()
 main = execParser (info (helper <*> parseOpt) fullDesc) >>= \opts ->
-    let s = initialState { _threshold     = inline opts
-                         , _optimiseLimit = iter opts
-                         , _extTyEnv      = minrtExtTyEnv
-                         }
-        lg = case logf opts of
-          Nothing -> ($ stdout)
-          Just f  -> withFile f WriteMode
-    in lg $ \h -> mapM_ (compile s{_logfile=h}) (args opts)
+  let s = initialState & threshold     .~ inline opts
+                       & optimiseLimit .~ iter opts
+                       & verbosity     .~ if verbose opts
+                                            then LevelDebug
+                                            else LevelInfo
+      withLogFile = case logf opts of
+        Nothing -> ($ stdout)
+        Just f  -> withFile f WriteMode
+      compiler
+        | first opts = compile1
+        | otherwise  = compile2
+  in  withLogFile $ \h -> mapM_ (compiler s{_logfile=h}) (args opts)
 
-compile :: S -> FilePath -> IO ()
-compile s f = do
+-------------------------------------------------------------------------------
+-- compile method
+-------------------------------------------------------------------------------
+
+-- 2nd compiler
+compile2 :: S -> FilePath -> IO ()
+compile2 s f = do
+  input <- readFile f
+  withFile (f -<.> "s") WriteMode $ \h -> do
+    m <-
+      flip runCaml s $ lex (libmincamlML ++ input)
+      >>= parse
+      >>= typing
+      >>= kNormalize
+      >>= alpha
+      >>= optimise
+      >>= lambdaLift
+      >>= closureConvert
+      >>= toLLVM
+      >>= optimiseLLVM
+      >>= toLProg
+      >>= toAProg
+      >>= virtual
+      >>= optimiseA
+      >>= (($logDebug) "optimiseA end" $>)
+      >>= saveAndRestore
+      >>= (($logDebug) "saveAndRestore end" $>)
+      >>= ((use constFloats >>= ($logDebugSH)) $>)
+      >>= emitProg h
+    case m of
+      Right{} -> return ()
+      Left e  -> error $ show e
+  `catch` \(e::SomeException) -> do
+    putStrLn $ "error occurred: " ++ show e
+    --putStrLn $ "retry with old compiler"
+    --compile1 s f
+
+-- 1st compiler
+compile1 :: S -> FilePath -> IO ()-- {{{
+compile1 s f = do
   input <- readFile f
   withFile (f -<.> "s") WriteMode $ \h -> do
     m <- (`runCaml` s) $ lex (libmincamlML ++ input)
-          >>= parse
-          >>= \e -> log (show e) >> return e
-          >>= typing
-          >>= kNormalize
-          >>= alpha
-          >>= optimise
-          >>= lambdaLift
-          >>= \e -> do { log . show =<< use globalHeap
-                       ; return e}
-          >>= closureConvert
-          >>= virtualCode
-          >>= simm
-          >>= regAlloc
-          >>= emit h
+      >>= parse
+      >>= typing
+      >>= kNormalize
+      >>= alpha
+      >>= optimise
+      >>= lambdaLift
+      >>= ((use globalHeap >>= ($logDebugSH)) $>)
+      >>= closureConvert
+      >>= virtualCode
+      >>= simm
+      >>= regAlloc
+      >>= emit h
     case m of
-      Right () -> return ()
+      Right _ -> return ()
       Left e -> error $ f ++ ": " ++ show e
+---- }}}
 
-minrtExtTyEnv :: TyEnv
-minrtExtTyEnv = M.fromList
-  [ ("fiszero"      , TFun [TFloat         ] TBool  )
-  , ("fispos"       , TFun [TFloat         ] TBool  )
-  , ("fisneg"       , TFun [TFloat         ] TBool  )
-  , ("xor"          , TFun [TBool,  TBool  ] TBool  )
-  , ("fless"        , TFun [TFloat, TFloat ] TBool  )
-  , ("fneg"         , TFun [TFloat         ] TFloat )
-  , ("fabs"         , TFun [TFloat         ] TFloat )
-  , ("fsqr"         , TFun [TFloat         ] TFloat )
-  , ("sqrt"         , TFun [TFloat         ] TFloat )
-  , ("fhalf"        , TFun [TFloat         ] TFloat )
-  , ("floor"        , TFun [TFloat         ] TFloat )
-  , ("cos"          , TFun [TFloat         ] TFloat )
-  , ("sin"          , TFun [TFloat         ] TFloat )
-  , ("atan"         , TFun [TFloat         ] TFloat )
-  , ("read_int"     , TFun [TUnit          ] TInt   )
-  , ("read_float"   , TFun [TUnit          ] TFloat )
-  , ("print_int"    , TFun [TInt           ] TUnit  )
-  , ("print_char"   , TFun [TInt           ] TUnit  )
-  , ("print_byte"   , TFun [TInt           ] TUnit  )
-  , ("int_of_float" , TFun [TFloat         ] TInt   )
-  , ("float_of_int" , TFun [TInt           ] TFloat )
-  ]
+-------------------------------------------------------------------------------
+-- library
+-------------------------------------------------------------------------------
 
-data MinCamlOptions = MinCamlOptions
-                    { inline  :: Int
-                    , iter    :: Int
-                    , logf    :: Maybe String
-                    , args    :: [String]
-                    }
+libmincamlML :: String
+libmincamlML = BC.unpack $(embedFile "src/libmincaml.ml")
+
+-------------------------------------------------------------------------------
+-- command line options parser
+-------------------------------------------------------------------------------
+
+data MinCamlOptions
+  = MinCamlOptions {
+    inline  :: Int
+  , iter    :: Int
+  , logf    :: Maybe String
+  , first   :: Bool
+  , verbose :: Bool
+  , args    :: [String]
+  }
 
 parseOpt :: Parser MinCamlOptions
 parseOpt = pure MinCamlOptions
@@ -111,6 +159,13 @@ parseOpt = pure MinCamlOptions
     <=> help "file to log to"
     <=> value Nothing
     <=> showDefaultWith (const "stdout")
+  <*> switch
+    $$ short '1'
+    <=> long "first"
+    <=> help "use first compiler using old instructin set"
+  <*> switch
+    $$ short 'v'
+    <=> long "verbose"
   <*> some (argument str (metavar "FILES.."))
   where
     infixr 7 $$
@@ -119,7 +174,4 @@ parseOpt = pure MinCamlOptions
     ($$) = ($)
     (<=>) :: Monoid m => m -> m -> m
     (<=>) = (<>)
-
-libmincamlML :: String
-libmincamlML = BC.unpack $(embedFile "src/libmincaml.ml")
 

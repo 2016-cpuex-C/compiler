@@ -1,5 +1,6 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
 module MiddleEnd.LambdaLifting where
@@ -8,16 +9,13 @@ import Prelude hiding (log)
 
 import           Base
 import           MiddleEnd.KNormal       hiding (fv)
-import           MiddleEnd.Alpha                (alpha)
+{-import           MiddleEnd.Alpha                (alpha)-}
 import           MiddleEnd.Elim                 (elim)
 
-import           Data.Map                       (Map)
 import qualified Data.Map as M
-import           Data.Set                       (toList, fromList, singleton, Set, (\\))
+import           Data.Set                       (toList, fromList, singleton, (\\))
 import qualified Data.Set as S
-import           Data.Maybe                     (fromMaybe)
 import           Control.Lens            hiding (lifted)
-import           Control.Monad.Trans.Class      (lift)
 import           Control.Monad.Trans.State.Lazy
 
 data LL = LL { _directlyCallable :: Set Id -- function without any free variables
@@ -28,17 +26,19 @@ makeLenses ''LL
 type CamlLL = StateT LL Caml
 
 lambdaLift :: KExpr -> Caml KExpr
-lambdaLift e = evalStateT (f M.empty e) (LL S.empty M.empty) >>= alpha >>= elim
+lambdaLift e = evalStateT (f M.empty e) (LL S.empty M.empty) >>= elim
 
 fv :: KExpr -> CamlLL (Set Id)
 fv e_ = do
-  stArrays <- lift $ uses globalHeap (map fst . M.toList) --何度も呼び出すのもったいない
+  --TODO 何度も呼び出すのもったいない
+  stArrays <- lift $ uses globalHeap (map fst . M.toList)
   fv' stArrays e_
   where
     fv' :: [Id] -> KExpr -> CamlLL (Set Id)
     fv' ign e = case e of
       KUnit           -> return $ S.empty
       KInt _          -> return $ S.empty
+      KBool _         -> return $ S.empty
       KFloat _        -> return $ S.empty
       KExtArray _     -> return $ S.empty
       KVar  x         -> return $ S.singleton x
@@ -50,9 +50,9 @@ fv e_ = do
       KSub  x y       -> return $ S.fromList [x,y]
       KMul  x y       -> return $ S.fromList [x,y]
       KDiv  x y       -> return $ S.fromList [x,y]
-      KAnd  x y       -> return $ S.fromList [x,y]
-      KOr   x y       -> return $ S.fromList [x,y]
-      KXor  x y       -> return $ S.fromList [x,y]
+      KLAnd x y       -> return $ S.fromList [x,y]
+      KLOr  x y       -> return $ S.fromList [x,y]
+      KLXor x y       -> return $ S.fromList [x,y]
       KSrl  x y       -> return $ S.fromList [x,y]
       KSll  x y       -> return $ S.fromList [x,y]
       KFAdd x y       -> return $ S.fromList [x,y]
@@ -61,7 +61,7 @@ fv e_ = do
       KFDiv x y       -> return $ S.fromList [x,y]
       KTuple xs       -> return $ S.fromList xs
       KArray x y      -> return $ S.fromList [x,y]
-      KFArray x y     -> return $ S.fromList [x,y]
+      KArrayInit _ x  -> return $ S.singleton x
       KExtFunApp _ xs -> return $ S.fromList xs
       KIfEq x y e1 e2 ->
         S.insert x . S.insert y <$> (S.union <$> fv' ign e1 <*> fv' ign e2)
@@ -81,10 +81,10 @@ fv e_ = do
           (False, Nothing ) -> x:ys                -- (recursive function)
           (False, Just fvs) -> liftName x:ys++fvs  -- xはLambdaLiftingしたものの引数いっぱい
       KGet x y
-        | x `elem` ign -> return $ S.singleton y
+        | toGlobalId x `elem` ign -> return $ S.singleton y
         | otherwise    -> return $ S.fromList [x,y]
       KPut x y z
-        | x `elem` ign -> return $ S.fromList [y,z]
+        | toGlobalId x `elem` ign -> return $ S.fromList [y,z]
         | otherwise    -> return $ S.fromList [x,y,z]
 
 f :: Map Id Type -> KExpr -> CamlLL KExpr
@@ -92,43 +92,43 @@ f env e = case e of
   KIfEq x y e1 e2 -> KIfEq x y <$> f env e1 <*> f env e2
   KIfLe x y e1 e2 -> KIfLe x y <$> f env e1 <*> f env e2
   KLet (x,t) e1 e2 -> KLet (x,t) <$> f env e1 <*> f (M.insert x t env) e2
-  KLetTuple xts y e' -> KLetTuple xts y <$> f (M.union (M.fromList xts) env) e'
+  KLetTuple xts y e' -> KLetTuple xts y <$> f (insertList xts env) e'
 
   KLetRec fundef@(KFunDef (x,t) yts e1) e2 -> do
     let ys = map fst yts
         envE2  = M.insert x t env
-        envE1  = M.union (M.fromList yts) envE2
+        envE1  = insertList yts envE2
     fvs' <- fv e1
     case toList $ fvs' \\ singleton x \\ fromList ys of
       [] -> do
-        lift.log $ x ++ " is directly callable"
+        -- lift.($logInfo) $ pack x <> " is directly callable"
         directlyCallable %= S.insert x
         e1' <- f envE1 e1
         e2' <- f envE2 e2
         return $ KLetRec fundef{kbody=e1'} e2'
 
       fvs -> do
-        lift.log $ "LambdaLifting: free variable(s) " ++ ppList fvs ++ " " ++
-                   "found in function " ++ x
+        --lift.($logInfo).pack $
+        --  "LambdaLifting: free variable(s) " ++ ppList fvs ++ " " ++
+        --  "found in function " ++ x
         let (fvs1,fvs2) = splitAt (maxArgs - length ys) fvs
-            ts = map (`unsafeLookup` env) fvs1
-            fundef' = liftFun fundef fvs1 ts
-            insertOrigin = KLetRec fundef{kbody=KApp (liftName x) (fvs1++ys)}
+            ts = [ t' | ~(Just t') <- map (`M.lookup` env) fvs1 ]
+            insertOrigin = KLetRec fundef{kbody = KApp (liftName x) (fvs1++ys)}
             envE2' = M.insert (liftName x) (liftTy t ts) envE2
-            -- e.g. fundef: f = fun y -> x + y のとき
-            --    fundef': _f = fun x y -> x + y
-            --    origin : f  = fun y -> _f x y
         if null fvs2 then do
-          lift.log $ x ++ " is directly callable"
+          -- lift.($logInfo) $ pack x <> " is directly callable"
           directlyCallable %= S.insert x
-        else lift.log $
+        else lift.($logWarn).pack $
           "there are so many free variables in " ++ x ++
-          " that can't lift all of them: " ++ show (length fvs2) ++
-          " variables remains unlifted"
+          " that can't lift it: " ++ show (length fvs2) ++
+          " variables remains"
         liftedMap %= M.insert x fvs1
-        e1' <- f envE1  e1
-        e2' <- f envE2' e2
-        return $ KLetRec fundef'{kbody=insertOrigin e1'} $ insertOrigin e2'
+        e1' <- insertOrigin <$> f envE1  e1
+        e2' <- insertOrigin <$> f envE2' e2
+        return $ KLetRec (liftFun fundef fvs1 ts e1') e2'
+            -- e.g. fundef : f = fun y -> x + y のとき
+            --    lifted : _f = fun x y -> x + y
+            --    origin : f  = fun y -> _f x y
 
   KApp x ys -> do
     lifted <- use liftedMap
@@ -138,14 +138,11 @@ f env e = case e of
 
   _ -> return e
 
-unsafeLookup :: (Show a, Ord a) => a -> Map a b -> b
-unsafeLookup key dic = fromMaybe (error $ "unsafeLookup: " ++ show key) (M.lookup key dic)
-
-liftFun :: KFunDef -> [Id] -> [Type] -> KFunDef
-liftFun (KFunDef (x,t) yts _) fvs ts =
+liftFun :: KFunDef -> [Id] -> [Type] -> KExpr -> KFunDef
+liftFun (KFunDef (x,t) yts _) fvs ts e =
   let t' = liftTy t ts
       yts' = zip fvs ts ++ yts
-  in  KFunDef (liftName x,t') yts' undefined
+  in  KFunDef (liftName x,t') yts' e
 
 -- "_"で始まる名前は無いのでこれでOK(see FrontEnd.Lexer)
 liftName :: Id -> Id

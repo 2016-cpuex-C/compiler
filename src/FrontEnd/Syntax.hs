@@ -3,7 +3,6 @@
 module FrontEnd.Syntax where
 
 import Base
-import Control.Lens
 
 ---------------------
 -- Syntax.t = Expr --
@@ -20,9 +19,9 @@ data Expr = EUnit
           | ESub      Expr Expr
           | EMul      Expr Expr
           | EDiv      Expr Expr
-          | EAnd      Expr Expr
-          | EOr       Expr Expr
-          | EXor      Expr Expr
+          | ELAnd     Expr Expr -- bitwise and
+          | ELOr      Expr Expr -- bitwise or
+          | ELXor     Expr Expr -- bitwise xor
           | ESrl      Expr Expr
           | ESll      Expr Expr
           | EFNeg     Expr

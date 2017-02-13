@@ -1,15 +1,13 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE LambdaCase #-}
 
-module BackEnd.FirstArch.Asm where
+module BackEnd.First.Asm where
 
 import Base
 
-import           Data.Set (Set)
 import qualified Data.Set as S
 import           Data.Vector (Vector, (!))
 import qualified Data.Vector as V
-import           Control.Lens
 
 -----------------
 -- Asm.t = Asm --
@@ -39,8 +37,8 @@ data AExpr = ANop
            | AAnd Id IdOrImm
            | AOr  Id IdOrImm
            | AXor Id IdOrImm
-           | ASrl Id IdOrImm -- shift right logical
-           | ASll Id IdOrImm -- shift left logical
+           | ASrl Id IdOrImm
+           | ASll Id IdOrImm
            | ALd Id IdOrImm
            | ASt Id Id IdOrImm
            | AFMovD Id

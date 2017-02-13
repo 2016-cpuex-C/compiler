@@ -616,7 +616,6 @@ let rec read_screen_settings _ =
   viewpoint.(0) <- screen.(0) -. screenz_dir.(0);
   viewpoint.(1) <- screen.(1) -. screenz_dir.(1);
   viewpoint.(2) <- screen.(2) -. screenz_dir.(2)
-
 in
 
 (* 光源情報の読み込み *)
@@ -1079,7 +1078,6 @@ let rec solver_second_fast2 m dconst sconst b0 b1 b2 =
     else 0
 in
 
-(* 5.8million *)
 (* solverの、dirvec+startテーブル使用高速版 *)
 let rec solver_fast2 index dirvec =
   let m = objects.(index) in
@@ -1091,7 +1089,7 @@ let rec solver_fast2 index dirvec =
   let dconst = dconsts.(index) in
   let m_shape = o_form m in
   if m_shape = 1 then
-    solver_rect_fast m (d_vec dirvec) dconst b0 b1 b2
+    solver_rect_fast m (d_vec dirvec) dconst b0 b1 b2 (*ここで死ぬ*)
   else if m_shape = 2 then
     solver_surface_fast2 m dconst sconst b0 b1 b2
   else
@@ -1397,7 +1395,7 @@ let rec solve_each_element iand_ofs and_group dirvec =
                 vecset intersection_point q0 q1 q2;
                 intersected_object_id.(0) <- iobj;
                 intsec_rectside.(0) <- t0
-               )
+              )
             else ()
            )
          else ()

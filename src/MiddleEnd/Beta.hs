@@ -1,4 +1,6 @@
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module MiddleEnd.Beta where
 {- let x = y in ... みたいなのを消す -}
@@ -8,7 +10,6 @@ import Prelude hiding (log)
 import Base
 import MiddleEnd.KNormal
 
-import           Data.Map (Map)
 import qualified Data.Map as M
 import           Data.Maybe (fromMaybe)
 
@@ -22,6 +23,7 @@ g :: Map Id Id -> KExpr -> Caml KExpr
 g env e = case e of
   KUnit    -> return e
   KInt{}   -> return e
+  KBool{}  -> return e
   KFloat{} -> return e
 
   KVar  x -> return $ KVar  $ find x env
@@ -34,9 +36,9 @@ g env e = case e of
   KSub  x y -> return $ KSub  (find x env) (find y env)
   KMul  x y -> return $ KMul  (find x env) (find y env)
   KDiv  x y -> return $ KDiv  (find x env) (find y env)
-  KAnd  x y -> return $ KAnd  (find x env) (find y env)
-  KOr   x y -> return $ KOr   (find x env) (find y env)
-  KXor  x y -> return $ KXor  (find x env) (find y env)
+  KLAnd x y -> return $ KLAnd (find x env) (find y env)
+  KLOr  x y -> return $ KLOr  (find x env) (find y env)
+  KLXor x y -> return $ KLXor (find x env) (find y env)
   KSrl  x y -> return $ KSrl  (find x env) (find y env)
   KSll  x y -> return $ KSll  (find x env) (find y env)
 
@@ -54,7 +56,7 @@ g env e = case e of
   KLet (x,t) e1 e2 ->
       g env e1 >>= \case
         KVar y -> do
-          log $ "beta-reducing " ++ x ++ " = " ++ y
+          -- ($logInfo) $ "beta-reducing " <> pack x <> " = " <> pack y
           g (M.insert x y env) e2
         e1' -> do
           e2' <- g env e2
@@ -73,6 +75,7 @@ g env e = case e of
 
   KTuple xs   -> return $ KTuple (map (`find` env) xs)
   KArray x y  -> return $ KArray (find x env) (find y env)
-  KFArray x y -> return $ KFArray (find x env) (find y env)
+  KArrayInit l x -> return $ KArrayInit l (find x env)
+
   KExtArray x -> return $ KExtArray x
 
