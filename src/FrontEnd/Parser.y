@@ -30,19 +30,11 @@ import FrontEnd.Syntax
     '>='        { TokenGe          }
     '<'         { TokenLt          }
     '>'         { TokenGt          }
-<<<<<<< HEAD
-    land        { TokenAnd         }
-    lor         { TokenOr          }
-    lxor        { TokenXor         }
-    lsr         { TokenSrl         }
-    lsl         { TokenSll         }
-=======
     '&'         { TokenAnd         }
     '|'         { TokenOr          }
     '^'         { TokenXor         }
     '<<'        { TokenSll         }
     '>>'        { TokenSrl         }
->>>>>>> LLVM
     f2i         { TokenF2I         }
     i2f         { TokenI2F         }
     if          { TokenIf          }
@@ -102,16 +94,8 @@ Expr :: { Expr }
     | Expr '>' Expr                                    { ENot (ELe $1 $3)   }
     | Expr '<=' Expr                                   { ELe $1 $3          }
     | Expr '>=' Expr                                   { ELe $3 $1          }
-<<<<<<< HEAD
-    | Expr land Expr                                   { EAnd $1 $3         }
-    | Expr lor  Expr                                   { EOr  $1 $3         }
-    | Expr lxor Expr                                   { EXor $1 $3         }
-    | Expr lsr  Expr                                   { ESrl $1 $3         }
-    | Expr lsl  Expr                                   { ESll $1 $3         }
-=======
     | Expr '<<' Expr                                   { ESll $1 $3          }
     | Expr '>>' Expr                                   { ESrl $1 $3          }
->>>>>>> LLVM
     | if Expr then Expr else Expr %prec prec_if        { EIf $2 $4 $6       }
     | '-.' Expr %prec prec_neg                         { EFNeg $2           }
     | Expr '+.' Expr                                   { EFAdd $1 $3        }

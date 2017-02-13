@@ -42,13 +42,6 @@ tokens :-
   <0> ">="          { tk $ TokenGe          }
   <0> "<"           { tk $ TokenLt          }
   <0> ">"           { tk $ TokenGt          }
-<<<<<<< HEAD
-  <0> land          { tk $ TokenAnd         }
-  <0> lor           { tk $ TokenOr          }
-  <0> lxor          { tk $ TokenXor         }
-  <0> lsr           { tk $ TokenSrl         }
-  <0> lsl           { tk $ TokenSll         }
-=======
   <0> "&"           { tk $ TokenAnd         }
   <0> "|"           { tk $ TokenOr          }
   <0> "^"           { tk $ TokenXor         }
@@ -57,7 +50,6 @@ tokens :-
   <0> lxor          { tk $ TokenXor         }
   <0> lsl           { tk $ TokenSll         }
   <0> lsr           { tk $ TokenSrl         }
->>>>>>> LLVM
   <0> f2i           { tk $ TokenF2I         }
   <0> i2f           { tk $ TokenI2F         }
   <0> if            { tk $ TokenIf          }
@@ -109,13 +101,8 @@ data Token = TokenBool Bool
            | TokenAnd
            | TokenOr
            | TokenXor
-<<<<<<< HEAD
            | TokenSrl
            | TokenSll
-=======
-           | TokenSll
-           | TokenSrl
->>>>>>> LLVM
            | TokenF2I
            | TokenI2F
            | TokenIf
