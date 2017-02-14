@@ -19,7 +19,7 @@ optimiseLLVM ast = liftIO $ do
         Left e -> error $ "LLVM.MiddleEnd.optimise: verify: " ++ e
         Right _ ->
           withPassManager passSpec $ \pm -> do
-          {-withPassManager passes $ \pm -> do-}
+          {-withPassManager passSpec' $ \pm -> do-}
             void $ runPassManager pm m
             writeFile "result.ll" =<< moduleLLVMAssembly m
             moduleAST m
@@ -27,8 +27,8 @@ optimiseLLVM ast = liftIO $ do
     Left e -> error $ "LLVM.MiddleEnd.optimise: " ++ e
     Right optast -> return optast
 
-passes :: PassSetSpec
-passes = defaultCuratedPassSetSpec {
+passSpec' :: PassSetSpec
+passSpec' = defaultCuratedPassSetSpec {
     optLevel = Just 3
   --, loopVectorize = Just True
   --, unitAtATime = Just True
@@ -41,17 +41,16 @@ passSpec = defaultPassSetSpec {
     transforms = [
         AggressiveDeadCodeElimination
       , BreakCriticalEdges
-        -- | can use a 'LLVM.General.Target.TargetMachine'
       , ConstantPropagation
       , CorrelatedValuePropagation
       , DeadCodeElimination
       , DeadInstructionElimination
       , DeadStoreElimination
-      --, DemoteRegisterToMemory -- BitCast, dame
+      --, DemoteRegisterToMemory -- dame
       , EarlyCommonSubexpressionElimination
       , GlobalValueNumbering {
-            noLoads = True
-          }
+          noLoads = True
+        }
       , InductionVariableSimplify
       , InstructionCombining
       , JumpThreading
@@ -62,14 +61,14 @@ passSpec = defaultPassSetSpec {
       , LoopInstructionSimplify
       , LoopRotate
       , LoopStrengthReduce
-        --, LoopUnroll {
-        --      loopUnrollThreshold :: Maybe Word
-        --    , count :: Maybe Word
-        --    , allowPartial :: Maybe Bool
-        --    }
+      --, LoopUnroll {
+      --    loopUnrollThreshold = Nothing
+      --  , count = Nothing
+      --  , allowPartial = Nothing
+      --  }
       , LoopUnswitch {
-            optimizeForSize = True
-          }
+          optimizeForSize = True
+        }
       , LowerAtomic
       , LowerInvoke
       , LowerSwitch
@@ -79,14 +78,14 @@ passSpec = defaultPassSetSpec {
       , Reassociate
       , ScalarReplacementOfAggregates {
             requiresDominatorTree = True
-          }
-        --, OldScalarReplacementOfAggregates {
-        --      oldScalarReplacementOfAggregatesThreshold :: Maybe Word
-        --    , useDominatorTree :: Bool
-        --    , structMemberThreshold :: Maybe Word
-        --    , arrayElementThreshold :: Maybe Word
-        --    , scalarLoadThreshold :: Maybe Word
-        --  }
+        }
+      , OldScalarReplacementOfAggregates {
+            oldScalarReplacementOfAggregatesThreshold = Nothing
+          , useDominatorTree      = True
+          , structMemberThreshold = Nothing
+          , arrayElementThreshold = Nothing
+          , scalarLoadThreshold   = Nothing
+        }
       , SparseConditionalConstantPropagation
         --, SimplifyLibCalls
       , SimplifyControlFlowGraph
@@ -95,14 +94,14 @@ passSpec = defaultPassSetSpec {
 
       -- here begin the Interprocedural passes
       , AlwaysInline {
-            insertLifetime = True
-          }
+          insertLifetime = True
+        }
       , ArgumentPromotion
       , ConstantMerge
       , FunctionAttributes
       , FunctionInlining {
-            functionInliningThreshold = 1000
-          }
+          functionInliningThreshold = 1000
+        }
       , GlobalDeadCodeElimination
         --, InternalizeFunctions { exportList :: [String] }
       , InterproceduralConstantPropagation

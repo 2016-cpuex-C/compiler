@@ -45,15 +45,17 @@ let rec print_int a =
     if a < 10 then
       print_char (a + 48)
     else
-      (print_int_sub (a / 10);
-       print_char (a - ((a / 10) * 10) + 48))
+      let b = a / 10 in
+      print_int_sub b;
+      print_char (a - 10 * b + 48)
   in
   if a < 0 then
-     (print_char 45;
-      print_int_sub (-a))
-   else
-     print_int_sub a
+    print_char 45;
+    print_int_sub (-a)
+  else
+    print_int_sub a
 in
+
 
 let rec print_bool b =
   if b
@@ -67,6 +69,7 @@ in
 (*****************************************************************************
  * んほおお
  *****************************************************************************)
+(*{{{*)
 
 (*************
  * sin / cos *
@@ -184,24 +187,6 @@ in
 (****************
  * int_of_float *
  ****************)
-(*
-let rec int_of_float f =
-   let exp = ((f2i(f) lsr 23) land 255) - 127 in
-   let fraction = ((f2i(f) lor 8388608) land 16777215)
-   in
-   let rval =
-     if (23 - exp) > 0 then
-       (fraction lsr (23 - exp))
-     else
-       (fraction lsl (exp - 23))
-   in
-   let rval = rval land 2147483647 in
-   if f >= 0.0 then
-     rval
-   else
-     -rval
-in
-*)
 let rec NOINLINE iaf_mul x n =
    (*int * float -> float を足し算でやる、nは最大256 *)
   if n=1 then
@@ -223,7 +208,6 @@ let rec NOINLINE int_of_float x =
    if ax >= 2147483648.0 then
      2147483647
    else
-
      if ax < 8388608.0 then
        let xx = ax +. 8388608.0 in
      if x < 0.0 then
@@ -272,7 +256,6 @@ let rec NOINLINE float_of_int i =
        -.ans
      else
        ans
-
    else
      let n = (ai / 8388608) in
      let m = (modulo 8388608 ai) in
@@ -282,6 +265,26 @@ let rec NOINLINE float_of_int i =
      else
        ans
 in
+(*
+let rec float_of_int i =
+   let rec NOINLINE search_top i =
+     if i = 1 then
+       0
+     else
+       (search_top (i lsr 1)) + 1
+   in
+   if i = 0 then
+     0.0
+   else
+     let sign = if i > 0 then 0 else 1 in
+     let i = if i > 0 then i else -i in
+     let top = search_top i in
+     if top > 23 then
+       i2f((sign lsl 31) + ((top + 127) lsl 23) + ((i lxor (1 lsl top)) lsr (top - 23)))
+     else
+       i2f((sign lsl 31) + ((top + 127) lsl 23) + ((i lxor (1 lsl top)) lsl (23 - top)))
+in
+*)
 
 
 (*********
@@ -300,8 +303,6 @@ let rec floor x =
      else
        xx
 in
-
-
 
 (*}}}*)
 

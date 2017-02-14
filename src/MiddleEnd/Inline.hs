@@ -38,8 +38,8 @@ inlineSub _limit = g M.empty
 
       KLet xt e1 e2 -> KLet xt <$> g env e1 <*> g env e2
       KLetRec f@(KFunDef (x,t) yts e1 b) e2 -> do
-        let inlinable = not (isRecursive f) && kInlinable f
-        {-let inlinable = size e1 < _limit && (not (isRecursive f)) && kInlinable f-}
+        {-let inlinable = not (isRecursive f) && kInlinable f-}
+        let inlinable = size e1 < _limit && (not (isRecursive f)) && kInlinable f
             env' = if not inlinable then env else M.insert x (yts,e1) env
         when inlinable $ ($logInfo) $ "  " <> pack x <> " is inlinable"
         e1' <- g env' e1
