@@ -108,6 +108,18 @@ toAExpr linst = case linst of
     | "min_caml_i2f" == fname -> do
           [x] <- mapM toId xs
           return $ AI2F x
+    | "min_caml_sqrt" == fname -> do
+          [x] <- mapM toId xs
+          return $ APrim (Label "sqrt") (TFun [TFloat] TFloat) [] [x]
+    | "min_caml_print_char" == fname -> do
+          [x] <- mapM toId xs
+          return $ APrim (Label "print_c") (TFun [TInt] TUnit) [V x] []
+    | "min_caml_read_int" == fname -> do
+          [] <- mapM toId xs
+          return $ APrim (Label "read_i") (TFun [] TInt) [] []
+    | "min_caml_read_float" == fname -> do
+          [] <- mapM toId xs
+          return $ APrim (Label "read_f") (TFun [] TFloat) [] []
 
     | otherwise -> ACall rett l <$> mapM toId ys <*> mapM toId zs
 

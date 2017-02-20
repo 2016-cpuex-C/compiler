@@ -275,9 +275,16 @@ emitInst = \case
 
   Do AExit -> write "\texit"
 
-  x := APrim (Label "madd") _ [] [y,z,w] -> ffff "madd.s" x y z w
-  x := APrim (Label "sqrt") _ [] [y]     -> ff "sqrt" x y
-  x := APrim (Label "floor") _ [] [y]     -> ff "floor" x y
+  x := APrim (Label "madd") _ [] [y,z,w]    -> ffff "madd.s" x y z w
+  x := APrim (Label "sqrt") _ [] [y]        -> ff "sqrt" x y
+  x := APrim (Label "floor") _ [] [y]       -> ff "floor" x y
+  x := APrim (Label "") _ [] [y]            -> ff "floor" x y
+  Do  (APrim (Label "print_c") _ [V x] [])  -> r_ "print_c" x
+  x := APrim (Label "read_i")  _ [] []      -> r_ "read_i" x
+  Do  (APrim (Label "read_i") _ [] [])      -> r_ "read_i" regTmp
+  x := APrim (Label "read_f")  _ [] []      -> f_ "read_f" x
+  --Do  (APrim (Label "read_f") _ [] [])      -> r_ "read_i" undefined
+  --  レイトレにはないので...
 
   e -> errorShow "Emit: " e
 
@@ -330,6 +337,15 @@ deleteAndFindFirstMay p (a:as)
 -------------------------------------------------------------------------------
 
 -- {{{
+
+r_ :: String -> Id -> CamlE ()
+r_ s x = write =<<
+  printf "\t%s\t%s\t# %s" s <$> reg x <*> return (unwords [s,x])
+
+f_ :: String -> Id -> CamlE ()
+f_ s x = write =<<
+  printf "\t%s\t%s\t# %s" s <$> regF x <*> return (unwords [s,x])
+
 rr :: String -> Id -> Id -> CamlE ()
 rr s x y = write =<<
   printf "\t%s\t%s, %s\t# %s" s <$> reg x <*> reg y <*> return (unwords [s,x,y])

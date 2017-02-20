@@ -24,23 +24,23 @@ elimFun f = do
       f' = f { aBody = map g (aBody f) }
   if f'==f then return f else elimFun f'
 
---elimBlock :: Map Id [a] -> ABlock -> ABlock
 elimBlock :: Map InstId (Set Id) -> ABlock -> ABlock
 elimBlock dic b = b { aStatements = catMaybes $ map g (aStatements b) }
   where
-    --unUsed x = null $ M.findWithDefault [] x dic
     unUsed x n = x `S.notMember` lookupMapNote "elimBlock" n dic
     g s@(n,inst) = case inst of
+      -- 副作用のあるものは消しては行けない
       x := e@ACall{}
+        | unUsed x n -> Just (n,Do e)
+      x := e@(APrim (Label "read_i") (TFun [] TInt) [] [])
+        | unUsed x n -> Just (n,Do e)
+      x := e@(APrim (Label "read_f") (TFun [] TInt) [] [])
         | unUsed x n -> Just (n,Do e)
       x := _
         | unUsed x n -> Nothing
       Do (APhiV lvs) -> Just (n, Do (APhiV lvs'))
         where lvs' = [ (l, [ (x,v)
                            | (x,v) <- xvs
-                           --, if x == "mat.257.365..5" then
-                           --    trace ("elim: " <> show (M.findWithDefault [] x dic)) True else
-                           --    True
                            , not (unUsed x n)])
                      | (l,xvs) <- lvs ]
 

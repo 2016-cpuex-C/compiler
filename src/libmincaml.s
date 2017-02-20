@@ -3,31 +3,6 @@
 ## libmincaml.s ##
 ##################
 
-#min_caml_print_newline:
-#	li	$v0, 10
-#	print_c	$v0
-#	jr	$ra
-
-#min_caml_print_int: # $v0
-#	print_i	$v0
-#	jr	$ra
-
-min_caml_print_char: # $v0
-	print_c	$v0
-	jr	$ra
-
-#min_caml_print_float:
-#	print_f	$f0
-#	jr	$ra
-
-min_caml_read_int:
-	read_i	$v0
-	jr	$ra
-
-min_caml_read_float:
-	read_f	$f0
-	jr	$ra
-
 min_caml_array_init:	# write $a0 in ($v0)~($v0+$v1-1), return $v0 itself
 			# a0: elem, v0: init addr, v1: cnt
 	move	$a2, $v0 # memory counter
