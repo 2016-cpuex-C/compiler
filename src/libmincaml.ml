@@ -67,7 +67,7 @@ let rec print_newline _ = print_char 10
 in
 
 (*****************************************************************************
- * んほおお
+ * 進藤君
  *****************************************************************************)
 (*{{{*)
 
@@ -79,15 +79,84 @@ let rec kernel_sin x =
   let x3 = x *. x2 in
   let x5 = x2 *. x3 in
   let x7 = x2 *. x5 in
-  x -. (0.16666625976 *. x3) +. (0.008333557129 *. x5) -. (0.000198896484 *. x7)
+  x -. (0.166666259760*.x3)
+    +. (0.008333557129*.x5)
+    -. (0.000198896484*.x7)
 in
 let rec kernel_cos x =
    let x2 = x*.x in
    let x4 = x2*.x2 in
    let x6 = x2*.x4 in
-   1.0 -. (0.499998521812 *. x2) +. (0.041668949132*.x4) -. (0.001386642456*.x6)
+   1.0 -. (0.499998521812*.x2)
+       +. (0.041668949132*.x4)
+       -. (0.001386642456*.x6)
 in
 
+let rec NOINLINE sub1_red2pi p x =
+  if x >= p then
+    sub1_red2pi (2.0*.p) x
+  else
+    p
+in
+
+let rec NOINLINE sub2_red2pi p x =
+  if x >= 2.0*.3.14159265 then
+    if x >= p then
+      sub2_red2pi (p/.2.0) (x-.p)
+    else
+      sub2_red2pi (p/.2.0) x
+  else
+    x
+in
+
+let rec NOINLINE reduction_to_2pi x =
+  let p = 2.0*.3.14159265 in
+  let pp = sub1_red2pi p x in
+  sub2_red2pi pp x
+in
+
+let rec NOINLINE reduction_to_quopi x cs =
+   (* if cs=true then sin else cos *)
+   if x >= 3.14159265 then
+     -. reduction_to_quopi (x -. 3.14159265) cs
+   else
+     if x >= (3.141592 /. 2.0) then
+       if cs then
+         reduction_to_quopi (3.141592 -. x) cs
+       else
+         -. reduction_to_quopi (3.141592-.x) cs
+     else
+       if x > (3.14159265 /. 4.0) then
+         if cs then
+           kernel_cos  ((3.14159265 /. 2.0) -. x)
+         else
+           kernel_sin  ((3.14159265 /. 2.0) -. x)
+       else
+         if cs then
+           kernel_sin x
+         else
+           kernel_cos x
+in
+
+let rec cos x =
+   if x < 0.0 then
+     let x_red2pi = reduction_to_2pi (-.x) in
+     reduction_to_quopi x_red2pi false
+   else
+     let x_red2pi = reduction_to_2pi x in
+     reduction_to_quopi x_red2pi false
+in
+
+let rec sin x =
+   if x < 0.0 then
+     let x_red2pi = reduction_to_2pi (-.x) in
+     -. reduction_to_quopi x_red2pi true
+   else
+     let x_red2pi = reduction_to_2pi x in
+     reduction_to_quopi x_red2pi true
+in
+
+(*
 let rec NOINLINE sin a =
    if a >= 0.0 then
      if a > 6.28318548202514 then
@@ -151,19 +220,25 @@ let rec NOINLINE cos a =
     else
       cos (0.0 -. a)
 in
+*)
 
 (********
  * atan *
  ********)
 let rec kernel_atan x =
-  let x2 = x *. x in
-  let x3 = x *. x2 in
-  let x5 = x2 *. x3 in
-  let x7 = x2 *. x5 in
-  let x9 = x2 *. x7 in
+  let x2  = x *. x in
+  let x3  = x *. x2 in
+  let x5  = x2 *. x3 in
+  let x7  = x2 *. x5 in
+  let x9  = x2 *. x7 in
   let x11 = x2 *. x9 in
   let x13 = x2 *. x11 in
-  x -. (0.333333 *. x3) +. (0.2 *. x5) -. (0.142857142 *. x7) +. (0.111111104 *. x9) -. (0.08976446 *. x11) +. (0.060035485 *. x13)
+  x -. (0.333333333*.x3)
+    +. (0.200000000*.x5)
+    -. (0.142857142*.x7)
+    +. (0.111111111*.x9)
+    -. (0.089764460*.x11)
+    +. (0.060035485*.x13)
 in
 
 let rec NOINLINE atan x =
@@ -265,27 +340,6 @@ let rec NOINLINE float_of_int i =
      else
        ans
 in
-(*
-let rec float_of_int i =
-   let rec NOINLINE search_top i =
-     if i = 1 then
-       0
-     else
-       (search_top (i lsr 1)) + 1
-   in
-   if i = 0 then
-     0.0
-   else
-     let sign = if i > 0 then 0 else 1 in
-     let i = if i > 0 then i else -i in
-     let top = search_top i in
-     if top > 23 then
-       i2f((sign lsl 31) + ((top + 127) lsl 23) + ((i lxor (1 lsl top)) lsr (top - 23)))
-     else
-       i2f((sign lsl 31) + ((top + 127) lsl 23) + ((i lxor (1 lsl top)) lsl (23 - top)))
-in
-*)
-
 
 (*********
  * floor *
@@ -302,6 +356,9 @@ let rec floor x =
        xx-.1.0
      else
        xx
+in
+
+let rec truncate x = int_of_float x
 in
 
 (*}}}*)

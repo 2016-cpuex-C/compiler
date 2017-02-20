@@ -59,37 +59,3 @@ min_caml_create_float_array_cont:
 	addi	$gp, $gp, 1
 	j	min_caml_create_float_array_loop
 
-###############################
-### use virtual instructions ##
-###############################
-
-min_caml_sqrt: # f0 -> f0
-	sqrt	$f0, $f0
-	jr	$ra
-
-#min_caml_truncate:
-#	j	min_caml_int_of_float
-#min_caml_int_of_float: # f0 -> v0
-#	ftoi	$v0, $f0
-#	jr	$ra
-#
-#min_caml_float_of_int: # v0 -> f0
-#	itof	$f0, $v0
-#	jr	$ra
-#
-#min_caml_floor: # f0 -> f0
-#	floor $f0, $f0
-#	jr	$ra
-
-#min_caml_sin:
-#	sin	$f0, $f0
-#	jr	$ra
-
-#min_caml_cos:
-#	cos	$f0, $f0
-#	jr	$ra
-
-#min_caml_atan:
-#	atan	$f0, $f0
-#	jr	$ra
-

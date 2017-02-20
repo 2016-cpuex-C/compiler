@@ -30,10 +30,10 @@ optimiseLLVM ast = liftIO $ do
 passSpec' :: PassSetSpec
 passSpec' = defaultCuratedPassSetSpec {
     optLevel = Just 3
-  --, loopVectorize = Just True
-  --, unitAtATime = Just True
-  --, superwordLevelParallelismVectorize = Just True
-  --, useInlinerWithThreshold = Just 300
+  , loopVectorize = Just True
+  , unitAtATime = Just True
+  , superwordLevelParallelismVectorize = Just False
+  , useInlinerWithThreshold = Just 750
   }
 
 passSpec :: PassSetSpec
@@ -61,11 +61,11 @@ passSpec = defaultPassSetSpec {
       , LoopInstructionSimplify
       , LoopRotate
       , LoopStrengthReduce
-      --, LoopUnroll {
-      --    loopUnrollThreshold = Nothing
-      --  , count = Nothing
-      --  , allowPartial = Nothing
-      --  }
+      , LoopUnroll {
+          loopUnrollThreshold = Just 1000
+        , count = Nothing
+        , allowPartial = Nothing
+        }
       , LoopUnswitch {
           optimizeForSize = True
         }

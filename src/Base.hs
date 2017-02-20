@@ -189,10 +189,7 @@ genType = do
 
 -- Id --
 ppList :: [Id] -> Id
-ppList = \case
-  []  -> ""
-  [x] -> x
-  x:xs -> x ++ " " ++ ppList xs
+ppList = unwords
 
 genId :: String -> Caml Id
 genId s = do

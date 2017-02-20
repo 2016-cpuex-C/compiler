@@ -75,6 +75,7 @@ compile2 s f = do
       >>= alpha
       >>= optimise
       >>= lambdaLift
+      >>= ((use globalHeap >>= ($logDebugSH)) $>)
       >>= closureConvert
       >>= toLLVM
       >>= optimiseLLVM
